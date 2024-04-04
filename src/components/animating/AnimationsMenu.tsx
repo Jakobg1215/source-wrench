@@ -1,6 +1,6 @@
 import { For, type Component } from 'solid-js';
-import Animation, { type AnimationData } from './Animation';
 import type { SetStoreFunction } from 'solid-js/store';
+import Animation, { type AnimationData } from './Animation';
 
 type AnimationsMenuProps = {
     animations: AnimationData[];

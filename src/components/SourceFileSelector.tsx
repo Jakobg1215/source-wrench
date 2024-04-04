@@ -1,6 +1,6 @@
-import { createSignal, type Component } from 'solid-js';
-import { open } from '@tauri-apps/plugin-dialog';
 import { documentDir } from '@tauri-apps/api/path';
+import { open } from '@tauri-apps/plugin-dialog';
+import { createSignal, type Component } from 'solid-js';
 
 type SourceFileSelectorProps = {
     onSelectedFile: (path: string) => void;

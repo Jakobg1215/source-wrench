@@ -19,7 +19,7 @@ const BodyPart: Component<BodyPartProps> = (props) => {
         props.setbodyParts(
             (bodyPart) => bodyPart.ordinal === props.ordinal,
             'name',
-            () => newName
+            () => newName,
         );
     };
 
@@ -27,7 +27,7 @@ const BodyPart: Component<BodyPartProps> = (props) => {
         props.setbodyParts(
             (bodyPart) => bodyPart.ordinal === props.ordinal,
             'is_blank',
-            () => value
+            () => value,
         );
     };
 
@@ -35,7 +35,7 @@ const BodyPart: Component<BodyPartProps> = (props) => {
         props.setbodyParts(
             (bodyPart) => bodyPart.ordinal === props.ordinal,
             'model_source',
-            () => value
+            () => value,
         );
     };
 

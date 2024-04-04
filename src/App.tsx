@@ -1,11 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { createSignal, type Component } from 'solid-js';
-import BodyGroupsMenu from './components/bodygroups/BodyGroupsMenu';
-import { BodyGroupData } from './components/bodygroups/BodyGroup';
 import { createStore } from 'solid-js/store';
 import AnimatingMenu from './components/animating/AnimatingMenu';
 import { AnimationData } from './components/animating/Animation';
 import { SequenceData } from './components/animating/Sequence';
+import { BodyGroupData } from './components/bodygroups/BodyGroup';
+import BodyGroupsMenu from './components/bodygroups/BodyGroupsMenu';
 
 type CompilationData = {
     model_name: string;

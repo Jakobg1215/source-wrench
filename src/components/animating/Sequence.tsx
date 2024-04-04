@@ -19,7 +19,7 @@ const Sequence: Component<SequenceProps> = (props) => {
         props.setSequences(
             (sequence) => sequence.ordinal === props.ordinal,
             'name',
-            () => value
+            () => value,
         );
     };
 
@@ -27,7 +27,7 @@ const Sequence: Component<SequenceProps> = (props) => {
         props.setSequences(
             (sequence) => sequence.ordinal === props.ordinal,
             'animation',
-            () => value
+            () => value,
         );
     };
 

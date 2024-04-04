@@ -1,7 +1,7 @@
 import { For, type Component } from 'solid-js';
-import Sequence, { type SequenceData } from './Sequence';
 import type { SetStoreFunction } from 'solid-js/store';
 import { AnimationData } from './Animation';
+import Sequence, { type SequenceData } from './Sequence';
 
 type SequencesMenuProps = {
     sequences: SequenceData[];

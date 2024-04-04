@@ -18,7 +18,7 @@ const Animation: Component<AnimationProps> = (props) => {
         props.setAnimations(
             (animation) => animation.ordinal === props.ordinal,
             'name',
-            () => value
+            () => value,
         );
     };
 
@@ -26,7 +26,7 @@ const Animation: Component<AnimationProps> = (props) => {
         props.setAnimations(
             (animation) => animation.ordinal === props.ordinal,
             'source_file',
-            () => value
+            () => value,
         );
     };
 

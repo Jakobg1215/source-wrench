@@ -1,9 +1,9 @@
 import type { Component } from 'solid-js';
-import AnimationsMenu from './AnimationsMenu';
-import SequencesMenu from './SequencesMenu';
-import type { AnimationData } from './Animation';
 import type { SetStoreFunction } from 'solid-js/store';
+import type { AnimationData } from './Animation';
+import AnimationsMenu from './AnimationsMenu';
 import type { SequenceData } from './Sequence';
+import SequencesMenu from './SequencesMenu';
 
 type AnimatingMenuProps = {
     id: string;

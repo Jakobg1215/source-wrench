@@ -1,7 +1,7 @@
-import { For, type Component, createEffect } from 'solid-js';
+import { For, createEffect, type Component } from 'solid-js';
+import { createStore, type SetStoreFunction } from 'solid-js/store';
 import type { BodyPartData } from './BodyPart';
 import BodyPart from './BodyPart';
-import { createStore, type SetStoreFunction } from 'solid-js/store';
 
 type BodyGroupProps = {
     readonly ordinal: number;
@@ -36,7 +36,7 @@ const BodyGroup: Component<BodyGroupProps> = (props) => {
         props.setBodyGroups(
             (bodyGroup) => bodyGroup.ordinal === props.ordinal,
             'parts',
-            () => bodyParts
+            () => bodyParts,
         );
     };
 
@@ -48,7 +48,7 @@ const BodyGroup: Component<BodyGroupProps> = (props) => {
         props.setBodyGroups(
             (bodyGroup) => bodyGroup.ordinal === props.ordinal,
             'name',
-            () => newName
+            () => newName,
         );
     };
 
