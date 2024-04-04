@@ -1,30 +1,11 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-struct CompilationData {
-    model_name: String,
-    body_groups: Vec<BodyGroup>,
-}
-
-#[derive(Deserialize)]
-struct BodyGroup {
-    name: String,
-    parts: Vec<BodyPart>,
-}
-
-#[derive(Deserialize)]
-struct BodyPart {
-    name: String,
-    is_blank: bool,
-    model_source: String,
-}
+pub mod input_data;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn compile_model(data: CompilationData) {
+fn compile_model(data: input_data::CompilationDataInput) {
     println!("Compiling model {}", data.model_name);
 }
 
