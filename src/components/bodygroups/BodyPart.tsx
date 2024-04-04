@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
+import SourceFileSelector from '../SourceFileSelector';
 
 type BodyPartProps = {
     readonly ordinal: number;
@@ -56,7 +57,7 @@ const BodyPart: Component<BodyPartProps> = (props) => {
             <br />
             <label>
                 Part Model Source:
-                <input type="text" onChange={(event) => changeBodyPartModelSource(event.target.value)}></input>
+                <SourceFileSelector onSelectedFile={(selectedFile) => changeBodyPartModelSource(selectedFile)} />
             </label>
             <br />
             <button onClick={removeBodyPart}>Remove Part</button>

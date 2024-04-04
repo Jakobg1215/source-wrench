@@ -11,7 +11,7 @@ fn compile_model(data: input_data::CompilationDataInput) {
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![compile_model])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

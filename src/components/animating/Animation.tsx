@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
+import SourceFileSelector from '../SourceFileSelector';
 
 type AnimationProps = {
     readonly ordinal: number;
@@ -42,7 +43,7 @@ const Animation: Component<AnimationProps> = (props) => {
             <br />
             <label>
                 Animation Source:
-                <input type="Text" onChange={(event) => updateAnimationFileSource(event.target.value)}></input>
+                <SourceFileSelector onSelectedFile={(selectedFile) => updateAnimationFileSource(selectedFile)} />
             </label>
             <br />
             <button onClick={removeAnimation}>Remove Animation</button>
