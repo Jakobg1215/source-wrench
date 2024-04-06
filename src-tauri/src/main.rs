@@ -1,12 +1,26 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-pub mod input_data;
+pub mod import;
+pub mod input;
+pub mod utilities;
+
+use import::load_all_source_files;
+use input::CompilationDataInput;
+use utilities::logging::{log, LogLevel};
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn compile_model(data: input_data::CompilationDataInput) {
-    println!("Compiling model {}", data.model_name);
+fn compile_model(data: CompilationDataInput) {
+    log(format!("Compiling model {}.mdl!", data.model_name), LogLevel::Info);
+
+    let loaded_source_files = match load_all_source_files(&data) {
+        Ok(source_files) => source_files,
+        Err(error) => {
+            log(format!("Fail to compile due to: {}", error.to_string()), LogLevel::Error);
+            return;
+        }
+    };
 }
 
 fn main() {
