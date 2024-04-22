@@ -45,56 +45,66 @@ pub fn load_all_source_files(input_data: &CompilationDataInput) -> Result<HashMa
 
     for body_group in &input_data.body_groups {
         for body_part in &body_group.parts {
-            if loaded_files.contains_key(&body_part.model_source) {
-                continue;
-            }
-
-            let file_path = Path::new(&body_part.model_source);
-            let file_exists = match file_path.try_exists() {
-                Ok(exists) => exists,
-                Err(error) => {
-                    log(error.to_string(), LogLevel::Verbose);
-                    return Err(ImportingError::FileNotFound);
-                }
-            };
-
-            if !file_exists {
-                log(format!("File {} could not be found!", body_part.model_source), LogLevel::Verbose);
-                return Err(ImportingError::FileNotFound);
-            }
-
-            let file_extension = match file_path.extension() {
-                Some(extension) => extension,
-                None => {
-                    log(format!("File {} has no extension!", body_part.model_source), LogLevel::Verbose);
-                    return Err(ImportingError::NoFileExtension);
-                }
-            };
-
-            let imported_file: Result<ImportedFileData, String> = match file_extension.to_str().unwrap() {
-                "smd" => smd::load_smd(file_path, None).map_err(|error| error.to_string()), // TODO: Support vta file
-                _ => {
-                    log(format!("File {} is an unsupported format!", body_part.model_source), LogLevel::Verbose);
-                    return Err(ImportingError::UnsupportedFile);
-                }
-            };
-
-            match imported_file {
-                Ok(file) => loaded_files.insert(body_part.model_source.clone(), file),
-                Err(error) => {
-                    log(format!("File {} failed to import due to: {}!", body_part.model_source, error), LogLevel::Debug);
-                    return Err(ImportingError::FailedImport);
-                }
-            };
+            load_file(&mut loaded_files, &body_part.model_source)?;
         }
+    }
+
+    for animation in &input_data.animations {
+        load_file(&mut loaded_files, &animation.source_file)?;
     }
 
     Ok(loaded_files)
 }
 
+fn load_file(loaded_files: &mut HashMap<String, ImportedFileData>, source_path: &str) -> Result<(), ImportingError> {
+    if loaded_files.contains_key(source_path) {
+        return Ok(());
+    }
+
+    let file_path = Path::new(source_path);
+    let file_exists = match file_path.try_exists() {
+        Ok(exists) => exists,
+        Err(error) => {
+            log(error.to_string(), LogLevel::Verbose);
+            return Err(ImportingError::FileNotFound);
+        }
+    };
+
+    if !file_exists {
+        log(format!("File {} could not be found!", source_path), LogLevel::Verbose);
+        return Err(ImportingError::FileNotFound);
+    }
+
+    let file_extension = match file_path.extension() {
+        Some(extension) => extension,
+        None => {
+            log(format!("File {} has no extension!", source_path), LogLevel::Verbose);
+            return Err(ImportingError::NoFileExtension);
+        }
+    };
+
+    let imported_file: Result<ImportedFileData, String> = match file_extension.to_str().unwrap() {
+        "smd" => smd::load_smd(file_path, None).map_err(|error| error.to_string()), // TODO: Support vta file
+        _ => {
+            log(format!("File {} is an unsupported format!", source_path), LogLevel::Verbose);
+            return Err(ImportingError::UnsupportedFile);
+        }
+    };
+
+    match imported_file {
+        Ok(file) => loaded_files.insert(source_path.to_string(), file),
+        Err(error) => {
+            log(format!("File {} failed to import due to: {}!", source_path, error), LogLevel::Debug);
+            return Err(ImportingError::FailedImport);
+        }
+    };
+
+    Ok(())
+}
+
 pub struct ImportedFileData {
-    skeleton: Vec<ImportedBone>,
-    animation: Vec<ImportedAnimationFrame>,
+    pub skeleton: Vec<ImportedBone>,
+    pub animation: Vec<ImportedAnimationFrame>,
     pub mesh: ImportedModel,
     flexes: Vec<ImportedFlexKey>,
 }
@@ -120,28 +130,33 @@ impl ImportedFileData {
         self.animation.push(new_frame);
         self.animation.len() - 1
     }
+
+    pub fn get_bone_by_index(&self, index: usize) -> &ImportedBone {
+        // UNWRAP: The bone index should exist.
+        self.skeleton.get(index).unwrap()
+    }
 }
 
 pub struct ImportedBone {
-    name: String,
-    position: Vector3,
-    orintation: Quaternion,
-    parent: Option<usize>,
+    pub name: String,
+    pub position: Vector3,
+    pub orientation: Quaternion,
+    pub parent: Option<usize>,
 }
 
 impl ImportedBone {
-    pub fn new(name: String, position: Vector3, orintation: Quaternion, parent: Option<usize>) -> Self {
+    pub fn new(name: String, position: Vector3, orientation: Quaternion, parent: Option<usize>) -> Self {
         Self {
             name,
             position,
-            orintation,
+            orientation,
             parent,
         }
     }
 }
 
 pub struct ImportedAnimationFrame {
-    bones: Vec<ImportedBoneAnimation>,
+    pub bones: Vec<ImportedBoneAnimation>,
 }
 
 impl ImportedAnimationFrame {
@@ -157,21 +172,21 @@ impl ImportedAnimationFrame {
 }
 
 pub struct ImportedBoneAnimation {
-    bone: usize,
-    position: Vector3,
-    orintation: Quaternion,
+    pub bone: usize,
+    pub position: Vector3,
+    pub orientation: Quaternion,
 }
 
 impl ImportedBoneAnimation {
-    pub fn new(bone: usize, position: Vector3, orintation: Quaternion) -> Self {
-        Self { bone, position, orintation }
+    pub fn new(bone: usize, position: Vector3, orientation: Quaternion) -> Self {
+        Self { bone, position, orientation }
     }
 }
 
 pub struct ImportedModel {
-    materials: Vec<String>,
-    vertices: Vec<ImportedVertex>,
-    faces: Vec<ImportedFace>,
+    pub materials: Vec<String>,
+    pub vertices: Vec<ImportedVertex>,
+    pub faces: Vec<ImportedFace>,
 }
 
 impl ImportedModel {
@@ -203,6 +218,10 @@ impl ImportedModel {
     pub fn add_face(&mut self, new_face: ImportedFace) {
         self.faces.push(new_face);
     }
+
+    pub fn get_material(&self, index: usize) -> &str {
+        self.materials.get(index).unwrap()
+    }
 }
 
 pub struct ImportedVertex {
@@ -230,8 +249,8 @@ impl ImportedVertex {
 }
 
 pub struct ImportedFace {
-    material_index: usize,
-    vertex_indices: Vec<usize>,
+    pub material_index: usize,
+    pub vertex_indices: Vec<usize>,
 }
 
 impl ImportedFace {

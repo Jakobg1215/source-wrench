@@ -3,10 +3,12 @@
 
 pub mod import;
 pub mod input;
+pub mod process;
 pub mod utilities;
 
 use import::load_all_source_files;
 use input::CompilationDataInput;
+use process::process;
 use utilities::logging::{log, LogLevel};
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -17,7 +19,15 @@ fn compile_model(data: CompilationDataInput) {
     let loaded_source_files = match load_all_source_files(&data) {
         Ok(source_files) => source_files,
         Err(error) => {
-            log(format!("Fail to compile due to: {}", error.to_string()), LogLevel::Error);
+            log(format!("Fail to compile due to: {}!", error.to_string()), LogLevel::Error);
+            return;
+        }
+    };
+
+    let processed_data = match process(data, loaded_source_files) {
+        Ok(data) => data,
+        Err(error) => {
+            log(format!("Fail to compile due to: {}!", error.to_string()), LogLevel::Error);
             return;
         }
     };
