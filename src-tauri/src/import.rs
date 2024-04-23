@@ -1,9 +1,6 @@
-use std::{
-    collections::HashMap,
-    error::Error,
-    fmt::{self, Display, Formatter},
-    path::Path,
-};
+use std::{collections::HashMap, path::Path};
+
+use thiserror::Error;
 
 use crate::{
     input::CompilationDataInput,
@@ -15,28 +12,122 @@ use crate::{
 
 mod smd;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ImportingError {
+    #[error("File Was Not Found")]
     FileNotFound,
+    #[error("File Had No Extension")]
     NoFileExtension,
+    #[error("File Is Not Supported")]
     UnsupportedFile,
+    #[error("File Failed To Import")]
     FailedImport,
 }
 
-impl Display for ImportingError {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
-        let error_message: &str = match self {
-            ImportingError::FileNotFound => "File Could Not Be Found!",
-            ImportingError::NoFileExtension => "File Has No Extension!",
-            ImportingError::UnsupportedFile => "File Is Unsupported!",
-            ImportingError::FailedImport => "File Failed To Import!",
-        };
+#[derive(Default)]
+pub struct ImportedFileData {
+    pub skeleton: Vec<ImportedBone>,
+    pub animation: Vec<ImportedAnimationFrame>,
+    pub mesh: ImportedMesh,
+    pub flexes: Vec<ImportedFlexKey>,
+}
 
-        fmt.write_str(error_message)
+impl ImportedFileData {
+    pub fn add_bone(&mut self, new_bone: ImportedBone) -> usize {
+        self.skeleton.push(new_bone);
+        self.skeleton.len() - 1
+    }
+
+    pub fn add_frame(&mut self, new_frame: ImportedAnimationFrame) -> usize {
+        self.animation.push(new_frame);
+        self.animation.len() - 1
+    }
+
+    pub fn get_bone_by_index(&self, index: usize) -> &ImportedBone {
+        // UNWRAP: The index should be valid
+        self.skeleton.get(index).unwrap()
+    }
+}
+pub struct ImportedBone {
+    pub name: String,
+    pub position: Vector3,
+    pub orientation: Quaternion,
+    pub parent: Option<usize>,
+}
+
+impl ImportedBone {
+    pub fn new(name: String, position: Vector3, orientation: Quaternion, parent: Option<usize>) -> Self {
+        Self {
+            name,
+            position,
+            orientation,
+            parent,
+        }
     }
 }
 
-impl Error for ImportingError {}
+#[derive(Default)]
+pub struct ImportedAnimationFrame {
+    pub bones: Vec<ImportedBoneAnimation>,
+}
+
+impl ImportedAnimationFrame {
+    pub fn add_bone(&mut self, new_bone: ImportedBoneAnimation) {
+        self.bones.push(new_bone);
+    }
+}
+
+pub struct ImportedBoneAnimation {
+    pub bone: usize,
+    pub position: Vector3,
+    pub orientation: Quaternion,
+}
+
+impl ImportedBoneAnimation {
+    pub fn new(bone: usize, position: Vector3, orientation: Quaternion) -> Self {
+        Self { bone, position, orientation }
+    }
+}
+
+#[derive(Default)]
+pub struct ImportedMesh {
+    pub materials: HashMap<String, Vec<Vec<usize>>>,
+    pub vertices: Vec<ImportedVertex>,
+}
+
+impl ImportedMesh {
+    fn add_vertex(&mut self, vertex: ImportedVertex) {
+        self.vertices.push(vertex);
+    }
+}
+
+pub struct ImportedVertex {
+    pub position: Vector3,
+    pub normal: Vector3,
+    pub uv: Vector2,
+    pub weights: Vec<(usize, f64)>,
+}
+
+impl ImportedVertex {
+    pub fn new(position: Vector3, normal: Vector3, uv: Vector2) -> Self {
+        Self {
+            position,
+            normal,
+            uv,
+            weights: Vec::new(),
+        }
+    }
+}
+
+impl ImportedVertex {
+    pub fn add_weight(&mut self, bone_index: usize, weight: f64) {
+        self.weights.push((bone_index, weight));
+    }
+}
+
+pub struct ImportedFlexKey {}
+
+impl ImportedFlexKey {}
 
 pub fn load_all_source_files(input_data: &CompilationDataInput) -> Result<HashMap<String, ImportedFileData>, ImportingError> {
     log("Loading all source files.", LogLevel::Info);
@@ -101,173 +192,3 @@ fn load_file(loaded_files: &mut HashMap<String, ImportedFileData>, source_path: 
 
     Ok(())
 }
-
-pub struct ImportedFileData {
-    pub skeleton: Vec<ImportedBone>,
-    pub animation: Vec<ImportedAnimationFrame>,
-    pub mesh: ImportedModel,
-    flexes: Vec<ImportedFlexKey>,
-}
-
-impl ImportedFileData {
-    pub fn new() -> Self {
-        Self {
-            skeleton: Vec::new(),
-            animation: Vec::new(),
-            mesh: ImportedModel::new(),
-            flexes: Vec::new(),
-        }
-    }
-}
-
-impl ImportedFileData {
-    pub fn add_bone(&mut self, new_bone: ImportedBone) -> usize {
-        self.skeleton.push(new_bone);
-        self.skeleton.len() - 1
-    }
-
-    pub fn add_frame(&mut self, new_frame: ImportedAnimationFrame) -> usize {
-        self.animation.push(new_frame);
-        self.animation.len() - 1
-    }
-
-    pub fn get_bone_by_index(&self, index: usize) -> &ImportedBone {
-        // UNWRAP: The bone index should exist.
-        self.skeleton.get(index).unwrap()
-    }
-}
-
-pub struct ImportedBone {
-    pub name: String,
-    pub position: Vector3,
-    pub orientation: Quaternion,
-    pub parent: Option<usize>,
-}
-
-impl ImportedBone {
-    pub fn new(name: String, position: Vector3, orientation: Quaternion, parent: Option<usize>) -> Self {
-        Self {
-            name,
-            position,
-            orientation,
-            parent,
-        }
-    }
-}
-
-pub struct ImportedAnimationFrame {
-    pub bones: Vec<ImportedBoneAnimation>,
-}
-
-impl ImportedAnimationFrame {
-    pub fn new() -> Self {
-        Self { bones: Vec::new() }
-    }
-}
-
-impl ImportedAnimationFrame {
-    pub fn add_bone(&mut self, new_bone: ImportedBoneAnimation) {
-        self.bones.push(new_bone);
-    }
-}
-
-pub struct ImportedBoneAnimation {
-    pub bone: usize,
-    pub position: Vector3,
-    pub orientation: Quaternion,
-}
-
-impl ImportedBoneAnimation {
-    pub fn new(bone: usize, position: Vector3, orientation: Quaternion) -> Self {
-        Self { bone, position, orientation }
-    }
-}
-
-pub struct ImportedModel {
-    pub materials: Vec<String>,
-    pub vertices: Vec<ImportedVertex>,
-    pub faces: Vec<ImportedFace>,
-}
-
-impl ImportedModel {
-    pub fn new() -> Self {
-        Self {
-            materials: Vec::new(),
-            vertices: Vec::new(),
-            faces: Vec::new(),
-        }
-    }
-}
-
-impl ImportedModel {
-    pub fn add_material(&mut self, new_material: String) -> usize {
-        let existing = self.materials.iter().position(|material| material == &new_material);
-        if let Some(index) = existing {
-            return index;
-        }
-
-        self.materials.push(new_material);
-        self.materials.len() - 1
-    }
-
-    pub fn add_vertex(&mut self, new_vertex: ImportedVertex) -> usize {
-        self.vertices.push(new_vertex);
-        self.vertices.len() - 1
-    }
-
-    pub fn add_face(&mut self, new_face: ImportedFace) {
-        self.faces.push(new_face);
-    }
-
-    pub fn get_material(&self, index: usize) -> &str {
-        self.materials.get(index).unwrap()
-    }
-}
-
-pub struct ImportedVertex {
-    position: Vector3,
-    normal: Vector3,
-    uv: Vector2,
-    weights: Vec<(usize, f64)>,
-}
-
-impl ImportedVertex {
-    pub fn new(position: Vector3, normal: Vector3, uv: Vector2) -> Self {
-        Self {
-            position,
-            normal,
-            uv,
-            weights: Vec::new(),
-        }
-    }
-}
-
-impl ImportedVertex {
-    pub fn add_weight(&mut self, bone_index: usize, weight: f64) {
-        self.weights.push((bone_index, weight));
-    }
-}
-
-pub struct ImportedFace {
-    pub material_index: usize,
-    pub vertex_indices: Vec<usize>,
-}
-
-impl ImportedFace {
-    pub fn new(material_index: usize) -> Self {
-        Self {
-            material_index,
-            vertex_indices: Vec::new(),
-        }
-    }
-}
-
-impl ImportedFace {
-    pub fn add_vertex_index(&mut self, vertex_index: usize) {
-        self.vertex_indices.push(vertex_index);
-    }
-}
-
-pub struct ImportedFlexKey {}
-
-impl ImportedFlexKey {}

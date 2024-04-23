@@ -145,7 +145,7 @@ impl BoneTable {
 pub struct GlobalBone {
     name: String,
     parent: Option<usize>,
-    collapsible: bool,
+    pub collapsible: bool,
     pub position: Vector3,
     pub orientation: Quaternion,
     bone_to_pose: Matrix,

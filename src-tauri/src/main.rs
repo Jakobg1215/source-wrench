@@ -24,7 +24,7 @@ fn compile_model(data: CompilationDataInput) {
         }
     };
 
-    let processed_data = match process(data, loaded_source_files) {
+    let _processed_data = match process(data, loaded_source_files) {
         Ok(data) => data,
         Err(error) => {
             log(format!("Fail to compile due to: {}!", error.to_string()), LogLevel::Error);

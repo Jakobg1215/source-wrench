@@ -110,7 +110,7 @@ pub fn compress_animations(
                 continue;
             }
 
-            for (mapped_position, mapped_rotation) in mapped_bone.frames {
+            for (_mapped_position, _mapped_rotation) in mapped_bone.frames {
                 todo!()
             }
         }

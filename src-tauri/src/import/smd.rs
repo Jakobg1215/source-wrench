@@ -1,647 +1,575 @@
 use std::{
-    collections::HashMap,
-    error::Error,
-    fmt::{self, Display, Formatter},
+    collections::{hash_map::Entry, HashMap},
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Error},
     path::Path,
 };
 
-use crate::utilities::{
-    logging::{log, LogLevel},
-    mathematics::{Angles, Vector2, Vector3},
+use thiserror::Error;
+
+use crate::{
+    import::ImportedBone,
+    utilities::{
+        logging::{log, LogLevel},
+        mathematics::{Angles, Vector2, Vector3},
+    },
 };
 
-use super::{ImportedAnimationFrame, ImportedBone, ImportedBoneAnimation, ImportedFace, ImportedFileData, ImportedVertex};
+use super::{ImportedAnimationFrame, ImportedBoneAnimation, ImportedFileData, ImportedVertex};
 
-#[derive(Debug)]
-pub enum SMDParseError {
-    NotValidUTF8,
+#[derive(Error, Debug)]
+pub enum ParseSMDError {
+    #[error("Failed To Open File")]
+    FailedFileOpen(#[from] Error),
+    #[error("Failed To Parse Integer On Line {0}")]
+    FailedIntegerParse(usize),
+    #[error("Failed To Parse Float On Line {0}")]
+    FailedFloatParse(usize),
+    #[error("Unexpected End Of File")]
+    EndOFFile,
+    #[error("Unknown Studio Command {0} On Line {1}")]
+    UnknownStudioCommand(String, usize),
+    #[error("Missing {0} Argument On Line {1}")]
+    MissingArgument(&'static str, usize),
+    #[error("Invalid SMD Version")]
     InvalidVersion,
-    InvalidNumber,
+    #[error("Node ID Is Not Sequential On Line {0}")]
+    NonSequentialNode(usize),
+    #[error("Invalid Node Index On Line {0}")]
+    InvalidNodeIndex(usize),
+    #[error("Frames Are Not Sequential On Line {0}")]
+    NonSequentialFrames(usize),
+    #[error("No Fame Specified Before Nodes On Line {0}")]
+    NoFrame(usize),
+    #[error("No Frames In File")]
+    NoBindFrame,
+    #[error("Not All Bones Specified")]
+    MissingBoneBind,
 }
 
-impl Display for SMDParseError {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
-        let error_message: &str = match self {
-            SMDParseError::NotValidUTF8 => "Line Was Not Valid UTF8!",
-            SMDParseError::InvalidVersion => "SMD Version Not Vaild!",
-            SMDParseError::InvalidNumber => "Number Was Not Valid!",
-        };
-
-        fmt.write_str(error_message)
-    }
-}
-
-impl Error for SMDParseError {}
-
-pub fn load_smd(file_path: &Path, vta_path: Option<&Path>) -> Result<ImportedFileData, SMDParseError> {
-    log(
-        format!("Loading SMD File: {}", file_path.file_name().unwrap().to_str().unwrap()), // UNWRAP: Path should be valid from caller.
-        LogLevel::Verbose,
-    );
-
-    let file = File::open(file_path).unwrap(); // UNWRAP: The file should be accessible from caller.
-    let file_buffer = BufReader::new(file);
-    let mut file_lines = file_buffer.lines();
-    let mut line_count: usize = 0;
-
-    let mut file_data = SMDFileData::new();
-
-    loop {
-        line_count += 1;
-        let next_line = match file_lines.next() {
-            Some(line) => match line {
-                Ok(line) => line,
-                Err(error) => {
-                    log(format!("Failed On Line: {}", line_count), LogLevel::Verbose);
-                    log(format!("Fail Reason: {}", error), LogLevel::Debug);
-                    return Err(SMDParseError::NotValidUTF8);
-                }
-            },
-            None => break,
-        };
-
-        let mut line_arguments = next_line.split_whitespace();
-
-        match line_arguments.next() {
-            Some("version") => {
-                let version = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<isize>() {
-                        Ok(version) => version,
-                        Err(_) => todo!("Log and return with parse error!"),
-                    },
-                    None => todo!("Log and return with missing version argument!"),
-                };
-
-                if version < 1 || version > 3 {
-                    log(format!("Failed On Line: {}", line_count), LogLevel::Verbose);
-                    return Err(SMDParseError::InvalidVersion);
-                }
-
-                log(format!("SMD Version: {}", version), LogLevel::Debug);
-
-                file_data.version = version
-            }
-            Some("nodes") => loop {
-                line_count += 1;
-                let next_line = match file_lines.next() {
-                    Some(line) => match line {
-                        Ok(line) => line,
-                        Err(error) => {
-                            log(format!("Line failed to read: {}", error.to_string()), LogLevel::Error);
-                            return Err(SMDParseError::NotValidUTF8);
-                        }
-                    },
-                    None => todo!("Log and return with unexpected end of line!"),
-                };
-
-                let mut line_arguments = next_line.split_whitespace();
-
-                let node_id = match line_arguments.next() {
-                    Some(argument) => {
-                        if argument == "end" {
-                            break;
-                        }
-
-                        match argument.parse::<isize>() {
-                            Ok(node_id) => node_id,
-                            Err(_) => todo!("Log and return with parse error!"),
-                        }
-                    }
-                    None => continue,
-                };
-
-                if node_id < 0 {}
-
-                if file_data.nodes.iter().any(|node| node.id == node_id) {
-                    todo!("Log and error node id already used!")
-                }
-
-                let node_name = match line_arguments.next() {
-                    Some(argument) => {
-                        if !argument.starts_with('"') || !argument.ends_with('"') {
-                            todo!("Log and error node name not in quotes!")
-                        }
-
-                        if argument.len() == 2 {
-                            todo!("Log and error node has no name!")
-                        }
-
-                        argument[1..argument.len() - 1].to_string()
-                    }
-                    None => todo!("Log and error missing node name!"),
-                };
-
-                let node_parent = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<isize>() {
-                        Ok(node_parent) => node_parent,
-                        Err(_) => todo!("Log and return with parse errro!"),
-                    },
-                    None => todo!(),
-                };
-
-                if node_parent < -1 {
-                    todo!("Log and error node parent can't be negitve!")
-                }
-
-                if node_parent > -1 && !file_data.nodes.iter().any(|node| node.id == node_parent) {
-                    todo!("Log and error node could not find parent!")
-                }
-
-                file_data.nodes.push(Node::new(node_id, node_name, node_parent))
-            },
-            Some("skeleton") => loop {
-                line_count += 1;
-                let next_line = match file_lines.next() {
-                    Some(line) => match line {
-                        Ok(line) => line,
-                        Err(error) => {
-                            log(format!("Line failed to read: {}", error.to_string()), LogLevel::Error);
-                            return Err(SMDParseError::NotValidUTF8);
-                        }
-                    },
-                    None => todo!("Log and return with unexpected end of line!"),
-                };
-
-                let mut line_arguments = next_line.split_whitespace();
-
-                let node_id = match line_arguments.next() {
-                    Some(argument) => {
-                        if argument == "end" {
-                            break;
-                        }
-
-                        if argument == "time" {
-                            let time = match line_arguments.next() {
-                                Some(time_argumnt) => match time_argumnt.parse::<usize>() {
-                                    Ok(time) => time,
-                                    Err(_) => todo!("Parse faild"),
-                                },
-                                None => todo!("Fame argument doesn't exist!"),
-                            };
-
-                            if time != file_data.frames.len() {
-                                todo!("Frames are not sequential!")
-                            }
-
-                            file_data.frames.push(Frame::new());
-
-                            continue;
-                        }
-
-                        match argument.parse::<isize>() {
-                            Ok(node_id) => node_id,
-                            Err(_) => todo!("Log and return with parse error!"),
-                        }
-                    }
-                    None => continue,
-                };
-
-                if !file_data.nodes.iter().any(|node| node.id == node_id) {
-                    todo!("Faild to find node id!")
-                }
-
-                let position_x = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<f64>() {
-                        Ok(position) => position,
-                        Err(_) => todo!(),
-                    },
-                    None => todo!(),
-                };
-
-                let position_y = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<f64>() {
-                        Ok(position) => position,
-                        Err(_) => todo!(),
-                    },
-                    None => todo!(),
-                };
-
-                let position_z = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<f64>() {
-                        Ok(position) => position,
-                        Err(_) => todo!(),
-                    },
-                    None => todo!(),
-                };
-
-                let rotation_x = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<f64>() {
-                        Ok(rotation) => rotation,
-                        Err(_) => todo!(),
-                    },
-                    None => todo!(),
-                };
-
-                let rotation_y = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<f64>() {
-                        Ok(rotation) => rotation,
-                        Err(_) => todo!(),
-                    },
-                    None => todo!(),
-                };
-
-                let rotation_z = match line_arguments.next() {
-                    Some(argument) => match argument.parse::<f64>() {
-                        Ok(rotation) => rotation,
-                        Err(_) => todo!(),
-                    },
-                    None => todo!(),
-                };
-
-                let frame = match file_data.frames.last_mut() {
-                    Some(frame) => frame,
-                    None => todo!(),
-                };
-
-                frame.animated_nodes.push(AnimationNode::new(
-                    node_id,
-                    Vector3::new(position_x, position_y, position_z),
-                    Angles::new(rotation_x, rotation_y, rotation_z),
-                ))
-            },
-            Some("triangles") => loop {
-                line_count += 1;
-                let next_line = match file_lines.next() {
-                    Some(line) => match line {
-                        Ok(line) => line,
-                        Err(error) => {
-                            log(format!("Line failed to read: {}", error.to_string()), LogLevel::Error);
-                            return Err(SMDParseError::NotValidUTF8);
-                        }
-                    },
-                    None => todo!("Log and return with unexpected end of line!"),
-                };
-
-                let mut line_arguments = next_line.split_whitespace();
-
-                let material = match line_arguments.next() {
-                    Some(argument) => {
-                        if argument == "end" {
-                            break;
-                        }
-
-                        argument.to_string()
-                    }
-                    None => continue,
-                };
-
-                let material_index = match file_data.materials.iter().position(|material_name| material_name == &material) {
-                    Some(index) => index,
-                    None => {
-                        file_data.materials.push(material);
-                        file_data.materials.len() - 1
-                    }
-                };
-
-                let mut triangle = Triangle::new(material_index);
-
-                while triangle.vertices.len() < 3 {
-                    line_count += 1;
-                    let next_line = match file_lines.next() {
-                        Some(line) => match line {
-                            Ok(line) => line,
-                            Err(error) => {
-                                log(format!("Line failed to read: {}", error.to_string()), LogLevel::Error);
-                                return Err(SMDParseError::NotValidUTF8);
-                            }
-                        },
-                        None => todo!("Log and return with unexpected end of line!"),
-                    };
-
-                    let mut line_arguments = next_line.split_whitespace();
-
-                    let node_id = match line_arguments.next() {
-                        Some(argument) => {
-                            if argument == "end" {
-                                todo!("Unexpected end of triangles")
-                            }
-
-                            match argument.parse::<isize>() {
-                                Ok(node_id) => node_id,
-                                Err(error) => {
-                                    log(format!("Failed on line {}", line_count), LogLevel::Verbose);
-                                    log(format!("Fail Reason: {}", error), LogLevel::Debug);
-                                    return Err(SMDParseError::InvalidNumber);
-                                }
-                            }
-                        }
-                        None => continue,
-                    };
-
-                    let position_x = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(position) => position,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let position_y = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(position) => position,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let position_z = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(position) => position,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let normal_x = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(normal) => normal,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let normal_y = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(normal) => normal,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let normal_z = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(normal) => normal,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let uv_x = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(uv) => uv,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let uv_y = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<f64>() {
-                            Ok(uv) => uv,
-                            Err(_) => todo!(),
-                        },
-                        None => todo!(),
-                    };
-
-                    let mut vertex = Vertex::new(
-                        Vector3::new(position_x, position_y, position_z),
-                        Vector3::new(normal_x, normal_y, normal_z),
-                        Vector2::new(uv_x, uv_y),
-                    );
-
-                    let link_count = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<isize>() {
-                            Ok(link_count) => link_count,
-                            Err(_) => todo!(),
-                        },
-                        None => 0,
-                    };
-
-                    let mut weighting = 0.0;
-                    for _ in 0..link_count {
-                        let node_id = match line_arguments.next() {
-                            Some(argument) => match argument.parse::<isize>() {
-                                Ok(node_id) => node_id,
-                                Err(_) => todo!(),
-                            },
-                            None => todo!(),
-                        };
-
-                        let weight = match line_arguments.next() {
-                            Some(argument) => match argument.parse::<f64>() {
-                                Ok(normal) => normal,
-                                Err(_) => todo!(),
-                            },
-                            None => todo!(),
-                        };
-
-                        weighting += weight;
-                        vertex.weights.push((node_id, weight))
-                    }
-
-                    if weighting < 1.0 {
-                        vertex.weights.push((node_id, 1.0 - weighting))
-                    }
-
-                    if file_data.version < 3 {
-                        triangle.vertices.push(vertex);
-                        continue;
-                    }
-
-                    let uv_count = match line_arguments.next() {
-                        Some(argument) => match argument.parse::<isize>() {
-                            Ok(uv_count) => uv_count,
-                            Err(_) => todo!(),
-                        },
-                        None => {
-                            triangle.vertices.push(vertex);
-                            continue;
-                        }
-                    };
-
-                    for _ in 0..uv_count {
-                        let uv_x = match line_arguments.next() {
-                            Some(argument) => match argument.parse::<f64>() {
-                                Ok(uv) => uv,
-                                Err(_) => todo!(),
-                            },
-                            None => todo!(),
-                        };
-
-                        let uv_y = match line_arguments.next() {
-                            Some(argument) => match argument.parse::<f64>() {
-                                Ok(uv) => uv,
-                                Err(_) => todo!(),
-                            },
-                            None => todo!(),
-                        };
-
-                        vertex.extra_uv.push(Vector2::new(uv_x, uv_y))
-                    }
-
-                    triangle.vertices.push(vertex);
-                }
-
-                file_data.triangles.push(triangle)
-            },
-            Some("vertexanimation") => todo!("Log and error flexes should be stored in vta file"),
-            Some(_) => todo!("Log and return for unknown command!"),
-            None => continue,
-        }
-    }
-
-    if let Some(vta_path) = vta_path {
-        todo!("Implment vta reading!")
-    }
-
-    let mut imported_file_data = ImportedFileData::new();
-    let mut mapped_nodes: HashMap<isize, usize> = HashMap::new();
-
-    let bind_pose = match file_data.frames.first() {
-        Some(frame) => frame,
-        None => todo!("SMd requires first frame"),
-    };
-
-    if bind_pose.animated_nodes.len() != file_data.nodes.len() {
-        todo!("First frame requires all nodes")
-    }
-
-    for node in file_data.nodes {
-        // UNWRAP: All check should not allow it to not exist
-        let bind = bind_pose.animated_nodes.iter().find(|animation| animation.id == node.id).unwrap();
-
-        let parent = if node.parent == -1 {
-            None
-        } else {
-            // UNWRAP: All check should not allow it to not exist
-            Some(*mapped_nodes.get(&node.parent).unwrap())
-        };
-
-        let new_bone = ImportedBone::new(node.name, bind.position, bind.rotation.to_quaternion(), parent);
-
-        let bone_id = imported_file_data.add_bone(new_bone);
-
-        mapped_nodes.insert(node.id, bone_id);
-    }
-
-    for frame in file_data.frames {
-        let mut frame_data = ImportedAnimationFrame::new();
-
-        for animation in frame.animated_nodes {
-            // UNWRAP: All check should not allow it to not exist
-            let bone_id = *mapped_nodes.get(&animation.id).unwrap();
-
-            let animation = ImportedBoneAnimation::new(bone_id, animation.position, animation.rotation.to_quaternion());
-
-            frame_data.add_bone(animation);
-        }
-
-        imported_file_data.add_frame(frame_data);
-    }
-
-    for material in file_data.materials {
-        imported_file_data.mesh.add_material(material);
-    }
-
-    for triangle in file_data.triangles {
-        let mut face = ImportedFace::new(triangle.material_index);
-
-        for vertex in triangle.vertices {
-            let mut vertice = ImportedVertex::new(vertex.position, vertex.normal, vertex.uv);
-
-            for (bone_id, weight) in vertex.weights {
-                // UNWRAP: All check should not allow it to not exist
-                let bone_id = *mapped_nodes.get(&bone_id).unwrap();
-
-                vertice.add_weight(bone_id, weight);
-            }
-
-            let vertex_index = imported_file_data.mesh.add_vertex(vertice);
-
-            face.add_vertex_index(vertex_index);
-        }
-
-        imported_file_data.mesh.add_face(face);
-    }
-
-    Ok(imported_file_data)
-}
-
-struct SMDFileData {
-    version: isize,
+#[derive(Default)]
+struct SMDData {
     nodes: Vec<Node>,
-    frames: Vec<Frame>,
-    materials: Vec<String>,
-    triangles: Vec<Triangle>,
+    frames: Vec<Vec<Bone>>,
+    vertices: Vec<Vertex>,
+    materials: HashMap<String, Vec<Vec<usize>>>,
 }
 
-impl SMDFileData {
-    fn new() -> Self {
-        SMDFileData {
-            version: 1,
-            nodes: Vec::new(),
-            frames: Vec::new(),
-            materials: Vec::new(),
-            triangles: Vec::new(),
-        }
+impl SMDData {
+    fn add_vertex(&mut self, vertex: Vertex) -> usize {
+        self.vertices.push(vertex);
+        self.vertices.len() - 1
     }
 }
 
 struct Node {
-    id: isize,
     name: String,
-    parent: isize,
+    parent: Option<usize>,
 }
 
 impl Node {
-    fn new(id: isize, name: String, parent: isize) -> Self {
-        Self { id, name, parent }
+    fn new(name: String, parent: Option<usize>) -> Self {
+        Self { name, parent }
     }
 }
 
-struct Frame {
-    animated_nodes: Vec<AnimationNode>,
-}
-
-impl Frame {
-    fn new() -> Self {
-        Self { animated_nodes: Vec::new() }
-    }
-}
-
-struct AnimationNode {
-    id: isize,
+struct Bone {
+    node: usize,
     position: Vector3,
     rotation: Angles,
 }
 
-impl AnimationNode {
-    fn new(id: isize, position: Vector3, rotation: Angles) -> Self {
-        Self { id, position, rotation }
+impl Bone {
+    fn new(node: usize, position: Vector3, rotation: Angles) -> Self {
+        Self { node, position, rotation }
     }
 }
-
-struct Triangle {
-    material_index: usize,
-    vertices: Vec<Vertex>,
-}
-
-impl Triangle {
-    fn new(material_index: usize) -> Self {
-        Self {
-            material_index,
-            vertices: Vec::with_capacity(3),
-        }
-    }
-}
-
 struct Vertex {
     position: Vector3,
     normal: Vector3,
-    uv: Vector2,
-    weights: Vec<(isize, f64)>,
-    extra_uv: Vec<Vector2>,
+    texture_coordinate: Vector2,
+    links: Vec<Link>,
 }
 
 impl Vertex {
-    fn new(position: Vector3, normal: Vector3, uv: Vector2) -> Self {
+    fn new(position: Vector3, normal: Vector3, texture_coordinate: Vector2) -> Self {
         Self {
             position,
             normal,
-            uv,
-            weights: Vec::with_capacity(1),
-            extra_uv: Vec::new(),
+            texture_coordinate,
+            links: Vec::with_capacity(1),
         }
     }
+}
+
+struct Link {
+    bone: usize,
+    weight: f64,
+}
+
+impl Link {
+    fn new(bone: usize, weight: f64) -> Self {
+        Self { bone, weight }
+    }
+}
+
+pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFileData, ParseSMDError> {
+    log(
+        format!("Loading SMD File: {:?}", file_path.file_name().unwrap()), // UNWRAP: Path should be valid if called.
+        LogLevel::Verbose,
+    );
+
+    let file = File::open(file_path)?;
+    let file_buffer = BufReader::new(file);
+    let mut lines = file_buffer.lines().flatten();
+    let mut line_count = 0;
+    let mut smd_data = SMDData::default();
+
+    loop {
+        let current_line = match lines.next() {
+            Some(line) => line,
+            None => break,
+        };
+        line_count += 1;
+
+        let mut line_arguments = current_line.split_whitespace();
+        let command = line_arguments.next();
+
+        match command {
+            Some("version") => {
+                let version = match line_arguments.next() {
+                    Some(version) => match version.parse::<isize>() {
+                        Ok(version) => version,
+                        Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("Version", line_count)),
+                };
+
+                if version < 1 || version > 2 {
+                    return Err(ParseSMDError::InvalidVersion);
+                }
+            }
+            Some("nodes") => loop {
+                let current_line = match lines.next() {
+                    Some(line) => line,
+                    None => return Err(ParseSMDError::EndOFFile),
+                };
+                line_count += 1;
+
+                struct SplitAtWhitespace<'a> {
+                    input: &'a str,
+                    index: usize,
+                    in_quotes: bool,
+                }
+
+                impl<'a> SplitAtWhitespace<'a> {
+                    fn new(input: &'a str) -> Self {
+                        Self {
+                            input,
+                            index: 0,
+                            in_quotes: false,
+                        }
+                    }
+                }
+
+                impl<'a> Iterator for SplitAtWhitespace<'a> {
+                    type Item = &'a str;
+
+                    fn next(&mut self) -> Option<Self::Item> {
+                        let mut start = None;
+                        let mut end = None;
+                        let mut chars = self.input[self.index..].char_indices();
+
+                        while let Some((index, char)) = chars.next() {
+                            match char {
+                                '"' => {
+                                    self.in_quotes = !self.in_quotes;
+                                    if self.in_quotes {
+                                        start.get_or_insert(self.index + index + 1);
+                                    } else if start.is_some() {
+                                        end = Some(self.index + index);
+                                        break;
+                                    }
+                                }
+                                _ if char.is_whitespace() && !self.in_quotes => {
+                                    if let Some(start) = start {
+                                        end = Some(start + index);
+                                        break;
+                                    }
+                                }
+                                _ => {
+                                    start.get_or_insert(self.index);
+                                }
+                            }
+                        }
+
+                        if let Some(start) = start {
+                            let end = end.unwrap_or(self.input.len());
+                            let word = &self.input[start..end];
+                            self.index = end;
+                            Some(word.trim())
+                        } else {
+                            None
+                        }
+                    }
+                }
+
+                let mut line_arguments = SplitAtWhitespace::new(&current_line);
+
+                let index = match line_arguments.next() {
+                    Some(index) => {
+                        if index == "end" {
+                            break;
+                        }
+                        match index.parse::<usize>() {
+                            Ok(index) => index,
+                            Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                        }
+                    }
+                    None => return Err(ParseSMDError::MissingArgument("index", line_count)),
+                };
+
+                if index != smd_data.nodes.len() {
+                    return Err(ParseSMDError::NonSequentialNode(line_count));
+                }
+
+                let name = match line_arguments.next() {
+                    Some(name) => name.to_string(),
+                    None => return Err(ParseSMDError::MissingArgument("name", line_count)),
+                };
+
+                let parent = match line_arguments.next() {
+                    Some(parent) => match parent.parse::<isize>() {
+                        Ok(parent) => parent,
+                        Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("parent", line_count)),
+                };
+
+                if parent < -1 || parent != -1 && parent as usize > smd_data.nodes.len() {
+                    return Err(ParseSMDError::InvalidNodeIndex(line_count));
+                }
+
+                smd_data.nodes.push(Node::new(name, if parent == -1 { None } else { Some(parent as usize) }))
+            },
+            Some("skeleton") => loop {
+                let current_line = match lines.next() {
+                    Some(line) => line,
+                    None => return Err(ParseSMDError::EndOFFile),
+                };
+                line_count += 1;
+
+                let mut line_arguments = current_line.split_whitespace();
+
+                let node = match line_arguments.next() {
+                    Some(node) => match node {
+                        "end" => break,
+                        "time" => {
+                            let time = match line_arguments.next() {
+                                Some(time) => match time.parse::<usize>() {
+                                    Ok(time) => time,
+                                    Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                                },
+                                None => return Err(ParseSMDError::MissingArgument("frame", line_count)),
+                            };
+
+                            if time != smd_data.frames.len() {
+                                return Err(ParseSMDError::NonSequentialFrames(line_count));
+                            }
+
+                            smd_data.frames.push(Vec::new());
+                            continue;
+                        }
+                        _ => match node.parse::<usize>() {
+                            Ok(node) => node,
+                            Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                        },
+                    },
+
+                    None => return Err(ParseSMDError::MissingArgument("node", line_count)),
+                };
+
+                let frame_count = smd_data.frames.len();
+
+                let frame = match smd_data.frames.last_mut() {
+                    Some(frame) => frame,
+                    None => return Err(ParseSMDError::NoFrame(line_count)),
+                };
+
+                if node > smd_data.nodes.len() {
+                    return Err(ParseSMDError::InvalidNodeIndex(line_count));
+                }
+
+                if frame_count == 1 && node != frame.len() {
+                    return Err(ParseSMDError::NonSequentialNode(line_count));
+                }
+
+                let x_position = match line_arguments.next() {
+                    Some(x_position) => match x_position.parse::<f64>() {
+                        Ok(x_position) => x_position,
+                        Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("X Position", line_count)),
+                };
+
+                let y_position = match line_arguments.next() {
+                    Some(y_position) => match y_position.parse::<f64>() {
+                        Ok(y_position) => y_position,
+                        Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("Y Position", line_count)),
+                };
+
+                let z_position = match line_arguments.next() {
+                    Some(z_position) => match z_position.parse::<f64>() {
+                        Ok(z_position) => z_position,
+                        Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("Z Position", line_count)),
+                };
+
+                let x_rotation = match line_arguments.next() {
+                    Some(x_rotation) => match x_rotation.parse::<f64>() {
+                        Ok(x_rotation) => x_rotation,
+                        Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("X Rotation", line_count)),
+                };
+
+                let y_rotation = match line_arguments.next() {
+                    Some(y_rotation) => match y_rotation.parse::<f64>() {
+                        Ok(y_rotation) => y_rotation,
+                        Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("Y Rotation", line_count)),
+                };
+
+                let z_rotation = match line_arguments.next() {
+                    Some(z_rotation) => match z_rotation.parse::<f64>() {
+                        Ok(z_rotation) => z_rotation,
+                        Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                    },
+                    None => return Err(ParseSMDError::MissingArgument("Z Rotation", line_count)),
+                };
+
+                frame.push(Bone::new(
+                    node,
+                    Vector3::new(x_position, y_position, z_position),
+                    Angles::new(x_rotation, y_rotation, z_rotation),
+                ));
+            },
+            Some("triangles") => loop {
+                let current_line = match lines.next() {
+                    Some(line) => line,
+                    None => return Err(ParseSMDError::EndOFFile),
+                };
+                line_count += 1;
+
+                if current_line == "end" {
+                    break;
+                }
+
+                let mut face = Vec::with_capacity(3);
+
+                for _ in 0..3 {
+                    let current_line = match lines.next() {
+                        Some(line) => line,
+                        None => return Err(ParseSMDError::EndOFFile),
+                    };
+                    line_count += 1;
+
+                    let mut line_arguments = current_line.split_whitespace();
+
+                    let bone = match line_arguments.next() {
+                        Some(bone) => match bone.parse::<usize>() {
+                            Ok(bone) => bone,
+                            Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("Bone", line_count)),
+                    };
+
+                    if bone > smd_data.nodes.len() {
+                        return Err(ParseSMDError::InvalidNodeIndex(line_count));
+                    }
+
+                    let x_position = match line_arguments.next() {
+                        Some(x_position) => match x_position.parse::<f64>() {
+                            Ok(x_position) => x_position,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("X Position", line_count)),
+                    };
+
+                    let y_position = match line_arguments.next() {
+                        Some(y_position) => match y_position.parse::<f64>() {
+                            Ok(y_position) => y_position,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("Y Position", line_count)),
+                    };
+
+                    let z_position = match line_arguments.next() {
+                        Some(z_position) => match z_position.parse::<f64>() {
+                            Ok(z_position) => z_position,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("Z Position", line_count)),
+                    };
+
+                    let x_normal = match line_arguments.next() {
+                        Some(x_normal) => match x_normal.parse::<f64>() {
+                            Ok(x_normal) => x_normal,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("X Normal", line_count)),
+                    };
+
+                    let y_normal = match line_arguments.next() {
+                        Some(y_normal) => match y_normal.parse::<f64>() {
+                            Ok(y_normal) => y_normal,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("Y Normal", line_count)),
+                    };
+
+                    let z_normal = match line_arguments.next() {
+                        Some(z_normal) => match z_normal.parse::<f64>() {
+                            Ok(z_normal) => z_normal,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("Z Normal", line_count)),
+                    };
+
+                    let u_texture_coordinate = match line_arguments.next() {
+                        Some(u_texture_coordinate) => match u_texture_coordinate.parse::<f64>() {
+                            Ok(u_texture_coordinate) => u_texture_coordinate,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("U Texture Coordinate", line_count)),
+                    };
+
+                    let v_texture_coordinate = match line_arguments.next() {
+                        Some(v_texture_coordinate) => match v_texture_coordinate.parse::<f64>() {
+                            Ok(v_texture_coordinate) => v_texture_coordinate,
+                            Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                        },
+                        None => return Err(ParseSMDError::MissingArgument("V Texture Coordinate", line_count)),
+                    };
+
+                    let link_count = match line_arguments.next() {
+                        Some(link_count) => match link_count.parse::<usize>() {
+                            Ok(link_count) => link_count,
+                            Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                        },
+                        None => 0,
+                    };
+
+                    let mut vertex = Vertex::new(
+                        Vector3::new(x_position, y_position, z_position),
+                        Vector3::new(x_normal, y_normal, z_normal),
+                        Vector2::new(u_texture_coordinate, v_texture_coordinate),
+                    );
+
+                    if link_count == 0 {
+                        vertex.links.push(Link::new(bone, 1.0));
+                        let vertex_index = smd_data.add_vertex(vertex);
+                        face.push(vertex_index);
+                        continue;
+                    }
+
+                    vertex.links.reserve(link_count);
+
+                    for _ in 0..link_count {
+                        let bone = match line_arguments.next() {
+                            Some(bone) => match bone.parse::<usize>() {
+                                Ok(bone) => bone,
+                                Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                            },
+                            None => return Err(ParseSMDError::MissingArgument("Bone Link", line_count)),
+                        };
+
+                        let weight = match line_arguments.next() {
+                            Some(weight) => match weight.parse::<f64>() {
+                                Ok(weight) => weight,
+                                Err(_) => return Err(ParseSMDError::FailedFloatParse(line_count)),
+                            },
+                            None => return Err(ParseSMDError::MissingArgument("Weight Link", line_count)),
+                        };
+
+                        if bone > smd_data.nodes.len() {
+                            return Err(ParseSMDError::InvalidNodeIndex(line_count));
+                        }
+
+                        vertex.links.push(Link::new(bone, weight))
+                    }
+
+                    let vertex_index = smd_data.add_vertex(vertex);
+                    face.push(vertex_index);
+                }
+
+                let face_list = match smd_data.materials.entry(current_line) {
+                    Entry::Occupied(entry) => entry.into_mut(),
+                    Entry::Vacant(entry) => entry.insert(Vec::new()),
+                };
+
+                face_list.push(face);
+            },
+            Some(command) => return Err(ParseSMDError::UnknownStudioCommand(command.to_string(), line_count)),
+            None => continue,
+        }
+    }
+
+    let mut file_data = ImportedFileData::default();
+
+    if smd_data.frames.len() == 0 {
+        return Err(ParseSMDError::NoBindFrame);
+    }
+
+    if smd_data.frames[0].len() != smd_data.nodes.len() {
+        return Err(ParseSMDError::MissingBoneBind);
+    }
+
+    let mut mapped_nodes = HashMap::new();
+
+    for (id, node) in smd_data.nodes.into_iter().enumerate() {
+        let bind_frame = &smd_data.frames[0];
+
+        let bind_pose = match bind_frame.iter().find(|bone| bone.node == id) {
+            Some(bind_pose) => bind_pose,
+            None => return Err(ParseSMDError::MissingBoneBind),
+        };
+
+        let parent = match node.parent {
+            Some(parent) => match mapped_nodes.get(&parent) {
+                Some(parent) => Some(*parent),
+                None => None,
+            },
+            None => None,
+        };
+
+        let index = file_data.add_bone(ImportedBone::new(node.name, bind_pose.position, bind_pose.rotation.to_quaternion(), parent));
+        mapped_nodes.insert(id, index);
+    }
+
+    for frame in smd_data.frames {
+        let mut animation = ImportedAnimationFrame::default();
+        for bone in frame {
+            let index = mapped_nodes.get(&bone.node).unwrap(); // UNWRAP: This should never fail.
+            animation.add_bone(ImportedBoneAnimation::new(*index, bone.position, bone.rotation.to_quaternion()))
+        }
+        file_data.add_frame(animation);
+    }
+
+    file_data.mesh.materials = smd_data.materials;
+
+    for vertex in smd_data.vertices {
+        let mut vert = ImportedVertex::new(vertex.position, vertex.normal, vertex.texture_coordinate);
+        for link in vertex.links {
+            let bone_index = mapped_nodes.get(&link.bone).unwrap(); // UNWRAP: This should never fail.
+            vert.add_weight(*bone_index, link.weight)
+        }
+        file_data.mesh.add_vertex(vert);
+    }
+
+    Ok(file_data)
 }

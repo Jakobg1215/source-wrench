@@ -1,14 +1,12 @@
-use serde_json::value::Index;
-
 use crate::utilities::mathematics::{Angles, Quaternion, Vector2, Vector3, Vector4};
 
 /// The main structure of where all processed data is contained.
 /// This processed data is set up to be easily written out at the write stage.
 pub struct ProcessedData {
-    bone_data: ProcessedBoneData,
-    animation_data: Vec<ProcessedAnimationData>,
-    sequence_data: Vec<ProcessedSequenceData>,
-    model_data: ProcessedModelData,
+    pub bone_data: ProcessedBoneData,
+    pub animation_data: Vec<ProcessedAnimationData>,
+    pub sequence_data: Vec<ProcessedSequenceData>,
+    pub model_data: ProcessedModelData,
 }
 
 impl ProcessedData {
@@ -25,9 +23,9 @@ impl ProcessedData {
 /// The main structure that store everything relevant to bone data.
 pub struct ProcessedBoneData {
     /// The bone table were any data that uses bones indexes to.
-    processed_bones: Vec<ProcessedBone>,
+    pub processed_bones: Vec<ProcessedBone>,
     /// The bone table sorted by name with quick sort.
-    sorted_bones_by_name: Vec<usize>,
+    pub sorted_bones_by_name: Vec<usize>,
 }
 
 impl ProcessedBoneData {
@@ -42,17 +40,17 @@ impl ProcessedBoneData {
 /// The structure that contains the data for a bone.
 pub struct ProcessedBone {
     /// The name of the bone.
-    name: String,
+    pub name: String,
     /// If the bone has no parent then its -1 else its the index to the parent bone.
-    parent: Option<usize>,
+    pub parent: Option<usize>,
     /// The location of the bone relative to its parent or in world space if not parented.
-    position: Vector3,
+    pub position: Vector3,
     /// The orientation of the bone in world space.
-    rotation: Angles,
+    pub rotation: Angles,
     /// The scale factor of each axis for position animation data as they are stored as fix-point shorts.
-    animation_position_scale: Vector3,
+    pub animation_position_scale: Vector3,
     /// The scale factor of each axis for rotation animation data as they are stored as fix-point shorts.
-    animation_rotation_scale: Vector3,
+    pub animation_rotation_scale: Vector3,
 }
 
 impl ProcessedBone {
@@ -73,7 +71,7 @@ pub struct ProcessedAnimationData {
     /// The name of the animation.
     pub name: String,
     /// If the animation is delta for additive animations.
-    is_delta: bool,
+    pub is_delta: bool,
     /// The amount of frames that the animation has.
     pub frame_count: usize,
     /// The animation data of the bones in the animation.
@@ -94,7 +92,7 @@ impl ProcessedAnimationData {
 /// The structure for the an animated bone.
 pub struct ProcessedAnimatedBoneData {
     /// The index of the bone in the bone table.
-    bone: usize,
+    pub bone: usize,
     /// The position data of the animated bone.
     pub position: Option<ProcessedAnimationPosition>,
     /// The rotation data of the animated bone.
@@ -128,7 +126,7 @@ pub enum ProcessedAnimationRotation {
 /// The structure that contains data for sequences.
 pub struct ProcessedSequenceData {
     /// The name of the sequence.
-    name: String,
+    pub name: String,
     /// The array of animation indexes used for blending.
     pub animations: Vec<usize>,
 }
@@ -171,8 +169,8 @@ impl ProcessedModelData {
 }
 
 pub struct ProcessedBodyGroupData {
-    name: String,
-    parts: Vec<ProcessedBodyPartData>,
+    pub name: String,
+    pub parts: Vec<ProcessedBodyPartData>,
 }
 
 impl ProcessedBodyGroupData {
@@ -182,47 +180,47 @@ impl ProcessedBodyGroupData {
 }
 
 pub struct ProcessedBodyPartData {
-    name: String,
-    meshes: Vec<ProcessedMeshData>,
+    pub name: String,
+    pub meshes: Vec<ProcessedMeshData>,
 }
 
 pub struct ProcessedMeshData {
-    material: usize,
-    vertex_data: Vec<ProcessedVertexData>,
-    strip_groups: Vec<ProcessedStripGroup>,
+    pub material: usize,
+    pub vertex_data: Vec<ProcessedVertexData>,
+    pub strip_groups: Vec<ProcessedStripGroup>,
 }
 
 pub struct ProcessedVertexData {
-    weights: [f64; 3],
-    bones: [u8; 3],
-    bone_count: u8,
-    position: Vector3,
-    normal: Vector3,
-    uv: Vector2,
-    tangent: Vector4,
+    pub weights: [f64; 3],
+    pub bones: [u8; 3],
+    pub bone_count: u8,
+    pub position: Vector3,
+    pub normal: Vector3,
+    pub uv: Vector2,
+    pub tangent: Vector4,
 }
 
 pub struct ProcessedStripGroup {
-    vertices: Vec<ProcessedMeshVertex>,
-    indices: Vec<u16>,
-    strips: Vec<ProcessedStrip>,
-    is_flexed: bool,
+    pub vertices: Vec<ProcessedMeshVertex>,
+    pub indices: Vec<u16>,
+    pub strips: Vec<ProcessedStrip>,
+    pub is_flexed: bool,
 }
 
 pub struct ProcessedMeshVertex {
-    bone_count: u8,
-    vertex_index: u16,
-    bones: [u8; 3],
+    pub bone_count: u8,
+    pub vertex_index: u16,
+    pub bones: [u8; 3],
 }
 
 pub struct ProcessedStrip {
-    indices_count: i32,
-    vertex_count: i32,
-    bone_count: i16,
-    hardware_bones: Vec<ProcessedHardwareBone>,
+    pub indices_count: i32,
+    pub vertex_count: i32,
+    pub bone_count: i16,
+    pub hardware_bones: Vec<ProcessedHardwareBone>,
 }
 
 pub struct ProcessedHardwareBone {
-    hardware_bone: i32,
-    bone_table_bone: i32,
+    pub hardware_bone: i32,
+    pub bone_table_bone: i32,
 }

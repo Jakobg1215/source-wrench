@@ -55,7 +55,7 @@ pub fn process(input: CompilationDataInput, import: HashMap<String, ImportedFile
     }
 
     log("Processing Mesh Data", LogLevel::Debug);
-    let processed_mesh = process_mesh_data(&input, &import, &bone_table)?;
+    let _processed_mesh = process_mesh_data(&input, &import, &bone_table)?;
 
     todo!()
 }
