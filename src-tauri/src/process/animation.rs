@@ -15,6 +15,36 @@ use super::{
     ProcessingDataError, FLOAT_TOLERANCE,
 };
 
+pub struct MappedAnimation {
+    name: String,
+    frame_count: usize,
+    animation: Vec<MappedBoneAnimation>,
+}
+
+impl MappedAnimation {
+    fn new(name: String) -> Self {
+        Self {
+            name,
+            frame_count: 0,
+            animation: Vec::new(),
+        }
+    }
+}
+
+pub struct MappedBoneAnimation {
+    bone_index: usize,
+    frames: Vec<(Vector3, Quaternion)>,
+}
+
+impl MappedBoneAnimation {
+    fn new(bone_index: usize) -> Self {
+        Self {
+            bone_index,
+            frames: Vec::new(),
+        }
+    }
+}
+
 /// Takes all animations and converts the local bones to the bone table bones.
 pub fn map_animations_to_table(
     input: &CompilationDataInput,
@@ -98,11 +128,15 @@ pub fn compress_animations(
                 let (mapped_position, mapped_rotation) = mapped_bone.frames.pop().unwrap();
 
                 if (mapped_position - bone.position).sum() > FLOAT_TOLERANCE {
+                    // TODO: If the animation is delta then it should just pass the raw animated position.
                     processed_bone.position = Some(ProcessedAnimationPosition::Raw(mapped_position - bone.position));
                 }
 
                 if (mapped_rotation.to_angles() - bone.orientation.to_angles()).sum() > FLOAT_TOLERANCE {
-                    processed_bone.rotation = Some(ProcessedAnimationRotation::Raw(mapped_rotation));
+                    // TODO: If the animation is delta then it should just pass the raw animated position.
+                    processed_bone.rotation = Some(ProcessedAnimationRotation::Raw(
+                        (mapped_rotation.to_angles() - bone.orientation.to_angles()).to_quaternion(),
+                    ));
                 }
 
                 processed_animation.bones.push(processed_bone);
@@ -111,7 +145,7 @@ pub fn compress_animations(
             }
 
             for (_mapped_position, _mapped_rotation) in mapped_bone.frames {
-                todo!()
+                todo!("Write Compression Of Animations")
             }
         }
 
@@ -138,34 +172,4 @@ pub fn process_sequences(input: &CompilationDataInput, animations: &Vec<Processe
     }
 
     Ok(processed_sequences)
-}
-
-pub struct MappedAnimation {
-    name: String,
-    frame_count: usize,
-    animation: Vec<MappedBoneAnimation>,
-}
-
-impl MappedAnimation {
-    fn new(name: String) -> Self {
-        Self {
-            name,
-            frame_count: 0,
-            animation: Vec::new(),
-        }
-    }
-}
-
-pub struct MappedBoneAnimation {
-    bone_index: usize,
-    frames: Vec<(Vector3, Quaternion)>,
-}
-
-impl MappedBoneAnimation {
-    fn new(bone_index: usize) -> Self {
-        Self {
-            bone_index,
-            frames: Vec::new(),
-        }
-    }
 }

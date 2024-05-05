@@ -15,7 +15,7 @@ impl ProcessedData {
             bone_data: ProcessedBoneData::new(),
             animation_data: Vec::new(),
             sequence_data: Vec::new(),
-            model_data: ProcessedModelData::new(),
+            model_data: ProcessedModelData::default(),
         }
     }
 }
@@ -138,18 +138,10 @@ impl ProcessedSequenceData {
 }
 
 /// The main structure that stores everything relevant to mesh data.
+#[derive(Default)]
 pub struct ProcessedModelData {
     pub body_groups: Vec<ProcessedBodyGroupData>,
     pub materials: Vec<String>,
-}
-
-impl ProcessedModelData {
-    pub fn new() -> Self {
-        Self {
-            body_groups: Vec::new(),
-            materials: Vec::new(),
-        }
-    }
 }
 
 impl ProcessedModelData {
@@ -179,9 +171,21 @@ impl ProcessedBodyGroupData {
     }
 }
 
+impl ProcessedBodyGroupData {
+    pub fn add_part(&mut self, part: ProcessedBodyPartData) {
+        self.parts.push(part);
+    }
+}
+
 pub struct ProcessedBodyPartData {
     pub name: String,
     pub meshes: Vec<ProcessedMeshData>,
+}
+
+impl ProcessedBodyPartData {
+    pub fn new(name: String) -> Self {
+        Self { name, meshes: Vec::new() }
+    }
 }
 
 pub struct ProcessedMeshData {
@@ -190,8 +194,9 @@ pub struct ProcessedMeshData {
     pub strip_groups: Vec<ProcessedStripGroup>,
 }
 
+#[derive(Default)]
 pub struct ProcessedVertexData {
-    pub weights: [f64; 3],
+    pub weights: [f32; 3],
     pub bones: [u8; 3],
     pub bone_count: u8,
     pub position: Vector3,

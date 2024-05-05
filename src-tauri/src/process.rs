@@ -1,8 +1,6 @@
-use std::{
-    collections::HashMap,
-    error::Error,
-    fmt::{self, Display, Formatter},
-};
+use std::collections::HashMap;
+
+use thiserror::Error;
 
 use crate::{
     import::ImportedFileData,
@@ -22,12 +20,41 @@ mod bones;
 mod mesh;
 mod structures;
 
+#[derive(Error, Debug)]
+pub enum ProcessingDataError {
+    #[error("Bone Had Different Hierarchy Than Pose")]
+    BoneHierarchyError,
+    #[error("Model Has Too Many Bone")]
+    TooManyBones,
+    #[error("Model Has Too Many Animations")]
+    TooManyAnimations,
+    #[error("Model Has Too Many Sequences")]
+    TooManySequences,
+    #[error("Sequence Could Not Find Animation")]
+    SequenceAnimationNotFound,
+    #[error("Model Has No Sequences")]
+    NoSequences,
+    #[error("Body Part Name Is Too Long")]
+    BodyPartNameTooLong,
+    #[error("Vertex Has More That 3 Weight Links")]
+    VertHasTooManyLinks,
+    #[error("Face Did Not Have 3 Indices")]
+    IncompleteFace,
+    #[error("Failed To Generated Tangents")]
+    FailedTangentGeneration,
+}
+
 const FLOAT_TOLERANCE: f64 = 0.000001;
 
 pub fn process(input: CompilationDataInput, import: HashMap<String, ImportedFileData>) -> Result<ProcessedData, ProcessingDataError> {
     log("Creating Bone Table", LogLevel::Debug);
     let mut bone_table = create_bone_table(&import)?;
     log(format!("Model uses {} source bones", bone_table.size()), LogLevel::Verbose);
+
+    if bone_table.size() > u8::MAX as usize {
+        // FIXME: This does not take into account collapsed bones!
+        // return Err(ProcessingDataError::TooManyBones);
+    }
 
     // TODO: The animations should be put in one function called process animations.
     log("Mapping Animations", LogLevel::Debug);
@@ -39,7 +66,7 @@ pub fn process(input: CompilationDataInput, import: HashMap<String, ImportedFile
     log(format!("Model has {} animations", processed_animations.len()), LogLevel::Verbose);
 
     if processed_animations.len() > i16::MAX as usize {
-        return Err(ProcessingDataError::TooManyAnimations(i16::MAX as usize));
+        return Err(ProcessingDataError::TooManyAnimations);
     }
 
     log("Processing Sequences", LogLevel::Debug);
@@ -51,7 +78,7 @@ pub fn process(input: CompilationDataInput, import: HashMap<String, ImportedFile
     }
 
     if processed_sequences.len() > i32::MAX as usize {
-        return Err(ProcessingDataError::TooManySequences(i32::MAX as usize));
+        return Err(ProcessingDataError::TooManySequences);
     }
 
     log("Processing Mesh Data", LogLevel::Debug);
@@ -59,23 +86,3 @@ pub fn process(input: CompilationDataInput, import: HashMap<String, ImportedFile
 
     todo!()
 }
-
-#[derive(Debug)]
-pub enum ProcessingDataError {
-    BoneHierarchyError,
-    TooManyBones(usize),
-    TooManyAnimations(usize),
-    TooManySequences(usize),
-    SequenceAnimationNotFound,
-    NoSequences,
-}
-
-impl Display for ProcessingDataError {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
-        // let error_message: &str = match self {};
-        // TODO: Switch to thiserror!
-        fmt.write_str("")
-    }
-}
-
-impl Error for ProcessingDataError {}
