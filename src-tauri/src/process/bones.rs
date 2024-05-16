@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     import::ImportedFileData,
-    utilities::mathematics::{Matrix, Quaternion, Vector3},
+    utilities::mathematics::{Quaternion, Vector3},
 };
 
 use super::ProcessingDataError;
@@ -10,7 +10,6 @@ use super::ProcessingDataError;
 #[derive(Default)]
 pub struct BoneTable {
     bones: Vec<GlobalBone>,
-    mapped_bones: HashMap<String, usize>,
 }
 
 impl BoneTable {
@@ -67,14 +66,12 @@ impl BoneTable {
         self.bones.len()
     }
 
-    pub fn get_bone_index(&self, bone_name: &str) -> &usize {
-        // UNWRAP: Bone should exist from bone table creation.
-        self.mapped_bones.get(bone_name).unwrap()
+    pub fn get(&self, index: usize) -> Option<&GlobalBone> {
+        self.bones.get(index)
     }
 
-    pub fn get_mut(&mut self, index: usize) -> &mut GlobalBone {
-        // UNWRAP: Bone should exist from bone table creation.
-        self.bones.get_mut(index).unwrap()
+    pub fn get_mut(&mut self, index: usize) -> Option<&mut GlobalBone> {
+        self.bones.get_mut(index)
     }
 }
 
@@ -84,7 +81,6 @@ pub struct GlobalBone {
     pub collapsible: bool,
     pub position: Vector3,
     pub orientation: Quaternion,
-    pub bone_to_pose: Matrix,
     pub position_scale: Vector3,
     pub rotation_scale: Vector3,
 }
@@ -94,21 +90,22 @@ impl GlobalBone {
         Self {
             name,
             parent: None,
-            collapsible: true,
+            collapsible: false,
             position,
             orientation,
-            bone_to_pose: Matrix::identity(),
             position_scale: Vector3::one(),
             rotation_scale: Vector3::one(),
         }
     }
 }
 
-pub fn create_bone_table(import: &HashMap<String, ImportedFileData>) -> Result<BoneTable, ProcessingDataError> {
+pub fn create_bone_table(import: &mut HashMap<String, ImportedFileData>) -> Result<BoneTable, ProcessingDataError> {
     let mut bone_table = BoneTable::default();
 
-    for file_data in import.values() {
-        for bone in &file_data.skeleton {
+    for file_data in import.values_mut() {
+        file_data.remapped_bones.reserve(file_data.skeleton.len());
+
+        for (index, bone) in file_data.skeleton.iter().enumerate() {
             let parent = match bone.parent {
                 Some(parent) => match file_data.skeleton.get(parent) {
                     Some(parent) => Some(parent),
@@ -127,7 +124,7 @@ pub fn create_bone_table(import: &HashMap<String, ImportedFileData>) -> Result<B
                     continue;
                 }
 
-                if bone_table.is_same_hierarchy(&bone.name, &parent.unwrap().name) {
+                if bone_table.is_same_hierarchy(&bone.name, &parent.expect("Parent Should Exist!").name) {
                     continue;
                 }
 
@@ -135,25 +132,17 @@ pub fn create_bone_table(import: &HashMap<String, ImportedFileData>) -> Result<B
             }
 
             // Check if the parent is in the table.
-            if parent.is_some() && !bone_table.is_bone_in_table(&parent.unwrap().name) {
+            if parent.is_some() && !bone_table.is_bone_in_table(&parent.expect("Parent Should Exist!").name) {
                 return Err(ProcessingDataError::BoneHierarchyError);
             }
 
             // Add the bone to the table.
-            let mut new_bone = GlobalBone::new(bone.name.clone(), bone.position, bone.orientation);
+            let new_bone = GlobalBone::new(bone.name.clone(), bone.position, bone.orientation);
 
-            if parent.is_none() {
-                new_bone.bone_to_pose = Matrix::new(bone.orientation, bone.position);
-            } else {
-                let parent = parent.unwrap();
-                let parent_matrix = Matrix::new(parent.orientation, parent.position);
-                let parent_matrix_transpose = parent_matrix.transpose();
+            let bone_table_index = bone_table.add_bone(new_bone, parent.map(|parent| parent.name.as_str()))?;
 
-                new_bone.bone_to_pose = parent_matrix_transpose.concatenate(&Matrix::new(bone.orientation, bone.position));
-            }
-
-            let bone_index = bone_table.add_bone(new_bone, parent.map(|parent| parent.name.as_str()))?;
-            bone_table.mapped_bones.insert(bone.name.clone(), bone_index);
+            // Add bone to remap table.
+            file_data.remapped_bones.insert(index, bone_table_index);
         }
     }
 

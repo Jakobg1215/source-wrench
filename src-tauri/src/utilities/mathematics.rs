@@ -26,16 +26,16 @@ impl Vector3 {
     }
 
     pub fn zero() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0 }
+        Self::default()
     }
 
     pub fn one() -> Self {
-        Self { x: 1.0, y: 1.0, z: 1.0 }
+        Self::new(1.0, 1.0, 1.0)
     }
 }
 
 impl Vector3 {
-    pub fn dot_product(&self, other: Vector3) -> f64 {
+    pub fn dot_product(&self, other: &Self) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
@@ -45,10 +45,10 @@ impl Vector3 {
 }
 
 impl Sub for Vector3 {
-    type Output = Vector3;
+    type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Vector3::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+        Self::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
     }
 }
 
@@ -66,12 +66,7 @@ impl Vector4 {
     }
 
     pub fn zero() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 0.0,
-        }
+        Self::default()
     }
 }
 
@@ -89,7 +84,7 @@ impl Angles {
     }
 
     pub fn zero() -> Self {
-        Self { x: 0.0, y: 0.0, z: 0.0 }
+        Self::default()
     }
 }
 
@@ -110,14 +105,14 @@ impl Angles {
         Quaternion::new(x, y, z, w)
     }
 
-    pub fn to_degrees(&self) -> Angles {
+    pub fn to_degrees(&self) -> Self {
         let degrees_conversion = 180.0 / PI;
-        Angles::new(self.x * degrees_conversion, self.y * degrees_conversion, self.z * degrees_conversion)
+        Self::new(self.x * degrees_conversion, self.y * degrees_conversion, self.z * degrees_conversion)
     }
 
-    pub fn to_radians(&self) -> Angles {
+    pub fn to_radians(&self) -> Self {
         let radians_conversion = PI / 180.0;
-        Angles::new(self.x * radians_conversion, self.y * radians_conversion, self.z * radians_conversion)
+        Self::new(self.x * radians_conversion, self.y * radians_conversion, self.z * radians_conversion)
     }
 
     pub fn sum(&self) -> f64 {
@@ -132,10 +127,10 @@ impl From<Quaternion> for Angles {
 }
 
 impl Sub for Angles {
-    type Output = Angles;
+    type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Angles::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+        Self::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
     }
 }
 
@@ -279,14 +274,14 @@ impl Matrix {
 
         let position = self.to_vector();
 
-        new_matrix[0][3] = -position.dot_product(Vector3::new(self[0][0], self[0][1], self[0][2]));
-        new_matrix[1][3] = -position.dot_product(Vector3::new(self[1][0], self[1][1], self[1][2]));
-        new_matrix[2][3] = -position.dot_product(Vector3::new(self[2][0], self[2][1], self[2][2]));
+        new_matrix[0][3] = -position.dot_product(&Vector3::new(self[0][0], self[0][1], self[0][2]));
+        new_matrix[1][3] = -position.dot_product(&Vector3::new(self[1][0], self[1][1], self[1][2]));
+        new_matrix[2][3] = -position.dot_product(&Vector3::new(self[2][0], self[2][1], self[2][2]));
 
         new_matrix
     }
 
-    pub fn concatenate(&self, other: &Matrix) -> Self {
+    pub fn concatenate(&self, other: &Self) -> Self {
         let mut new_matrix = Self::zero();
 
         for i in 0..3 {

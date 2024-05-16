@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use crate::{
-    import::ImportedFileData,
+    import::{ImportedBoneAnimation, ImportedFileData},
     input::CompilationDataInput,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{Quaternion, Vector3},
+        mathematics::Vector3,
     },
 };
 
@@ -15,10 +15,10 @@ use super::{
     ProcessingDataError, FLOAT_TOLERANCE,
 };
 
-pub struct MappedAnimation {
+struct MappedAnimation {
     name: String,
     frame_count: usize,
-    animation: Vec<MappedBoneAnimation>,
+    bones: Vec<MappedBoneAnimation>,
 }
 
 impl MappedAnimation {
@@ -26,14 +26,14 @@ impl MappedAnimation {
         Self {
             name,
             frame_count: 0,
-            animation: Vec::new(),
+            bones: Vec::new(),
         }
     }
 }
 
-pub struct MappedBoneAnimation {
+struct MappedBoneAnimation {
     bone_index: usize,
-    frames: Vec<(Vector3, Quaternion)>,
+    frames: Vec<ImportedBoneAnimation>,
 }
 
 impl MappedBoneAnimation {
@@ -45,55 +45,50 @@ impl MappedBoneAnimation {
     }
 }
 
-/// Takes all animations and converts the local bones to the bone table bones.
-pub fn map_animations_to_table(
+pub fn process_animations(
     input: &CompilationDataInput,
     import: &HashMap<String, ImportedFileData>,
-    bone_table: &BoneTable,
-) -> Result<Vec<MappedAnimation>, ProcessingDataError> {
-    let mut mapped_animations = Vec::new();
+    bone_table: &mut BoneTable,
+) -> Result<Vec<ProcessedAnimationData>, ProcessingDataError> {
+    let mapped_animations = map_animations_to_table(&input, &import)?;
+
+    compress_animations(input, bone_table, mapped_animations)
+}
+
+/// Takes all animations and converts the local bones to the bone table bones.
+fn map_animations_to_table(input: &CompilationDataInput, import: &HashMap<String, ImportedFileData>) -> Result<Vec<MappedAnimation>, ProcessingDataError> {
+    let mut mapped_animations = Vec::with_capacity(input.animations.len());
 
     for input_animation in &input.animations {
         let mut mapped_animation = MappedAnimation::new(input_animation.name.clone());
+        let imported_file = import.get(&input_animation.source_file).expect("Source File Not Found!");
+        mapped_animation.frame_count = imported_file.get_frame_count();
 
-        // UNWRAP: The source file should exist from import stage.
-        let source_animation = import.get(&input_animation.source_file).unwrap();
+        for (bone_index, animation_data) in imported_file.animation.iter().enumerate() {
+            let mapped_bone = imported_file.remapped_bones.get(&bone_index).expect("Mapped Bone Not Found!");
+            let mut mapped_bone_animation = MappedBoneAnimation::new(*mapped_bone);
 
-        let mut mapped_bones: HashMap<usize, MappedBoneAnimation> = HashMap::new();
+            for (frame, animation_key) in animation_data {
+                // TODO: This is a waste of memory and should be changed.
+                while *frame != mapped_bone_animation.frames.len() {
+                    // TODO: This should get the bone data from the table.
+                    let pervious_frame = mapped_bone_animation.frames.last().expect("No First Frame!");
+                    mapped_bone_animation.frames.push(*pervious_frame);
+                }
 
-        for source_frame in &source_animation.animation {
-            for bone_frame in &source_frame.bones {
-                let bone = match mapped_bones.get_mut(&bone_frame.bone) {
-                    Some(mapped) => mapped,
-                    None => {
-                        let source_bone = source_animation.get_bone_by_index(bone_frame.bone);
-                        mapped_bones.insert(bone_frame.bone, MappedBoneAnimation::new(*bone_table.get_bone_index(&source_bone.name)));
-                        let mapped = mapped_bones.get_mut(&bone_frame.bone).unwrap(); // UNWRAP: It inserted from above.
-                        mapped.frames.reserve_exact(source_animation.animation.len());
-                        mapped
-                    }
-                };
-
-                bone.frames.push((bone_frame.position, bone_frame.orientation));
+                mapped_bone_animation.frames.push(*animation_key);
             }
+
+            mapped_animation.bones.push(mapped_bone_animation);
         }
-
-        mapped_animation.frame_count = source_animation.animation.len();
-        mapped_animation.animation.reserve_exact(mapped_bones.len());
-
-        for (_, bone) in mapped_bones.drain() {
-            mapped_animation.animation.push(bone);
-        }
-
         mapped_animations.push(mapped_animation);
     }
-
     Ok(mapped_animations)
 }
 
 /// This compresses all animations.
 /// If the animation is not used then its ignored.
-pub fn compress_animations(
+fn compress_animations(
     input: &CompilationDataInput,
     bone_table: &mut BoneTable,
     animations: Vec<MappedAnimation>,
@@ -112,39 +107,38 @@ pub fn compress_animations(
         processed_animation.frame_count = mapped_animation.frame_count;
 
         // Get Bone Scale
-        for mapped_bone in &mapped_animation.animation {
-            let bone = bone_table.get_mut(mapped_bone.bone_index);
+        for mapped_bone in &mapped_animation.bones {
+            let bone = bone_table.get_mut(mapped_bone.bone_index).expect("Mapped Bone Not Found!");
             // TODO: Make this get the best scale values for best quality.
             bone.position_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
             bone.rotation_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
         }
 
-        for mut mapped_bone in mapped_animation.animation {
+        for mut mapped_bone in mapped_animation.bones {
             let mut processed_bone = ProcessedAnimatedBoneData::new(mapped_bone.bone_index);
-            let bone = bone_table.get_mut(mapped_bone.bone_index);
+            let bone = bone_table.get_mut(mapped_bone.bone_index).expect("Mapped Bone Not Found!");
 
             if mapped_bone.frames.len() == 1 {
                 // UNWRAP: We know it exist as length is one.
-                let (mapped_position, mapped_rotation) = mapped_bone.frames.pop().unwrap();
+                let animation_data = mapped_bone.frames.pop().unwrap();
 
-                if (mapped_position - bone.position).sum() > FLOAT_TOLERANCE {
+                if (animation_data.position - bone.position).sum() > FLOAT_TOLERANCE {
                     // TODO: If the animation is delta then it should just pass the raw animated position.
-                    processed_bone.position = Some(ProcessedAnimationPosition::Raw(mapped_position - bone.position));
+                    processed_bone.position = Some(ProcessedAnimationPosition::Raw(animation_data.position - bone.position));
                 }
 
-                if (mapped_rotation.to_angles() - bone.orientation.to_angles()).sum() > FLOAT_TOLERANCE {
+                if (animation_data.orientation.to_angles() - bone.orientation.to_angles()).sum() > FLOAT_TOLERANCE {
                     // TODO: If the animation is delta then it should just pass the raw animated position.
                     processed_bone.rotation = Some(ProcessedAnimationRotation::Raw(
-                        (mapped_rotation.to_angles() - bone.orientation.to_angles()).to_quaternion(),
+                        (animation_data.orientation.to_angles() - bone.orientation.to_angles()).to_quaternion(),
                     ));
                 }
 
                 processed_animation.bones.push(processed_bone);
-
                 continue;
             }
 
-            for (_mapped_position, _mapped_rotation) in mapped_bone.frames {
+            for _animation_data in mapped_bone.frames {
                 todo!("Write Compression Of Animations")
             }
         }
@@ -161,7 +155,7 @@ pub fn process_sequences(input: &CompilationDataInput, animations: &Vec<Processe
     for sequence in &input.sequences {
         let mut processed_sequence = ProcessedSequenceData::new(sequence.name.clone());
 
-        let animation_index = animations.iter().position(|animation| animation.name == sequence.name);
+        let animation_index = animations.iter().position(|animation| animation.name == sequence.animation);
 
         match animation_index {
             Some(index) => processed_sequence.animations.push(index),

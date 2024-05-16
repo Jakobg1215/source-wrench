@@ -6,7 +6,7 @@ use crate::{
     import::ImportedFileData,
     input::CompilationDataInput,
     process::{
-        animation::{compress_animations, map_animations_to_table, process_sequences},
+        animation::{process_animations, process_sequences},
         bones::create_bone_table,
         mesh::process_mesh_data,
     },
@@ -42,27 +42,30 @@ pub enum ProcessingDataError {
     IncompleteFace,
     #[error("Failed To Generated Tangents")]
     FailedTangentGeneration,
+    #[error("Model Has Too Many Materials")]
+    TooManyMaterials,
+    #[error("Model Has Too Many Body Groups")]
+    TooManyBodyGroups,
 }
 
+/// The tolerance for floating point numbers until they are considered equal.
+// TODO: Make this an imputed value.
 const FLOAT_TOLERANCE: f64 = 0.000001;
 
-pub fn process(input: CompilationDataInput, import: HashMap<String, ImportedFileData>) -> Result<ProcessedData, ProcessingDataError> {
+pub fn process(input: CompilationDataInput, mut import: HashMap<String, ImportedFileData>) -> Result<ProcessedData, ProcessingDataError> {
     log("Creating Bone Table", LogLevel::Debug);
-    let mut bone_table = create_bone_table(&import)?;
+    let mut bone_table = create_bone_table(&mut import)?;
     log(format!("Model uses {} source bones", bone_table.size()), LogLevel::Verbose);
+
+    // TODO: Mark bones as collapsed if they are not used.
 
     if bone_table.size() > u8::MAX as usize {
         // FIXME: This does not take into account collapsed bones!
         // return Err(ProcessingDataError::TooManyBones);
     }
 
-    // TODO: The animations should be put in one function called process animations.
-    log("Mapping Animations", LogLevel::Debug);
-    let mapped_animations = map_animations_to_table(&input, &import, &bone_table)?;
-    log(format!("Mapped {} Animations", mapped_animations.len()), LogLevel::Debug);
-
-    log("Compressing Animations", LogLevel::Debug);
-    let processed_animations = compress_animations(&input, &mut bone_table, mapped_animations)?;
+    log("Processing Animations", LogLevel::Debug);
+    let processed_animations = process_animations(&input, &import, &mut bone_table)?;
     log(format!("Model has {} animations", processed_animations.len()), LogLevel::Verbose);
 
     if processed_animations.len() > i16::MAX as usize {
@@ -82,7 +85,15 @@ pub fn process(input: CompilationDataInput, import: HashMap<String, ImportedFile
     }
 
     log("Processing Mesh Data", LogLevel::Debug);
-    let _processed_mesh = process_mesh_data(&input, &import, &bone_table)?;
+    let processed_mesh = process_mesh_data(&input, &import, &bone_table)?;
+
+    if processed_mesh.body_groups.len() > i32::MAX as usize {
+        return Err(ProcessingDataError::TooManyBodyGroups);
+    }
+
+    if processed_mesh.materials.len() > i16::MAX as usize {
+        return Err(ProcessingDataError::TooManyMaterials);
+    }
 
     todo!()
 }

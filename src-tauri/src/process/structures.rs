@@ -153,11 +153,6 @@ impl ProcessedModelData {
 
         self.materials.len() - 1
     }
-
-    pub fn get_material_index(&self, material: &str) -> usize {
-        // UNWRAP: The material should exist from adding it.
-        self.materials.iter().position(|mat| mat == material).unwrap()
-    }
 }
 
 pub struct ProcessedBodyGroupData {
@@ -196,9 +191,9 @@ pub struct ProcessedMeshData {
 
 #[derive(Default)]
 pub struct ProcessedVertexData {
-    pub weights: [f32; 3],
-    pub bones: [u8; 3],
-    pub bone_count: u8,
+    pub weights: [f64; 3],
+    pub bones: [usize; 3],
+    pub bone_count: usize,
     pub position: Vector3,
     pub normal: Vector3,
     pub uv: Vector2,
@@ -207,25 +202,25 @@ pub struct ProcessedVertexData {
 
 pub struct ProcessedStripGroup {
     pub vertices: Vec<ProcessedMeshVertex>,
-    pub indices: Vec<u16>,
+    pub indices: Vec<usize>,
     pub strips: Vec<ProcessedStrip>,
     pub is_flexed: bool,
 }
 
 pub struct ProcessedMeshVertex {
-    pub bone_count: u8,
-    pub vertex_index: u16,
-    pub bones: [u8; 3],
+    pub bone_count: usize,
+    pub vertex_index: usize,
+    pub bones: [usize; 3],
 }
 
 pub struct ProcessedStrip {
-    pub indices_count: i32,
-    pub vertex_count: i32,
-    pub bone_count: i16,
+    pub indices_count: usize,
+    pub vertex_count: usize,
+    pub bone_count: usize,
     pub hardware_bones: Vec<ProcessedHardwareBone>,
 }
 
 pub struct ProcessedHardwareBone {
-    pub hardware_bone: i32,
-    pub bone_table_bone: i32,
+    pub hardware_bone: usize,
+    pub bone_table_bone: usize,
 }

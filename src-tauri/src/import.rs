@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
+use indexmap::IndexMap;
 use thiserror::Error;
 
 use crate::{
@@ -9,6 +10,8 @@ use crate::{
         mathematics::{Quaternion, Vector2, Vector3},
     },
 };
+
+use self::smd::ParseSMDError;
 
 mod smd;
 
@@ -22,12 +25,15 @@ pub enum ImportingError {
     UnsupportedFile,
     #[error("File Failed To Import")]
     FailedImport,
+    #[error("Failed To Read SMD File")]
+    SmdReadError(#[from] ParseSMDError),
 }
 
 #[derive(Default)]
 pub struct ImportedFileData {
     pub skeleton: Vec<ImportedBone>,
-    pub animation: Vec<ImportedAnimationFrame>,
+    pub remapped_bones: HashMap<usize, usize>,
+    pub animation: Vec<IndexMap<usize, ImportedBoneAnimation>>,
     pub mesh: ImportedMesh,
     pub flexes: Vec<ImportedFlexKey>,
 }
@@ -35,17 +41,12 @@ pub struct ImportedFileData {
 impl ImportedFileData {
     pub fn add_bone(&mut self, new_bone: ImportedBone) -> usize {
         self.skeleton.push(new_bone);
+        self.animation.push(IndexMap::new());
         self.skeleton.len() - 1
     }
 
-    pub fn add_frame(&mut self, new_frame: ImportedAnimationFrame) -> usize {
-        self.animation.push(new_frame);
-        self.animation.len() - 1
-    }
-
-    pub fn get_bone_by_index(&self, index: usize) -> &ImportedBone {
-        // UNWRAP: The index should be valid
-        self.skeleton.get(index).unwrap()
+    pub fn get_frame_count(&self) -> usize {
+        *self.animation.iter().flat_map(|bone| bone.keys()).max().unwrap_or(&usize::MAX) + 1
     }
 }
 pub struct ImportedBone {
@@ -66,26 +67,15 @@ impl ImportedBone {
     }
 }
 
-#[derive(Default)]
-pub struct ImportedAnimationFrame {
-    pub bones: Vec<ImportedBoneAnimation>,
-}
-
-impl ImportedAnimationFrame {
-    pub fn add_bone(&mut self, new_bone: ImportedBoneAnimation) {
-        self.bones.push(new_bone);
-    }
-}
-
+#[derive(Clone, Copy)]
 pub struct ImportedBoneAnimation {
-    pub bone: usize,
     pub position: Vector3,
     pub orientation: Quaternion,
 }
 
 impl ImportedBoneAnimation {
-    pub fn new(bone: usize, position: Vector3, orientation: Quaternion) -> Self {
-        Self { bone, position, orientation }
+    pub fn new(position: Vector3, orientation: Quaternion) -> Self {
+        Self { position, orientation }
     }
 }
 
@@ -157,7 +147,7 @@ fn load_file(loaded_files: &mut HashMap<String, ImportedFileData>, source_path: 
         Ok(exists) => exists,
         Err(error) => {
             log(error.to_string(), LogLevel::Verbose);
-            return Err(ImportingError::FileNotFound);
+            return Err(ImportingError::FileNotFound); // FIXME: This should be a different error.
         }
     };
 
@@ -174,21 +164,15 @@ fn load_file(loaded_files: &mut HashMap<String, ImportedFileData>, source_path: 
         }
     };
 
-    let imported_file: Result<ImportedFileData, String> = match file_extension.to_str().unwrap() {
-        "smd" => smd::load_smd(file_path, None).map_err(|error| error.to_string()), // TODO: Support vta file
+    let imported_file = match file_extension.to_str().expect("Failed To Convert File Extension To String!") {
+        "smd" => smd::load_smd(file_path, None)?, // TODO: Support vta file
         _ => {
             log(format!("File {} is an unsupported format!", source_path), LogLevel::Verbose);
             return Err(ImportingError::UnsupportedFile);
         }
     };
 
-    match imported_file {
-        Ok(file) => loaded_files.insert(source_path.to_string(), file),
-        Err(error) => {
-            log(format!("File {} failed to import due to: {}!", source_path, error), LogLevel::Debug);
-            return Err(ImportingError::FailedImport);
-        }
-    };
+    loaded_files.insert(source_path.to_string(), imported_file);
 
     Ok(())
 }

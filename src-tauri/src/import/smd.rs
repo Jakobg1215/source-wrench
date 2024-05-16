@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use super::{ImportedAnimationFrame, ImportedBoneAnimation, ImportedFileData, ImportedVertex};
+use super::{ImportedBoneAnimation, ImportedFileData, ImportedVertex};
 
 #[derive(Error, Debug)]
 pub enum ParseSMDError {
@@ -115,7 +115,7 @@ impl Link {
 
 pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFileData, ParseSMDError> {
     log(
-        format!("Loading SMD File: {:?}", file_path.file_name().unwrap()), // UNWRAP: Path should be valid if called.
+        format!("Loading SMD File: {:?}", file_path.file_name().expect("File Path To Be Validated!")),
         LogLevel::Verbose,
     );
 
@@ -551,13 +551,12 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
         mapped_nodes.insert(id, index);
     }
 
-    for frame in smd_data.frames {
-        let mut animation = ImportedAnimationFrame::default();
-        for bone in frame {
-            let index = mapped_nodes.get(&bone.node).unwrap(); // UNWRAP: This should never fail.
-            animation.add_bone(ImportedBoneAnimation::new(*index, bone.position, bone.rotation.to_quaternion()))
+    for (frame, keys) in smd_data.frames.into_iter().enumerate() {
+        for bone in keys {
+            let index = mapped_nodes.get(&bone.node).expect("Node Not Found!");
+            let animation = file_data.animation.get_mut(*index).expect("Animation Not Found!");
+            animation.insert(frame, ImportedBoneAnimation::new(bone.position, bone.rotation.to_quaternion()));
         }
-        file_data.add_frame(animation);
     }
 
     file_data.mesh.materials = smd_data.materials;
@@ -565,7 +564,7 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
     for vertex in smd_data.vertices {
         let mut vert = ImportedVertex::new(vertex.position, vertex.normal, vertex.texture_coordinate);
         for link in vertex.links {
-            let bone_index = mapped_nodes.get(&link.bone).unwrap(); // UNWRAP: This should never fail.
+            let bone_index = mapped_nodes.get(&link.bone).expect("Bone Not Found!");
             vert.add_weight(*bone_index, link.weight)
         }
         file_data.mesh.add_vertex(vert);
