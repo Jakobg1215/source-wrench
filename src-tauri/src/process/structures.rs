@@ -9,32 +9,13 @@ pub struct ProcessedData {
     pub model_data: ProcessedModelData,
 }
 
-impl ProcessedData {
-    pub fn new() -> Self {
-        Self {
-            bone_data: ProcessedBoneData::new(),
-            animation_data: Vec::new(),
-            sequence_data: Vec::new(),
-            model_data: ProcessedModelData::default(),
-        }
-    }
-}
-
 /// The main structure that store everything relevant to bone data.
+#[derive(Default)]
 pub struct ProcessedBoneData {
     /// The bone table were any data that uses bones indexes to.
     pub processed_bones: Vec<ProcessedBone>,
     /// The bone table sorted by name with quick sort.
     pub sorted_bones_by_name: Vec<usize>,
-}
-
-impl ProcessedBoneData {
-    pub fn new() -> Self {
-        Self {
-            processed_bones: Vec::new(),
-            sorted_bones_by_name: Vec::new(),
-        }
-    }
 }
 
 /// The structure that contains the data for a bone.
@@ -189,7 +170,17 @@ pub struct ProcessedMeshData {
     pub strip_groups: Vec<ProcessedStripGroup>,
 }
 
-#[derive(Default)]
+impl ProcessedMeshData {
+    pub fn new(material: usize) -> Self {
+        Self {
+            material,
+            vertex_data: Vec::new(),
+            strip_groups: Vec::new(),
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy)]
 pub struct ProcessedVertexData {
     pub weights: [f64; 3],
     pub bones: [usize; 3],
@@ -200,6 +191,7 @@ pub struct ProcessedVertexData {
     pub tangent: Vector4,
 }
 
+#[derive(Default)]
 pub struct ProcessedStripGroup {
     pub vertices: Vec<ProcessedMeshVertex>,
     pub indices: Vec<usize>,
@@ -207,12 +199,14 @@ pub struct ProcessedStripGroup {
     pub is_flexed: bool,
 }
 
+#[derive(Default)]
 pub struct ProcessedMeshVertex {
     pub bone_count: usize,
     pub vertex_index: usize,
     pub bones: [usize; 3],
 }
 
+#[derive(Default)]
 pub struct ProcessedStrip {
     pub indices_count: usize,
     pub vertex_count: usize,

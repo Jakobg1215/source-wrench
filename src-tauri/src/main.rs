@@ -31,6 +31,8 @@ fn compile_model(data: CompilationDataInput) {
             return;
         }
     };
+
+    log("Model compiled successfully!", LogLevel::Info);
 }
 
 fn main() {

@@ -7,7 +7,7 @@ use crate::{
     input::CompilationDataInput,
     process::{
         animation::{process_animations, process_sequences},
-        bones::create_bone_table,
+        bones::{create_bone_table, process_bone_table},
         mesh::process_mesh_data,
     },
     utilities::logging::{log, LogLevel},
@@ -59,11 +59,6 @@ pub fn process(input: CompilationDataInput, mut import: HashMap<String, Imported
 
     // TODO: Mark bones as collapsed if they are not used.
 
-    if bone_table.size() > u8::MAX as usize {
-        // FIXME: This does not take into account collapsed bones!
-        // return Err(ProcessingDataError::TooManyBones);
-    }
-
     log("Processing Animations", LogLevel::Debug);
     let processed_animations = process_animations(&input, &import, &mut bone_table)?;
     log(format!("Model has {} animations", processed_animations.len()), LogLevel::Verbose);
@@ -85,7 +80,9 @@ pub fn process(input: CompilationDataInput, mut import: HashMap<String, Imported
     }
 
     log("Processing Mesh Data", LogLevel::Debug);
-    let processed_mesh = process_mesh_data(&input, &import, &bone_table)?;
+    let processed_mesh = process_mesh_data(&input, &import)?;
+    log(format!("Model has {} materials", processed_mesh.materials.len()), LogLevel::Verbose);
+    log(format!("Model has {} body groups", processed_mesh.body_groups.len()), LogLevel::Verbose);
 
     if processed_mesh.body_groups.len() > i32::MAX as usize {
         return Err(ProcessingDataError::TooManyBodyGroups);
@@ -95,5 +92,15 @@ pub fn process(input: CompilationDataInput, mut import: HashMap<String, Imported
         return Err(ProcessingDataError::TooManyMaterials);
     }
 
-    todo!()
+    let processed_bone_data = process_bone_table(&bone_table);
+    if processed_bone_data.processed_bones.len() > i8::MAX as usize {
+        return Err(ProcessingDataError::TooManyBones);
+    }
+
+    Ok(ProcessedData {
+        bone_data: processed_bone_data,
+        animation_data: processed_animations,
+        sequence_data: processed_sequences,
+        model_data: processed_mesh,
+    })
 }

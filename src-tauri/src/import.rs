@@ -91,6 +91,7 @@ impl ImportedMesh {
     }
 }
 
+#[derive(Clone)]
 pub struct ImportedVertex {
     pub position: Vector3,
     pub normal: Vector3,

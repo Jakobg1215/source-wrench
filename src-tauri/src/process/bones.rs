@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use crate::{
     import::ImportedFileData,
+    process::structures::ProcessedBone,
     utilities::mathematics::{Quaternion, Vector3},
 };
 
-use super::ProcessingDataError;
+use super::{structures::ProcessedBoneData, ProcessingDataError};
 
 #[derive(Default)]
 pub struct BoneTable {
@@ -97,6 +98,37 @@ impl GlobalBone {
             rotation_scale: Vector3::one(),
         }
     }
+}
+
+pub fn process_bone_table(bone_table: &BoneTable) -> ProcessedBoneData {
+    let mut processed_bones = ProcessedBoneData::default();
+
+    for table_bone in bone_table.bones.iter() {
+        if table_bone.collapsible {
+            continue;
+        }
+
+        let mut processed_bone = ProcessedBone::new(table_bone.name.clone());
+        processed_bone.parent = table_bone.parent;
+        processed_bone.position = table_bone.position;
+        processed_bone.rotation = table_bone.orientation.to_angles();
+        processed_bone.animation_position_scale = table_bone.position_scale;
+        processed_bone.animation_rotation_scale = table_bone.rotation_scale;
+
+        processed_bones.processed_bones.push(processed_bone);
+    }
+
+    let mut processed_bone_names = processed_bones
+        .processed_bones
+        .iter()
+        .enumerate()
+        .map(|(index, bone)| (index, bone.name.clone()))
+        .collect::<Vec<(usize, String)>>();
+    processed_bone_names.sort_by(|(_, a), (_, b)| a.to_lowercase().cmp(&b.to_lowercase()));
+
+    processed_bones.sorted_bones_by_name = processed_bone_names.iter().map(|(index, _)| *index).collect();
+
+    processed_bones
 }
 
 pub fn create_bone_table(import: &mut HashMap<String, ImportedFileData>) -> Result<BoneTable, ProcessingDataError> {

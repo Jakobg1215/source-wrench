@@ -1,5 +1,5 @@
 use std::f64::consts::{FRAC_PI_2, PI};
-use std::ops::{Index, IndexMut, Sub};
+use std::ops::{Add, Index, IndexMut, Sub};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Vector2 {
@@ -10,6 +10,14 @@ pub struct Vector2 {
 impl Vector2 {
     pub fn new(x: f64, y: f64) -> Self {
         Self { x, y }
+    }
+}
+
+impl Sub for Vector2 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::new(self.x - rhs.x, self.y - rhs.y)
     }
 }
 
@@ -35,12 +43,34 @@ impl Vector3 {
 }
 
 impl Vector3 {
-    pub fn dot_product(&self, other: &Self) -> f64 {
+    pub fn dot(&self, other: &Self) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
     pub fn sum(&self) -> f64 {
         self.x + self.y + self.z
+    }
+
+    pub fn as_slice(&self) -> [f64; 3] {
+        [self.x, self.y, self.z]
+    }
+
+    pub fn magnitude(&self) -> f64 {
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
+    }
+
+    pub fn normalize(&self) -> Self {
+        let mag = self.magnitude();
+
+        if mag < f64::EPSILON {
+            return Self::zero();
+        }
+
+        Self::new(self.x / mag, self.y / mag, self.z / mag)
+    }
+
+    pub fn cross(&self, other: &Self) -> Self {
+        Self::new(self.y * other.z - self.z * other.x, self.z * other.x, self.x * other.y - self.y * other.x)
     }
 }
 
@@ -49,6 +79,14 @@ impl Sub for Vector3 {
 
     fn sub(self, rhs: Self) -> Self::Output {
         Self::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+    }
+}
+
+impl Add for Vector3 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
     }
 }
 
@@ -274,9 +312,9 @@ impl Matrix {
 
         let position = self.to_vector();
 
-        new_matrix[0][3] = -position.dot_product(&Vector3::new(self[0][0], self[0][1], self[0][2]));
-        new_matrix[1][3] = -position.dot_product(&Vector3::new(self[1][0], self[1][1], self[1][2]));
-        new_matrix[2][3] = -position.dot_product(&Vector3::new(self[2][0], self[2][1], self[2][2]));
+        new_matrix[0][3] = -position.dot(&Vector3::new(self[0][0], self[0][1], self[0][2]));
+        new_matrix[1][3] = -position.dot(&Vector3::new(self[1][0], self[1][1], self[1][2]));
+        new_matrix[2][3] = -position.dot(&Vector3::new(self[2][0], self[2][1], self[2][2]));
 
         new_matrix
     }
