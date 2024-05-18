@@ -18,7 +18,7 @@ use self::structures::ProcessedData;
 mod animation;
 mod bones;
 mod mesh;
-mod structures;
+pub mod structures;
 
 #[derive(Error, Debug)]
 pub enum ProcessingDataError {
@@ -52,7 +52,7 @@ pub enum ProcessingDataError {
 // TODO: Make this an imputed value.
 const FLOAT_TOLERANCE: f64 = 0.000001;
 
-pub fn process(input: CompilationDataInput, mut import: HashMap<String, ImportedFileData>) -> Result<ProcessedData, ProcessingDataError> {
+pub fn process(input: &CompilationDataInput, mut import: HashMap<String, ImportedFileData>) -> Result<ProcessedData, ProcessingDataError> {
     log("Creating Bone Table", LogLevel::Debug);
     let mut bone_table = create_bone_table(&mut import)?;
     log(format!("Model uses {} source bones", bone_table.size()), LogLevel::Verbose);

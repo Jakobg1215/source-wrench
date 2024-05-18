@@ -1,4 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
+import { documentDir } from '@tauri-apps/api/path';
+import { open } from '@tauri-apps/plugin-dialog';
 import { createSignal, type Component } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import AnimatingMenu from './components/animating/AnimatingMenu';
@@ -12,6 +14,7 @@ type CompilationData = {
     body_groups: Array<BodyGroupData>;
     animations: Array<AnimationData>;
     sequences: Array<SequenceData>;
+    export_path: string;
 };
 
 const App: Component = () => {
@@ -20,12 +23,23 @@ const App: Component = () => {
     const [animations, setAnimations] = createStore<AnimationData[]>([]);
     const [sequences, setSequences] = createStore<SequenceData[]>([]);
 
-    const compileModel = () => {
+    const compileModel = async () => {
+        const selectedDirectory = await open({
+            defaultPath: await documentDir(),
+            directory: true,
+            title: 'Select Output Directory',
+        });
+
+        if (selectedDirectory === null) {
+            return;
+        }
+
         const data: CompilationData = {
             model_name: modelName(),
             body_groups: bodyGroups,
             animations,
             sequences,
+            export_path: selectedDirectory,
         };
 
         invoke('compile_model', { data });

@@ -6,6 +6,7 @@ pub struct CompilationDataInput {
     pub body_groups: Vec<BodyGroupInput>,
     pub animations: Vec<AnimationInput>,
     pub sequences: Vec<SequenceInput>,
+    pub export_path: String,
 }
 
 #[derive(Deserialize)]
