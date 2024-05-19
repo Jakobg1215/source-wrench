@@ -184,7 +184,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         vvd_writer.get_data(),
     );
     let _ = write(
-        format!("{}/{}.{}", export_path, mdl_header.second_header.model_name, "vtx"),
+        format!("{}/{}.{}", export_path, mdl_header.second_header.model_name, "dx90.vtx"),
         vtx_writer.get_data(),
     );
 }
