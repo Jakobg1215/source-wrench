@@ -2,14 +2,14 @@ use crate::utilities::binarydata::DataWriter;
 
 use super::StructWriting;
 
-pub struct MeshHeader {
+pub struct FileHeader {
     checksum: i32,
     material_replacement_index: usize,
-    pub body_groups: Vec<MeshBodyGroup>,
+    pub body_groups: Vec<BodyPartHeader>,
     body_groups_index: usize,
 }
 
-impl StructWriting for MeshHeader {
+impl StructWriting for FileHeader {
     fn write_to_writer(&mut self, mut writer: &mut DataWriter) {
         writer.write_int(7); // version
         writer.write_int(24); // vertCacheSize
@@ -32,11 +32,11 @@ impl StructWriting for MeshHeader {
         }
 
         writer.write_to_index(self.material_replacement_index, writer.get_size() as i32);
-        MeshMaterialReplacementListHeader::new().write_to_writer(&mut writer);
+        MaterialReplacementListHeader::new().write_to_writer(&mut writer);
     }
 }
 
-impl MeshHeader {
+impl FileHeader {
     pub fn new(checksum: i32) -> Self {
         Self {
             checksum,
@@ -47,28 +47,28 @@ impl MeshHeader {
     }
 }
 
-pub struct MeshMaterialReplacementListHeader {}
+pub struct MaterialReplacementListHeader {}
 
-impl StructWriting for MeshMaterialReplacementListHeader {
+impl StructWriting for MaterialReplacementListHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_int(0); // numReplacements
-        writer.write_int(-8); // replacementOffset
+        writer.write_int(0); // replacementOffset
     }
 }
 
-impl MeshMaterialReplacementListHeader {
+impl MaterialReplacementListHeader {
     pub fn new() -> Self {
         Self {}
     }
 }
 
-pub struct MeshBodyGroup {
+pub struct BodyPartHeader {
     index_start: usize,
-    pub parts: Vec<MeshBodyPart>,
+    pub parts: Vec<ModelHeader>,
     parts_index: usize,
 }
 
-impl StructWriting for MeshBodyGroup {
+impl StructWriting for BodyPartHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
 
@@ -77,7 +77,7 @@ impl StructWriting for MeshBodyGroup {
     }
 }
 
-impl MeshBodyGroup {
+impl BodyPartHeader {
     pub fn new() -> Self {
         Self {
             index_start: usize::MAX,
@@ -99,13 +99,13 @@ impl MeshBodyGroup {
     }
 }
 
-pub struct MeshBodyPart {
+pub struct ModelHeader {
     index_start: usize,
-    pub models: Vec<MeshBodyModel>,
+    pub models: Vec<ModelLODHeader>,
     models_index: usize,
 }
 
-impl StructWriting for MeshBodyPart {
+impl StructWriting for ModelHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
 
@@ -114,7 +114,7 @@ impl StructWriting for MeshBodyPart {
     }
 }
 
-impl MeshBodyPart {
+impl ModelHeader {
     pub fn new() -> Self {
         Self {
             index_start: usize::MAX,
@@ -136,14 +136,14 @@ impl MeshBodyPart {
     }
 }
 
-pub struct MeshBodyModel {
+pub struct ModelLODHeader {
     index_start: usize,
-    pub meshes: Vec<MeshBodyMesh>,
+    pub meshes: Vec<MeshHeader>,
     meshes_index: usize,
     switch_point: f64,
 }
 
-impl StructWriting for MeshBodyModel {
+impl StructWriting for ModelLODHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
 
@@ -153,7 +153,7 @@ impl StructWriting for MeshBodyModel {
     }
 }
 
-impl MeshBodyModel {
+impl ModelLODHeader {
     pub fn new(switch_point: f64) -> Self {
         Self {
             index_start: usize::MAX,
@@ -176,13 +176,13 @@ impl MeshBodyModel {
     }
 }
 
-pub struct MeshBodyMesh {
+pub struct MeshHeader {
     index_start: usize,
-    pub strip_groups: Vec<MeshStripGroup>,
+    pub strip_groups: Vec<StripGroupHeader>,
     strip_groups_index: usize,
 }
 
-impl StructWriting for MeshBodyMesh {
+impl StructWriting for MeshHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
 
@@ -192,7 +192,7 @@ impl StructWriting for MeshBodyMesh {
     }
 }
 
-impl MeshBodyMesh {
+impl MeshHeader {
     pub fn new() -> Self {
         Self {
             index_start: usize::MAX,
@@ -226,17 +226,17 @@ impl MeshBodyMesh {
     }
 }
 
-pub struct MeshStripGroup {
+pub struct StripGroupHeader {
     index_start: usize,
-    pub vertices: Vec<MeshVertex>,
+    pub vertices: Vec<Vertex>,
     vertices_index: usize,
     pub indices: Vec<u16>,
     indices_index: usize,
-    pub strips: Vec<MeshStrip>,
+    pub strips: Vec<StripHeader>,
     strips_index: usize,
 }
 
-impl StructWriting for MeshStripGroup {
+impl StructWriting for StripGroupHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
 
@@ -250,7 +250,7 @@ impl StructWriting for MeshStripGroup {
     }
 }
 
-impl MeshStripGroup {
+impl StripGroupHeader {
     pub fn new() -> Self {
         Self {
             index_start: usize::MAX,
@@ -295,13 +295,13 @@ impl MeshStripGroup {
     }
 }
 
-pub struct MeshVertex {
+pub struct Vertex {
     pub bone_count: usize,
     pub vertex_index: usize,
     pub bone_weight_bones: [usize; 3],
 }
 
-impl StructWriting for MeshVertex {
+impl StructWriting for Vertex {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_unsigned_byte_array(&vec![0, 1, 2]); // boneWeightIndex
         writer.write_unsigned_byte(self.bone_count as u8); // numBones
@@ -311,7 +311,7 @@ impl StructWriting for MeshVertex {
     }
 }
 
-impl MeshVertex {
+impl Vertex {
     pub fn new() -> Self {
         Self {
             bone_count: usize::MAX,
@@ -321,18 +321,18 @@ impl MeshVertex {
     }
 }
 
-pub struct MeshStrip {
+pub struct StripHeader {
     index_start: usize,
     pub indices_count: i32,
     pub indices_offset: i32,
     pub vertices_count: i32,
     pub vertices_offset: i32,
     pub bone_count: i16,
-    pub bone_state_changes: Vec<MeshBoneStateChange>,
+    pub bone_state_changes: Vec<BoneStateChangeHeader>,
     bone_state_changes_index: usize,
 }
 
-impl StructWriting for MeshStrip {
+impl StructWriting for StripHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
 
@@ -347,7 +347,7 @@ impl StructWriting for MeshStrip {
     }
 }
 
-impl MeshStrip {
+impl StripHeader {
     pub fn new(indices_count: i32, indices_offset: i32, vertices_count: i32, vertices_offset: i32, bone_count: i16) -> Self {
         Self {
             index_start: 0,
@@ -362,19 +362,19 @@ impl MeshStrip {
     }
 }
 
-pub struct MeshBoneStateChange {
+pub struct BoneStateChangeHeader {
     hardware_id: usize,
     new_bone_id: usize,
 }
 
-impl StructWriting for MeshBoneStateChange {
+impl StructWriting for BoneStateChangeHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_int(self.hardware_id as i32); // hardwareID
         writer.write_int(self.new_bone_id as i32); // newBoneID
     }
 }
 
-impl MeshBoneStateChange {
+impl BoneStateChangeHeader {
     pub fn new(hardware_id: usize, new_bone_id: usize) -> Self {
         Self { hardware_id, new_bone_id }
     }

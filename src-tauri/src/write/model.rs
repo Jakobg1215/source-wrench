@@ -724,7 +724,7 @@ pub struct BodyPart {
     write_meshes_index: usize,
     pub vertex_count: i32,
     pub vertex_index: i32,
-    pub tanget_index: i32,
+    pub tangent_index: i32,
 }
 
 impl StructWriting for BodyPart {
@@ -738,7 +738,7 @@ impl StructWriting for BodyPart {
         self.write_meshes_index = writer.write_index(); // meshindex
         writer.write_int(self.vertex_count); // numvertices
         writer.write_int(self.vertex_index); // vertexindex
-        writer.write_int(self.tanget_index); // tangentindex
+        writer.write_int(self.tangent_index); // tangentindex
         writer.write_int(0); // numattachments
         writer.write_int(0); // attachmentindex
         writer.write_int(0); // numeyeballs
@@ -758,7 +758,7 @@ impl BodyPart {
             write_meshes_index: usize::MAX,
             vertex_count: 0,
             vertex_index: 0,
-            tanget_index: 0,
+            tangent_index: 0,
         }
     }
 
