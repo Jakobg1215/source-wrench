@@ -349,3 +349,15 @@ impl IndexMut<usize> for Matrix {
         &mut self.entries[index]
     }
 }
+
+pub fn clamp<T: PartialOrd>(value: T, minimum: T, maximum: T) -> T {
+    if value < minimum {
+        return minimum;
+    }
+
+    if value > maximum {
+        return maximum;
+    }
+
+    value
+}

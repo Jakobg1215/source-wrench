@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use half::f16;
 
-use super::mathematics::{Angles, Matrix, Quaternion, Vector2, Vector3, Vector4};
+use super::mathematics::{clamp, Angles, Matrix, Quaternion, Vector2, Vector3, Vector4};
 
 /// This is a utility to write binary data.
 ///
@@ -11,7 +11,6 @@ use super::mathematics::{Angles, Matrix, Quaternion, Vector2, Vector3, Vector4};
 pub struct DataWriter {
     data: Vec<u8>,
     string_table: HashMap<String, Vec<(usize, usize)>>,
-    index_table: HashMap<String, usize>,
 }
 
 impl DataWriter {
@@ -53,6 +52,10 @@ impl DataWriter {
         for int in value {
             self.write_int(*int);
         }
+    }
+
+    pub fn write_long(&mut self, value: i64) {
+        self.data.extend_from_slice(&value.to_le_bytes());
     }
 
     pub fn write_float(&mut self, value: f32) {
@@ -120,7 +123,11 @@ impl DataWriter {
     }
 
     pub fn write_quaternion64(&mut self, value: &Quaternion) {
-        todo!()
+        let x = clamp((value.x * 1048576.0) as i64 + 1048576, 0, 2097151);
+        let y = clamp((value.y * 1048576.0) as i64 + 1048576, 0, 2097151);
+        let z = clamp((value.z * 1048576.0) as i64 + 1048576, 0, 2097151);
+        let w = (value.w < 0.0) as i64;
+        self.write_long((x << 43) | (y << 22) | (z << 1) | w);
     }
 
     pub fn write_vector4(&mut self, value: &Vector4) {
