@@ -10,7 +10,8 @@ pub mod write;
 use import::load_all_source_files;
 use input::CompilationDataInput;
 use process::process;
-use utilities::logging::{log, LogLevel};
+use tauri::Manager;
+use utilities::logging::{log, LogLevel, LOGGER};
 use write::write_files;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -42,6 +43,11 @@ fn compile_model(data: CompilationDataInput) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let window = app.get_webview_window("main");
+            unsafe { LOGGER = window };
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![compile_model])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

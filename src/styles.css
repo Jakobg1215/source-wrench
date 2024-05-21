@@ -2,3 +2,15 @@ ol,
 ul {
     list-style-type: none;
 }
+
+body {
+    display: flex;
+}
+
+.MainMenu {
+    flex: 1;
+}
+
+.LoggerMenu {
+    width: 50%;
+}

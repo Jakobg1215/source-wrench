@@ -2,6 +2,7 @@
     "app": {
         "windows": [
             {
+                "label": "main",
                 "center": true,
                 "title": "Source Wrench"
             }

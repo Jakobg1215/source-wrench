@@ -1,8 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { documentDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { createSignal, type Component } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import Logging from './components/Logging';
 import AnimatingMenu from './components/animating/AnimatingMenu';
 import { AnimationData } from './components/animating/Animation';
 import { SequenceData } from './components/animating/Sequence';
@@ -45,33 +47,41 @@ const App: Component = () => {
         invoke('compile_model', { data });
     };
 
+    listen('source-wrench-log', (value) => {
+        console.log(value);
+    });
+
     return (
         <>
-            <header>
-                <h1>Source Wrench</h1>
-                <nav>
-                    <ul>
-                        <li>
-                            <a href="#bodygroups">Body Groups</a>
-                        </li>
-                        <li>
-                            <a href="#animating">Animating</a>
-                        </li>
-                    </ul>
-                </nav>
-            </header>
+            <div class="MainMenu">
+                <header>
+                    <h1>Source Wrench</h1>
+                    <nav>
+                        <ul>
+                            <li>
+                                <a href="#bodygroups">Body Groups</a>
+                            </li>
+                            <li>
+                                <a href="#animating">Animating</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </header>
 
-            <main>
-                <button onClick={compileModel}>Compile Model</button>
-                <br />
-                <label>
-                    Model Name:
-                    <input type="text" onChange={(event) => setModelName(event.target.value)}></input>
-                    .mdl
-                </label>
-                <BodyGroupsMenu id="bodygroups" setBodyGroups={setBodyGroups} bodyGroups={bodyGroups} />
-                <AnimatingMenu id="animating" animations={animations} setAnimations={setAnimations} sequences={sequences} setSequences={setSequences} />
-            </main>
+                <main>
+                    <button onClick={compileModel}>Compile Model</button>
+                    <br />
+                    <label>
+                        Model Name:
+                        <input type="text" onChange={(event) => setModelName(event.target.value)}></input>
+                        .mdl
+                    </label>
+                    <BodyGroupsMenu id="bodygroups" setBodyGroups={setBodyGroups} bodyGroups={bodyGroups} />
+                    <AnimatingMenu id="animating" animations={animations} setAnimations={setAnimations} sequences={sequences} setSequences={setSequences} />
+                </main>
+            </div>
+
+            <Logging />
         </>
     );
 };
