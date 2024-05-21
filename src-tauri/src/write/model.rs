@@ -1,5 +1,5 @@
 use crate::{
-    process::structures::{ProcessedAnimationPosition, ProcessedAnimationRotation, ProcessedBodyGroupData},
+    process::structures::{ProcessedAnimationPosition, ProcessedAnimationRotation},
     utilities::{
         binarydata::DataWriter,
         mathematics::{Angles, Matrix, Quaternion, Vector3},
@@ -677,7 +677,7 @@ impl SequenceDescription {
 pub struct BodyGroup {
     write_start_index: usize,
     pub name: String,
-    base: i32,
+    pub base: i32,
     pub models: Vec<BodyPart>,
     write_models_index: usize,
 }
@@ -688,7 +688,7 @@ impl StructWriting for BodyGroup {
 
         writer.add_string_to_table(self.write_start_index, &self.name); // sznameindex
         writer.write_int(self.models.len() as i32); // nummodels
-        writer.write_int(1); // base
+        writer.write_int(self.base); // base
         self.write_models_index = writer.write_index(); // modelindex
     }
 }

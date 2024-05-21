@@ -83,9 +83,21 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     mdl_header.material_paths.push(String::from("\\"));
 
     let mut mesh_id = 0;
+    let mut previous_base: Option<(i32, usize)> = None;
     for processed_body_group in processed_data.model_data.body_groups {
         let mut body_group = BodyGroup::new();
         body_group.name = processed_body_group.name;
+
+        match previous_base {
+            Some(base) => {
+                body_group.base = base.0 * base.1 as i32;
+            }
+            None => {
+                body_group.base = 1;
+            }
+        }
+
+        previous_base = Some((body_group.base, processed_body_group.parts.len()));
 
         let mut mesh_body_part_header = BodyPartHeader::new();
 
