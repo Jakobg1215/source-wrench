@@ -24,8 +24,8 @@ pub struct Header {
     pub material_paths: Vec<String>,
     write_material_paths_index: usize,
     write_skin_families_index: usize,
-    pub body_groups: Vec<BodyGroup>,
-    write_body_groups_index: usize,
+    pub body_parts: Vec<BodyPart>,
+    write_body_parts_index: usize,
     pub bones_index: Vec<usize>,
     write_bone_table_by_name_index: usize,
     pub second_header: SecondHeader,
@@ -66,38 +66,38 @@ impl StructWriting for Header {
         writer.write_int(self.materials.len() as i32); // numskinref
         writer.write_int(self.materials.len() as i32); // numskinfamilies
         self.write_skin_families_index = writer.write_index(); // skinindex
-        writer.write_int(self.body_groups.len() as i32); // numbodyparts
-        self.write_body_groups_index = writer.write_index(); // bodypartindex
+        writer.write_int(self.body_parts.len() as i32); // numbodyparts
+        self.write_body_parts_index = writer.write_index(); // bodypartindex
         writer.write_int(0); // numlocalattachments
-        writer.write_int(self.write_body_groups_index as i32); // localattachmentindex
+        writer.write_int(self.write_body_parts_index as i32); // localattachmentindex
         writer.write_int(0); // numlocalnodes
-        writer.write_int(self.write_body_groups_index as i32); // localnodeindex
-        writer.write_int(self.write_body_groups_index as i32); // localnodenameindex
+        writer.write_int(self.write_body_parts_index as i32); // localnodeindex
+        writer.write_int(self.write_body_parts_index as i32); // localnodenameindex
         writer.write_int(0); // numflexdesc
-        writer.write_int(self.write_body_groups_index as i32); // flexdescindex
+        writer.write_int(self.write_body_parts_index as i32); // flexdescindex
         writer.write_int(0); // numflexcontrollers
-        writer.write_int(self.write_body_groups_index as i32); // flexcontrollerindex
+        writer.write_int(self.write_body_parts_index as i32); // flexcontrollerindex
         writer.write_int(0); // numflexrules
-        writer.write_int(self.write_body_groups_index as i32); // flexruleindex
+        writer.write_int(self.write_body_parts_index as i32); // flexruleindex
         writer.write_int(0); // numikchains
-        writer.write_int(self.write_body_groups_index as i32); // ikchainindex
+        writer.write_int(self.write_body_parts_index as i32); // ikchainindex
         writer.write_int(0); // nummouths
-        writer.write_int(self.write_body_groups_index as i32); // mouthindex
+        writer.write_int(self.write_body_parts_index as i32); // mouthindex
         writer.write_int(0); // numlocalposeparameters
-        writer.write_int(self.write_body_groups_index as i32); // localposeparamindex
+        writer.write_int(self.write_body_parts_index as i32); // localposeparamindex
         writer.add_string_to_table(self.write_start_index, "Default"); // surfacepropindex
-        writer.write_int(self.write_body_groups_index as i32); // keyvalueindex
+        writer.write_int(self.write_body_parts_index as i32); // keyvalueindex
         writer.write_int(0); // keyvaluesize
         writer.write_int(0); // numlocalikautoplaylocks
-        writer.write_int(self.write_body_groups_index as i32); // localikautoplaylockindex
+        writer.write_int(self.write_body_parts_index as i32); // localikautoplaylockindex
         writer.write_float(0.0); // mass
         writer.write_int(0); // contents
         writer.write_int(0); // numincludemodels
-        writer.write_int(self.write_body_groups_index as i32); // includemodelindex
+        writer.write_int(self.write_body_parts_index as i32); // includemodelindex
         writer.write_int(0); // virtualModel
         writer.add_string_to_table(self.write_start_index, "");
         writer.write_int(0); // numanimblocks
-        writer.write_int(self.write_body_groups_index as i32); // animblockindex
+        writer.write_int(self.write_body_parts_index as i32); // animblockindex
         writer.write_int(0); // animblockModel
         self.write_bone_table_by_name_index = writer.write_index(); // bonetablebynameindex
         writer.write_int(0); // pVertexBase
@@ -126,7 +126,7 @@ impl StructWriting for Header {
 
         self.write_sequences(writer);
 
-        self.write_body_groups(writer);
+        self.write_body_parts(writer);
 
         self.write_materials(writer);
 
@@ -158,8 +158,8 @@ impl Header {
             material_paths: Vec::new(),
             write_material_paths_index: usize::MAX,
             write_skin_families_index: usize::MAX,
-            body_groups: Vec::new(),
-            write_body_groups_index: usize::MAX,
+            body_parts: Vec::new(),
+            write_body_parts_index: usize::MAX,
             bones_index: Vec::new(),
             write_bone_table_by_name_index: usize::MAX,
             second_header: SecondHeader::new(),
@@ -230,15 +230,15 @@ impl Header {
         }
     }
 
-    fn write_body_groups(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.write_body_groups_index, writer.get_size() as i32);
+    fn write_body_parts(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.write_body_parts_index, writer.get_size() as i32);
 
-        for body_group in &mut self.body_groups {
-            body_group.write_to_writer(writer);
+        for body_part in &mut self.body_parts {
+            body_part.write_to_writer(writer);
         }
 
-        for body_group in &mut self.body_groups {
-            body_group.write_models(writer);
+        for body_part in &mut self.body_parts {
+            body_part.write_models(writer);
         }
     }
 
@@ -674,15 +674,15 @@ impl SequenceDescription {
     }
 }
 
-pub struct BodyGroup {
+pub struct BodyPart {
     write_start_index: usize,
     pub name: String,
     pub base: i32,
-    pub models: Vec<BodyPart>,
+    pub models: Vec<Model>,
     write_models_index: usize,
 }
 
-impl StructWriting for BodyGroup {
+impl StructWriting for BodyPart {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.write_start_index = writer.get_size();
 
@@ -693,7 +693,7 @@ impl StructWriting for BodyGroup {
     }
 }
 
-impl BodyGroup {
+impl BodyPart {
     pub fn new() -> Self {
         Self {
             write_start_index: usize::MAX,
@@ -717,17 +717,17 @@ impl BodyGroup {
     }
 }
 
-pub struct BodyPart {
+pub struct Model {
     write_start_index: usize,
     pub name: String,
-    pub meshes: Vec<BodyMesh>,
+    pub meshes: Vec<Mesh>,
     write_meshes_index: usize,
     pub vertex_count: i32,
     pub vertex_index: i32,
     pub tangent_index: i32,
 }
 
-impl StructWriting for BodyPart {
+impl StructWriting for Model {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.write_start_index = writer.get_size();
 
@@ -749,7 +749,7 @@ impl StructWriting for BodyPart {
     }
 }
 
-impl BodyPart {
+impl Model {
     pub fn new() -> Self {
         Self {
             write_start_index: usize::MAX,
@@ -772,7 +772,7 @@ impl BodyPart {
     }
 }
 
-pub struct BodyMesh {
+pub struct Mesh {
     write_start_index: usize,
     write_model_index: usize,
     pub material_index: usize,
@@ -781,7 +781,7 @@ pub struct BodyMesh {
     pub mesh_id: usize,
 }
 
-impl StructWriting for BodyMesh {
+impl StructWriting for Mesh {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.write_start_index = writer.get_size();
 
@@ -801,7 +801,7 @@ impl StructWriting for BodyMesh {
     }
 }
 
-impl BodyMesh {
+impl Mesh {
     pub fn new() -> Self {
         Self {
             write_start_index: usize::MAX,

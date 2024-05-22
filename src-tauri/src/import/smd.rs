@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-use super::{ImportedBoneAnimation, ImportedFileData, ImportedVertex};
+use super::{ImportedBoneAnimation, ImportedFile, ImportedVertex};
 
 #[derive(Error, Debug)]
 pub enum ParseSMDError {
@@ -113,7 +113,7 @@ impl Link {
     }
 }
 
-pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFileData, ParseSMDError> {
+pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFile, ParseSMDError> {
     log(
         format!("Loading SMD File: {:?}", file_path.file_name().expect("File Path To Be Validated!")),
         LogLevel::Verbose,
@@ -519,7 +519,7 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
         }
     }
 
-    let mut file_data = ImportedFileData::default();
+    let mut file_data = ImportedFile::default();
 
     if smd_data.frames.len() == 0 {
         return Err(ParseSMDError::NoBindFrame);
@@ -559,7 +559,7 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
         }
     }
 
-    file_data.mesh.materials = smd_data.materials;
+    file_data.model.materials = smd_data.materials;
 
     for vertex in smd_data.vertices {
         let mut vert = ImportedVertex::new(vertex.position, vertex.normal, vertex.texture_coordinate);
@@ -567,7 +567,7 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
             let bone_index = mapped_nodes.get(&link.bone).expect("Bone Not Found!");
             vert.add_weight(*bone_index, link.weight)
         }
-        file_data.mesh.add_vertex(vert);
+        file_data.model.add_vertex(vert);
     }
 
     Ok(file_data)

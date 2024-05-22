@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use thiserror::Error;
 
 use crate::{
-    input::CompilationDataInput,
+    input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
         mathematics::{Quaternion, Vector2, Vector3},
@@ -30,15 +30,15 @@ pub enum ImportingError {
 }
 
 #[derive(Default)]
-pub struct ImportedFileData {
+pub struct ImportedFile {
     pub skeleton: Vec<ImportedBone>,
     pub remapped_bones: HashMap<usize, usize>,
     pub animation: Vec<IndexMap<usize, ImportedBoneAnimation>>,
-    pub mesh: ImportedMesh,
+    pub model: ImportedModel,
     pub flexes: Vec<ImportedFlexKey>,
 }
 
-impl ImportedFileData {
+impl ImportedFile {
     pub fn add_bone(&mut self, new_bone: ImportedBone) -> usize {
         self.skeleton.push(new_bone);
         self.animation.push(IndexMap::new());
@@ -80,12 +80,12 @@ impl ImportedBoneAnimation {
 }
 
 #[derive(Default)]
-pub struct ImportedMesh {
+pub struct ImportedModel {
     pub materials: HashMap<String, Vec<Vec<usize>>>,
     pub vertices: Vec<ImportedVertex>,
 }
 
-impl ImportedMesh {
+impl ImportedModel {
     fn add_vertex(&mut self, vertex: ImportedVertex) {
         self.vertices.push(vertex);
     }
@@ -108,9 +108,7 @@ impl ImportedVertex {
             weights: Vec::new(),
         }
     }
-}
 
-impl ImportedVertex {
     pub fn add_weight(&mut self, bone_index: usize, weight: f64) {
         self.weights.push((bone_index, weight));
     }
@@ -120,14 +118,14 @@ pub struct ImportedFlexKey {}
 
 impl ImportedFlexKey {}
 
-pub fn load_all_source_files(input_data: &CompilationDataInput) -> Result<HashMap<String, ImportedFileData>, ImportingError> {
+pub fn load_all_source_files(input_data: &ImputedCompilationData) -> Result<HashMap<String, ImportedFile>, ImportingError> {
     log("Loading all source files.", LogLevel::Info);
 
-    let mut loaded_files: HashMap<String, ImportedFileData> = HashMap::new();
+    let mut loaded_files: HashMap<String, ImportedFile> = HashMap::new();
 
-    for body_group in &input_data.body_groups {
-        for body_part in &body_group.parts {
-            load_file(&mut loaded_files, &body_part.model_source)?;
+    for body_part in &input_data.body_parts {
+        for models in &body_part.models {
+            load_file(&mut loaded_files, &models.model_source)?;
         }
     }
 
@@ -138,7 +136,7 @@ pub fn load_all_source_files(input_data: &CompilationDataInput) -> Result<HashMa
     Ok(loaded_files)
 }
 
-fn load_file(loaded_files: &mut HashMap<String, ImportedFileData>, source_path: &str) -> Result<(), ImportingError> {
+fn load_file(loaded_files: &mut HashMap<String, ImportedFile>, source_path: &str) -> Result<(), ImportingError> {
     if loaded_files.contains_key(source_path) {
         return Ok(());
     }

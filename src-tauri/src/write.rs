@@ -6,9 +6,9 @@ use crate::{
 };
 
 use self::{
-    mesh::{BodyPartHeader, BoneStateChangeHeader, FileHeader, MeshHeader, ModelHeader, ModelLODHeader, StripGroupHeader, StripHeader, Vertex},
-    model::{Animation, AnimationData, AnimationDescription, BodyGroup, BodyMesh, BodyPart, Bone, Header, Hitbox, HitboxSet, Material, SequenceDescription},
-    vertex::{VerticesHeader, VerticesVertex},
+    mesh::{BodyPartHeader, BoneStateChangeHeader, MeshFileHeader, MeshHeader, ModelHeader, ModelLODHeader, StripGroupHeader, StripHeader, VertexHeader},
+    model::{Animation, AnimationData, AnimationDescription, BodyPart, Bone, Header, Hitbox, HitboxSet, Material, Mesh, Model, SequenceDescription},
+    vertex::{Vertex, VertexFileHeader},
 };
 
 mod mesh;
@@ -75,45 +75,45 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     }
 
     let mut vvd_writer = DataWriter::default();
-    let mut vvd_header = VerticesHeader::new(69420);
+    let mut vvd_header = VertexFileHeader::new(69420);
 
     let mut vtx_writer = DataWriter::default();
-    let mut vtx_header = FileHeader::new(69420);
+    let mut vtx_header = MeshFileHeader::new(69420);
 
     mdl_header.material_paths.push(String::from("\\"));
 
     let mut mesh_id = 0;
     let mut previous_base: Option<(i32, usize)> = None;
-    for processed_body_group in processed_data.model_data.body_groups {
-        let mut body_group = BodyGroup::new();
-        body_group.name = processed_body_group.name;
+    for processed_body_part in processed_data.model_data.body_parts {
+        let mut body_part = BodyPart::new();
+        body_part.name = processed_body_part.name;
 
         match previous_base {
             Some(base) => {
-                body_group.base = base.0 * base.1 as i32;
+                body_part.base = base.0 * base.1 as i32;
             }
             None => {
-                body_group.base = 1;
+                body_part.base = 1;
             }
         }
 
-        previous_base = Some((body_group.base, processed_body_group.parts.len()));
+        previous_base = Some((body_part.base, processed_body_part.parts.len()));
 
         let mut mesh_body_part_header = BodyPartHeader::new();
 
-        for processed_part in processed_body_group.parts {
-            let mut body_part = BodyPart::new();
-            body_part.name = processed_part.name;
-            body_part.vertex_count = processed_part.meshes.iter().map(|mesh| mesh.vertex_data.len()).sum::<usize>() as i32;
-            body_part.vertex_index = (vvd_header.vertexes.len() * 48) as i32;
-            body_part.tangent_index = (vvd_header.tangents.len() * 16) as i32;
+        for processed_part in processed_body_part.parts {
+            let mut model = Model::new();
+            model.name = processed_part.name;
+            model.vertex_count = processed_part.meshes.iter().map(|mesh| mesh.vertex_data.len()).sum::<usize>() as i32;
+            model.vertex_index = (vvd_header.vertexes.len() * 48) as i32;
+            model.tangent_index = (vvd_header.tangents.len() * 16) as i32;
 
             let mut mesh_model_header = ModelHeader::new();
             let mut mesh_model_lod_header = ModelLODHeader::new(0.0);
 
             let mut vertex_count = 0;
             for processed_mesh in processed_part.meshes {
-                let mut body_mesh = BodyMesh::new();
+                let mut body_mesh = Mesh::new();
 
                 body_mesh.material_index = processed_mesh.material;
                 body_mesh.vertex_count = processed_mesh.vertex_data.len();
@@ -122,7 +122,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                 mesh_id += 1;
                 vertex_count += processed_mesh.vertex_data.len();
                 for vertex in processed_mesh.vertex_data {
-                    let vvd_vertex = VerticesVertex::new(vertex.weights, vertex.bones, vertex.bone_count, vertex.position, vertex.normal, vertex.uv);
+                    let vvd_vertex = Vertex::new(vertex.weights, vertex.bones, vertex.bone_count, vertex.position, vertex.normal, vertex.uv);
                     vvd_header.vertexes.push(vvd_vertex);
                     vvd_header.tangents.push(vertex.tangent);
                 }
@@ -133,7 +133,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                     let mut mesh_strip_group_header = StripGroupHeader::new();
 
                     for vertex in strip_group.vertices {
-                        let mut mesh_vertex = Vertex::new();
+                        let mut mesh_vertex = VertexHeader::new();
                         mesh_vertex.bone_count = vertex.bone_count;
                         mesh_vertex.vertex_index = vertex.vertex_index;
                         mesh_vertex.bone_weight_bones = vertex.bones;
@@ -163,16 +163,16 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                 }
 
                 mesh_model_lod_header.meshes.push(mesh_mesh_header);
-                body_part.meshes.push(body_mesh);
+                model.meshes.push(body_mesh);
             }
 
-            body_group.models.push(body_part);
+            body_part.models.push(model);
             mesh_model_header.models.push(mesh_model_lod_header);
             mesh_body_part_header.parts.push(mesh_model_header);
         }
 
-        mdl_header.body_groups.push(body_group);
-        vtx_header.body_groups.push(mesh_body_part_header);
+        mdl_header.body_parts.push(body_part);
+        vtx_header.body_parts.push(mesh_body_part_header);
     }
 
     for processed_material in processed_data.model_data.materials {

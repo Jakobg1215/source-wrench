@@ -2,14 +2,14 @@ use crate::utilities::binarydata::DataWriter;
 
 use super::StructWriting;
 
-pub struct FileHeader {
+pub struct MeshFileHeader {
     checksum: i32,
     material_replacement_index: usize,
-    pub body_groups: Vec<BodyPartHeader>,
-    body_groups_index: usize,
+    pub body_parts: Vec<BodyPartHeader>,
+    body_parts_index: usize,
 }
 
-impl StructWriting for FileHeader {
+impl StructWriting for MeshFileHeader {
     fn write_to_writer(&mut self, mut writer: &mut DataWriter) {
         writer.write_int(7); // version
         writer.write_int(24); // vertCacheSize
@@ -19,16 +19,16 @@ impl StructWriting for FileHeader {
         writer.write_int(self.checksum); // checkSum
         writer.write_int(1); // numLODs
         self.material_replacement_index = writer.write_index(); // materialReplacementListOffset
-        writer.write_int(self.body_groups.len() as i32); // numBodyParts
-        self.body_groups_index = writer.write_index(); // bodyPartOffset
+        writer.write_int(self.body_parts.len() as i32); // numBodyParts
+        self.body_parts_index = writer.write_index(); // bodyPartOffset
 
-        writer.write_to_index(self.body_groups_index, writer.get_size() as i32);
-        for body_group in &mut self.body_groups {
-            body_group.write_to_writer(&mut writer);
+        writer.write_to_index(self.body_parts_index, writer.get_size() as i32);
+        for body_part in &mut self.body_parts {
+            body_part.write_to_writer(&mut writer);
         }
 
-        for body_group in &mut self.body_groups {
-            body_group.write_parts(&mut writer);
+        for body_part in &mut self.body_parts {
+            body_part.write_parts(&mut writer);
         }
 
         writer.write_to_index(self.material_replacement_index, writer.get_size() as i32);
@@ -36,13 +36,13 @@ impl StructWriting for FileHeader {
     }
 }
 
-impl FileHeader {
+impl MeshFileHeader {
     pub fn new(checksum: i32) -> Self {
         Self {
             checksum,
             material_replacement_index: usize::MAX,
-            body_groups: Vec::new(),
-            body_groups_index: usize::MAX,
+            body_parts: Vec::new(),
+            body_parts_index: usize::MAX,
         }
     }
 }
@@ -228,7 +228,7 @@ impl MeshHeader {
 
 pub struct StripGroupHeader {
     index_start: usize,
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<VertexHeader>,
     vertices_index: usize,
     pub indices: Vec<u16>,
     indices_index: usize,
@@ -295,13 +295,13 @@ impl StripGroupHeader {
     }
 }
 
-pub struct Vertex {
+pub struct VertexHeader {
     pub bone_count: usize,
     pub vertex_index: usize,
     pub bone_weight_bones: [usize; 3],
 }
 
-impl StructWriting for Vertex {
+impl StructWriting for VertexHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_unsigned_byte_array(&vec![0, 1, 2]); // boneWeightIndex
         writer.write_unsigned_byte(self.bone_count as u8); // numBones
@@ -311,7 +311,7 @@ impl StructWriting for Vertex {
     }
 }
 
-impl Vertex {
+impl VertexHeader {
     pub fn new() -> Self {
         Self {
             bone_count: usize::MAX,

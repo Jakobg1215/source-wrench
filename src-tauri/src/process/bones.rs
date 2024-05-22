@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    import::ImportedFileData,
+    import::ImportedFile,
     process::structures::ProcessedBone,
     utilities::mathematics::{Quaternion, Vector3},
 };
@@ -131,7 +131,7 @@ pub fn process_bone_table(bone_table: &BoneTable) -> ProcessedBoneData {
     processed_bones
 }
 
-pub fn create_bone_table(import: &mut HashMap<String, ImportedFileData>) -> Result<BoneTable, ProcessingDataError> {
+pub fn create_bone_table(import: &mut HashMap<String, ImportedFile>) -> Result<BoneTable, ProcessingDataError> {
     let mut bone_table = BoneTable::default();
 
     for file_data in import.values_mut() {

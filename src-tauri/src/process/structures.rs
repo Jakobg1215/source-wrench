@@ -4,8 +4,8 @@ use crate::utilities::mathematics::{Angles, Quaternion, Vector2, Vector3, Vector
 /// This processed data is set up to be easily written out at the write stage.
 pub struct ProcessedData {
     pub bone_data: ProcessedBoneData,
-    pub animation_data: Vec<ProcessedAnimationData>,
-    pub sequence_data: Vec<ProcessedSequenceData>,
+    pub animation_data: Vec<ProcessedAnimation>,
+    pub sequence_data: Vec<ProcessedSequence>,
     pub model_data: ProcessedModelData,
 }
 
@@ -48,7 +48,7 @@ impl ProcessedBone {
 }
 
 /// The structure that contains data for an animation.
-pub struct ProcessedAnimationData {
+pub struct ProcessedAnimation {
     /// The name of the animation.
     pub name: String,
     /// If the animation is delta for additive animations.
@@ -59,7 +59,7 @@ pub struct ProcessedAnimationData {
     pub bones: Vec<ProcessedAnimatedBoneData>,
 }
 
-impl ProcessedAnimationData {
+impl ProcessedAnimation {
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -105,14 +105,14 @@ pub enum ProcessedAnimationRotation {
 }
 
 /// The structure that contains data for sequences.
-pub struct ProcessedSequenceData {
+pub struct ProcessedSequence {
     /// The name of the sequence.
     pub name: String,
     /// The array of animation indexes used for blending.
     pub animations: Vec<usize>,
 }
 
-impl ProcessedSequenceData {
+impl ProcessedSequence {
     pub fn new(name: String) -> Self {
         Self { name, animations: Vec::new() }
     }
@@ -121,7 +121,7 @@ impl ProcessedSequenceData {
 /// The main structure that stores everything relevant to mesh data.
 #[derive(Default)]
 pub struct ProcessedModelData {
-    pub body_groups: Vec<ProcessedBodyGroupData>,
+    pub body_parts: Vec<ProcessedBodyPart>,
     pub materials: Vec<String>,
 }
 
@@ -136,41 +136,39 @@ impl ProcessedModelData {
     }
 }
 
-pub struct ProcessedBodyGroupData {
+pub struct ProcessedBodyPart {
     pub name: String,
-    pub parts: Vec<ProcessedBodyPartData>,
+    pub parts: Vec<ProcessedModel>,
 }
 
-impl ProcessedBodyGroupData {
+impl ProcessedBodyPart {
     pub fn new(name: String) -> Self {
         Self { name, parts: Vec::new() }
     }
-}
 
-impl ProcessedBodyGroupData {
-    pub fn add_part(&mut self, part: ProcessedBodyPartData) {
+    pub fn add_part(&mut self, part: ProcessedModel) {
         self.parts.push(part);
     }
 }
 
-pub struct ProcessedBodyPartData {
+pub struct ProcessedModel {
     pub name: String,
-    pub meshes: Vec<ProcessedMeshData>,
+    pub meshes: Vec<ProcessedMesh>,
 }
 
-impl ProcessedBodyPartData {
+impl ProcessedModel {
     pub fn new(name: String) -> Self {
         Self { name, meshes: Vec::new() }
     }
 }
 
-pub struct ProcessedMeshData {
+pub struct ProcessedMesh {
     pub material: usize,
-    pub vertex_data: Vec<ProcessedVertexData>,
+    pub vertex_data: Vec<ProcessedVertex>,
     pub strip_groups: Vec<ProcessedStripGroup>,
 }
 
-impl ProcessedMeshData {
+impl ProcessedMesh {
     pub fn new(material: usize) -> Self {
         Self {
             material,
@@ -181,7 +179,7 @@ impl ProcessedMeshData {
 }
 
 #[derive(Default, Clone, Copy)]
-pub struct ProcessedVertexData {
+pub struct ProcessedVertex {
     pub weights: [f64; 3],
     pub bones: [usize; 3],
     pub bone_count: usize,

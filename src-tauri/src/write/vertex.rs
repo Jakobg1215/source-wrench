@@ -5,17 +5,17 @@ use crate::utilities::{
 
 use super::StructWriting;
 
-pub struct VerticesHeader {
+pub struct VertexFileHeader {
     checksum: i32,
     fixups: Vec<VerticesFixUp>,
     fixups_index: usize,
-    pub vertexes: Vec<VerticesVertex>,
+    pub vertexes: Vec<Vertex>,
     vertexes_index: usize,
     pub tangents: Vec<Vector4>,
     tangents_index: usize,
 }
 
-impl StructWriting for VerticesHeader {
+impl StructWriting for VertexFileHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_int(1448297545); // id
         writer.write_int(4); // version
@@ -41,7 +41,7 @@ impl StructWriting for VerticesHeader {
     }
 }
 
-impl VerticesHeader {
+impl VertexFileHeader {
     pub fn new(checksum: i32) -> Self {
         Self {
             checksum,
@@ -57,7 +57,7 @@ impl VerticesHeader {
 
 pub struct VerticesFixUp {}
 
-pub struct VerticesVertex {
+pub struct Vertex {
     weights: [f64; 3],
     bones: [usize; 3],
     bone_count: usize,
@@ -66,7 +66,7 @@ pub struct VerticesVertex {
     uv: Vector2,
 }
 
-impl StructWriting for VerticesVertex {
+impl StructWriting for Vertex {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_float_array(&self.weights.iter().map(|f| *f as f32).collect()); // weight
         writer.write_unsigned_byte_array(&self.bones.iter().map(|b| *b as u8).collect()); // bone
@@ -77,7 +77,7 @@ impl StructWriting for VerticesVertex {
     }
 }
 
-impl VerticesVertex {
+impl Vertex {
     pub fn new(weights: [f64; 3], bones: [usize; 3], bone_count: usize, position: Vector3, normal: Vector3, uv: Vector2) -> Self {
         Self {
             weights,

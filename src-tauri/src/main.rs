@@ -8,7 +8,7 @@ pub mod utilities;
 pub mod write;
 
 use import::load_all_source_files;
-use input::CompilationDataInput;
+use input::ImputedCompilationData;
 use process::process;
 use tauri::Manager;
 use utilities::logging::{log, LogLevel, LOGGER};
@@ -16,7 +16,7 @@ use write::write_files;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
-fn compile_model(data: CompilationDataInput) {
+fn compile_model(data: ImputedCompilationData) {
     log(format!("Compiling model {}.mdl!", &data.model_name), LogLevel::Info);
 
     let loaded_source_files = match load_all_source_files(&data) {

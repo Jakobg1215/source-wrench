@@ -8,12 +8,12 @@ import Logging from './components/Logging';
 import AnimatingMenu from './components/animating/AnimatingMenu';
 import { AnimationData } from './components/animating/Animation';
 import { SequenceData } from './components/animating/Sequence';
-import { BodyGroupData } from './components/bodygroups/BodyGroup';
-import BodyGroupsMenu from './components/bodygroups/BodyGroupsMenu';
+import { BodyPartData } from './components/bodyparts/BodyPart';
+import BodyPartsMenu from './components/bodyparts/BodyPartsMenu';
 
 type CompilationData = {
     model_name: string;
-    body_groups: Array<BodyGroupData>;
+    body_parts: Array<BodyPartData>;
     animations: Array<AnimationData>;
     sequences: Array<SequenceData>;
     export_path: string;
@@ -21,7 +21,7 @@ type CompilationData = {
 
 const App: Component = () => {
     const [modelName, setModelName] = createSignal('');
-    const [bodyGroups, setBodyGroups] = createStore<BodyGroupData[]>([]);
+    const [bodyParts, setBodyParts] = createStore<BodyPartData[]>([]);
     const [animations, setAnimations] = createStore<AnimationData[]>([]);
     const [sequences, setSequences] = createStore<SequenceData[]>([]);
 
@@ -38,7 +38,7 @@ const App: Component = () => {
 
         const data: CompilationData = {
             model_name: modelName(),
-            body_groups: bodyGroups,
+            body_parts: bodyParts,
             animations,
             sequences,
             export_path: selectedDirectory,
@@ -59,7 +59,7 @@ const App: Component = () => {
                     <nav>
                         <ul>
                             <li>
-                                <a href="#bodygroups">Body Groups</a>
+                                <a href="#bodyparts">Body Parts</a>
                             </li>
                             <li>
                                 <a href="#animating">Animating</a>
@@ -76,7 +76,7 @@ const App: Component = () => {
                         <input type="text" onChange={(event) => setModelName(event.target.value)}></input>
                         .mdl
                     </label>
-                    <BodyGroupsMenu id="bodygroups" setBodyGroups={setBodyGroups} bodyGroups={bodyGroups} />
+                    <BodyPartsMenu id="bodyparts" setBodyParts={setBodyParts} bodyParts={bodyParts} />
                     <AnimatingMenu id="animating" animations={animations} setAnimations={setAnimations} sequences={sequences} setSequences={setSequences} />
                 </main>
             </div>

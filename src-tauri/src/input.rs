@@ -1,35 +1,35 @@
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-pub struct CompilationDataInput {
+pub struct ImputedCompilationData {
     pub model_name: String,
-    pub body_groups: Vec<BodyGroupInput>,
-    pub animations: Vec<AnimationInput>,
-    pub sequences: Vec<SequenceInput>,
+    pub body_parts: Vec<ImputedBodyPart>,
+    pub animations: Vec<ImputedAnimation>,
+    pub sequences: Vec<ImputedSequence>,
     pub export_path: String,
 }
 
 #[derive(Deserialize)]
-pub struct BodyGroupInput {
+pub struct ImputedBodyPart {
     pub name: String,
-    pub parts: Vec<BodyPartInput>,
+    pub models: Vec<ImputedModel>,
 }
 
 #[derive(Deserialize)]
-pub struct BodyPartInput {
+pub struct ImputedModel {
     pub name: String,
     pub is_blank: bool,
     pub model_source: String,
 }
 
 #[derive(Deserialize)]
-pub struct AnimationInput {
+pub struct ImputedAnimation {
     pub name: String,
     pub source_file: String,
 }
 
 #[derive(Deserialize)]
-pub struct SequenceInput {
+pub struct ImputedSequence {
     pub name: String,
     pub animation: String,
 }

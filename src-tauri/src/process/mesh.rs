@@ -4,8 +4,8 @@ use indexmap::IndexSet;
 use kdtree::{distance::squared_euclidean, KdTree};
 
 use crate::{
-    import::{ImportedFileData, ImportedMesh, ImportedVertex},
-    input::CompilationDataInput,
+    import::{ImportedFile, ImportedModel, ImportedVertex},
+    input::ImputedCompilationData,
     process::FLOAT_TOLERANCE,
     utilities::{
         logging::{log, LogLevel},
@@ -15,8 +15,8 @@ use crate::{
 
 use super::{
     structures::{
-        ProcessedBodyGroupData, ProcessedBodyPartData, ProcessedHardwareBone, ProcessedMeshData, ProcessedMeshVertex, ProcessedModelData, ProcessedStrip,
-        ProcessedStripGroup, ProcessedVertexData,
+        ProcessedBodyPart, ProcessedHardwareBone, ProcessedMesh, ProcessedMeshVertex, ProcessedModel, ProcessedModelData, ProcessedStrip, ProcessedStripGroup,
+        ProcessedVertex,
     },
     ProcessingDataError,
 };
@@ -32,24 +32,24 @@ impl TriangleList {
     }
 }
 
-pub fn process_mesh_data(input: &CompilationDataInput, import: &HashMap<String, ImportedFileData>) -> Result<ProcessedModelData, ProcessingDataError> {
-    let mut model_data = ProcessedModelData::default();
+pub fn process_mesh_data(input: &ImputedCompilationData, import: &HashMap<String, ImportedFile>) -> Result<ProcessedModelData, ProcessingDataError> {
+    let mut processed_model_data = ProcessedModelData::default();
 
-    for body_group in &input.body_groups {
-        let mut body_group_data = ProcessedBodyGroupData::new(body_group.name.clone());
+    for body_part in &input.body_parts {
+        let mut body_part_data = ProcessedBodyPart::new(body_part.name.clone());
 
-        for body_part in &body_group.parts {
-            if body_part.name.len() > 64 {
+        for model in &body_part.models {
+            if model.name.len() > 64 {
                 todo!("Warn and trim name")
             }
 
-            let mut body_part_data = ProcessedBodyPartData::new(body_part.name.clone());
+            let mut model_data = ProcessedModel::new(model.name.clone());
 
-            let imported_file = import.get(&body_part.model_source).expect("Source File Not Found!");
+            let imported_file = import.get(&model.model_source).expect("Source File Not Found!");
 
-            let mut material_triangle_lists = create_triangle_lists(&mut model_data, &imported_file.mesh);
+            let mut material_triangle_lists = create_triangle_lists(&mut processed_model_data, &imported_file.model);
 
-            let (unique_vertices, indices_remap) = create_unique_vertices(&imported_file.mesh);
+            let (unique_vertices, indices_remap) = create_unique_vertices(&imported_file.model);
 
             remap_indices(&mut material_triangle_lists, indices_remap);
 
@@ -60,7 +60,7 @@ pub fn process_mesh_data(input: &CompilationDataInput, import: &HashMap<String, 
             let combined_vertices = combine_vertex_data(&unique_vertices, &tangents, &imported_file);
 
             for material_triangle_list in material_triangle_lists {
-                let mut mesh_data = ProcessedMeshData::new(material_triangle_list.material);
+                let mut mesh_data = ProcessedMesh::new(material_triangle_list.material);
                 let mut strip_group_data = ProcessedStripGroup::default();
                 let mut strip_data = ProcessedStrip::default();
                 let mut bone_changes = IndexSet::new();
@@ -117,23 +117,23 @@ pub fn process_mesh_data(input: &CompilationDataInput, import: &HashMap<String, 
 
                 strip_group_data.strips.push(strip_data);
                 mesh_data.strip_groups.push(strip_group_data);
-                body_part_data.meshes.push(mesh_data);
+                model_data.meshes.push(mesh_data);
             }
 
-            body_group_data.parts.push(body_part_data);
+            body_part_data.parts.push(model_data);
         }
 
-        model_data.body_groups.push(body_group_data);
+        processed_model_data.body_parts.push(body_part_data);
     }
 
-    Ok(model_data)
+    Ok(processed_model_data)
 }
 
-fn combine_vertex_data(unique_vertices: &Vec<ImportedVertex>, tangents: &Vec<Vector4>, file_data: &ImportedFileData) -> Vec<ProcessedVertexData> {
+fn combine_vertex_data(unique_vertices: &Vec<ImportedVertex>, tangents: &Vec<Vector4>, file_data: &ImportedFile) -> Vec<ProcessedVertex> {
     let mut combined_vertices = Vec::with_capacity(unique_vertices.len());
 
     for (vertex_index, vertex) in unique_vertices.iter().enumerate() {
-        let mut combined_vertex = ProcessedVertexData::default();
+        let mut combined_vertex = ProcessedVertex::default();
 
         create_weight_link(&mut combined_vertex, &vertex.weights, &file_data);
 
@@ -148,7 +148,7 @@ fn combine_vertex_data(unique_vertices: &Vec<ImportedVertex>, tangents: &Vec<Vec
     combined_vertices
 }
 
-fn create_weight_link(vertex: &mut ProcessedVertexData, weights: &Vec<(usize, f64)>, file_data: &ImportedFileData) {
+fn create_weight_link(vertex: &mut ProcessedVertex, weights: &Vec<(usize, f64)>, file_data: &ImportedFile) {
     let mut sorted_weights: Vec<(usize, f64)> = weights.iter().cloned().collect();
     sorted_weights.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
@@ -243,7 +243,7 @@ fn remap_indices(triangle_lists: &mut Vec<TriangleList>, remap_list: Vec<usize>)
     }
 }
 
-fn create_triangle_lists(model_data: &mut ProcessedModelData, mesh: &ImportedMesh) -> Vec<TriangleList> {
+fn create_triangle_lists(model_data: &mut ProcessedModelData, mesh: &ImportedModel) -> Vec<TriangleList> {
     let mut triangle_lists = Vec::with_capacity(mesh.materials.len());
 
     for (material, list) in &mesh.materials {
@@ -269,7 +269,7 @@ fn create_triangle_lists(model_data: &mut ProcessedModelData, mesh: &ImportedMes
     triangle_lists
 }
 
-fn create_unique_vertices(mesh: &ImportedMesh) -> (Vec<ImportedVertex>, Vec<usize>) {
+fn create_unique_vertices(mesh: &ImportedModel) -> (Vec<ImportedVertex>, Vec<usize>) {
     let mut kd_tree = KdTree::new(3);
     let mut unique_vertices = Vec::new();
     let mut indices_remap = Vec::with_capacity(mesh.vertices.len());

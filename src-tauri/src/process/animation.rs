@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    import::{ImportedBoneAnimation, ImportedFileData},
-    input::CompilationDataInput,
+    import::{ImportedBoneAnimation, ImportedFile},
+    input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
         mathematics::Vector3,
@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
     bones::BoneTable,
-    structures::{ProcessedAnimatedBoneData, ProcessedAnimationData, ProcessedAnimationPosition, ProcessedAnimationRotation, ProcessedSequenceData},
+    structures::{ProcessedAnimatedBoneData, ProcessedAnimation, ProcessedAnimationPosition, ProcessedAnimationRotation, ProcessedSequence},
     ProcessingDataError, FLOAT_TOLERANCE,
 };
 
@@ -46,17 +46,17 @@ impl MappedBoneAnimation {
 }
 
 pub fn process_animations(
-    input: &CompilationDataInput,
-    import: &HashMap<String, ImportedFileData>,
+    input: &ImputedCompilationData,
+    import: &HashMap<String, ImportedFile>,
     bone_table: &mut BoneTable,
-) -> Result<Vec<ProcessedAnimationData>, ProcessingDataError> {
+) -> Result<Vec<ProcessedAnimation>, ProcessingDataError> {
     let mapped_animations = map_animations_to_table(&input, &import)?;
 
     compress_animations(input, bone_table, mapped_animations)
 }
 
 /// Takes all animations and converts the local bones to the bone table bones.
-fn map_animations_to_table(input: &CompilationDataInput, import: &HashMap<String, ImportedFileData>) -> Result<Vec<MappedAnimation>, ProcessingDataError> {
+fn map_animations_to_table(input: &ImputedCompilationData, import: &HashMap<String, ImportedFile>) -> Result<Vec<MappedAnimation>, ProcessingDataError> {
     let mut mapped_animations = Vec::with_capacity(input.animations.len());
 
     for input_animation in &input.animations {
@@ -89,10 +89,10 @@ fn map_animations_to_table(input: &CompilationDataInput, import: &HashMap<String
 /// This compresses all animations.
 /// If the animation is not used then its ignored.
 fn compress_animations(
-    input: &CompilationDataInput,
+    input: &ImputedCompilationData,
     bone_table: &mut BoneTable,
     animations: Vec<MappedAnimation>,
-) -> Result<Vec<ProcessedAnimationData>, ProcessingDataError> {
+) -> Result<Vec<ProcessedAnimation>, ProcessingDataError> {
     let mut processed_animations = Vec::new();
 
     for mapped_animation in animations {
@@ -103,7 +103,7 @@ fn compress_animations(
             continue;
         }
 
-        let mut processed_animation = ProcessedAnimationData::new(mapped_animation.name);
+        let mut processed_animation = ProcessedAnimation::new(mapped_animation.name);
         processed_animation.frame_count = mapped_animation.frame_count;
 
         // Get Bone Scale
@@ -149,11 +149,11 @@ fn compress_animations(
     Ok(processed_animations)
 }
 
-pub fn process_sequences(input: &CompilationDataInput, animations: &Vec<ProcessedAnimationData>) -> Result<Vec<ProcessedSequenceData>, ProcessingDataError> {
+pub fn process_sequences(input: &ImputedCompilationData, animations: &Vec<ProcessedAnimation>) -> Result<Vec<ProcessedSequence>, ProcessingDataError> {
     let mut processed_sequences = Vec::new();
 
     for sequence in &input.sequences {
-        let mut processed_sequence = ProcessedSequenceData::new(sequence.name.clone());
+        let mut processed_sequence = ProcessedSequence::new(sequence.name.clone());
 
         let animation_index = animations.iter().position(|animation| animation.name == sequence.animation);
 

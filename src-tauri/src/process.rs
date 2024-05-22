@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
-    import::ImportedFileData,
-    input::CompilationDataInput,
+    import::ImportedFile,
+    input::ImputedCompilationData,
     process::{
         animation::{process_animations, process_sequences},
         bones::{create_bone_table, process_bone_table},
@@ -44,15 +44,15 @@ pub enum ProcessingDataError {
     FailedTangentGeneration,
     #[error("Model Has Too Many Materials")]
     TooManyMaterials,
-    #[error("Model Has Too Many Body Groups")]
-    TooManyBodyGroups,
+    #[error("Model Has Too Many Body Parts")]
+    TooManyBodyParts,
 }
 
 /// The tolerance for floating point numbers until they are considered equal.
 // TODO: Make this an imputed value.
 const FLOAT_TOLERANCE: f64 = 0.000001;
 
-pub fn process(input: &CompilationDataInput, mut import: HashMap<String, ImportedFileData>) -> Result<ProcessedData, ProcessingDataError> {
+pub fn process(input: &ImputedCompilationData, mut import: HashMap<String, ImportedFile>) -> Result<ProcessedData, ProcessingDataError> {
     log("Creating Bone Table", LogLevel::Debug);
     let mut bone_table = create_bone_table(&mut import)?;
     log(format!("Model uses {} source bones", bone_table.size()), LogLevel::Verbose);
@@ -82,10 +82,10 @@ pub fn process(input: &CompilationDataInput, mut import: HashMap<String, Importe
     log("Processing Mesh Data", LogLevel::Debug);
     let processed_mesh = process_mesh_data(&input, &import)?;
     log(format!("Model has {} materials", processed_mesh.materials.len()), LogLevel::Verbose);
-    log(format!("Model has {} body groups", processed_mesh.body_groups.len()), LogLevel::Verbose);
+    log(format!("Model has {} body parts", processed_mesh.body_parts.len()), LogLevel::Verbose);
 
-    if processed_mesh.body_groups.len() > i32::MAX as usize {
-        return Err(ProcessingDataError::TooManyBodyGroups);
+    if processed_mesh.body_parts.len() > i32::MAX as usize {
+        return Err(ProcessingDataError::TooManyBodyParts);
     }
 
     if processed_mesh.materials.len() > i16::MAX as usize {
