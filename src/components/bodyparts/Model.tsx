@@ -12,6 +12,7 @@ export type ModelData = {
     name: string;
     is_blank: boolean;
     model_source: string;
+    part_name: Array<string>;
 };
 
 const Model: Component<ModelProps> = (props) => {
@@ -47,7 +48,7 @@ const Model: Component<ModelProps> = (props) => {
         <li class="model">
             <label>
                 Model Name:
-                <input type="text" value="New Body Part" onChange={(event) => changeName(event.target.value)}></input>
+                <input type="text" value="New Model" onChange={(event) => changeName(event.target.value)}></input>
             </label>
             <br />
             <label>

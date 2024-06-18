@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { documentDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { createSignal, type Component } from 'solid-js';
@@ -30,6 +31,10 @@ const SourceFileSelector: Component<SourceFileSelectorProps> = (props) => {
                     });
 
                     if (selectedFile === null) {
+                        return;
+                    }
+
+                    if (!(await invoke('load_file', { path: selectedFile.path }))) {
                         return;
                     }
 

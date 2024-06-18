@@ -18,14 +18,15 @@ pub struct ImputedBodyPart {
 #[derive(Deserialize)]
 pub struct ImputedModel {
     pub name: String,
-    pub is_blank: bool,
     pub model_source: String,
+    pub part_name: Vec<String>,
 }
 
 #[derive(Deserialize)]
 pub struct ImputedAnimation {
     pub name: String,
     pub source_file: String,
+    pub animation_name: String,
 }
 
 #[derive(Deserialize)]

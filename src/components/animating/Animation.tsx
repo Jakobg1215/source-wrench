@@ -11,6 +11,7 @@ export type AnimationData = {
     readonly ordinal: number;
     name: string;
     source_file: string;
+    animation_name: string;
 };
 
 const Animation: Component<AnimationProps> = (props) => {

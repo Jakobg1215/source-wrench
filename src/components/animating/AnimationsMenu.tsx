@@ -18,6 +18,7 @@ const AnimationsMenu: Component<AnimationsMenuProps> = (props) => {
             ordinal: animationOrdinal++,
             name: 'New Animation',
             source_file: '',
+            animation_name: '',
         };
     };
 

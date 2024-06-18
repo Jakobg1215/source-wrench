@@ -1,7 +1,7 @@
 use std::fs::write;
 
 use crate::{
-    process::structures::ProcessedData,
+    process::ProcessedData,
     utilities::{binarydata::DataWriter, mathematics::Vector3},
 };
 
@@ -122,7 +122,9 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                 mesh_id += 1;
                 vertex_count += processed_mesh.vertex_data.len();
                 for vertex in processed_mesh.vertex_data {
-                    let vvd_vertex = Vertex::new(vertex.weights, vertex.bones, vertex.bone_count, vertex.position, vertex.normal, vertex.uv);
+                    let mut uv_fix = vertex.uv; // FIXME: This should be in the mesh processing stage.
+                    uv_fix.y = 1.0 - uv_fix.y;
+                    let vvd_vertex = Vertex::new(vertex.weights, vertex.bones, vertex.bone_count, vertex.position, vertex.normal, uv_fix);
                     vvd_header.vertexes.push(vvd_vertex);
                     vvd_header.tangents.push(vertex.tangent);
                 }

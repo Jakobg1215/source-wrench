@@ -1,5 +1,5 @@
 use crate::{
-    process::structures::{ProcessedAnimationPosition, ProcessedAnimationRotation},
+    process::{ProcessedAnimationPosition, ProcessedAnimationRotation},
     utilities::{
         binarydata::DataWriter,
         mathematics::{Angles, Matrix, Quaternion, Vector3},

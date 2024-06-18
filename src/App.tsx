@@ -1,5 +1,4 @@
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { documentDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { createSignal, type Component } from 'solid-js';
@@ -46,10 +45,6 @@ const App: Component = () => {
 
         invoke('compile_model', { data });
     };
-
-    listen('source-wrench-log', (value) => {
-        console.log(value);
-    });
 
     return (
         <>

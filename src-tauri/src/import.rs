@@ -1,177 +1,156 @@
-use std::{collections::HashMap, path::Path};
-
-use indexmap::IndexMap;
-use thiserror::Error;
-
-use crate::{
-    input::ImputedCompilationData,
-    utilities::{
-        logging::{log, LogLevel},
-        mathematics::{Quaternion, Vector2, Vector3},
-    },
+use std::{
+    collections::HashMap,
+    io::Error,
+    path::Path,
+    sync::{Arc, Mutex},
 };
 
-use self::smd::ParseSMDError;
+use smd::ParseSMDError;
+use thiserror::Error as ThisError;
+
+use crate::utilities::{
+    logging::{log, LogLevel},
+    mathematics::{Quaternion, Vector2, Vector3},
+};
 
 mod smd;
 
-#[derive(Error, Debug)]
-pub enum ImportingError {
-    #[error("File Was Not Found")]
-    FileNotFound,
-    #[error("File Had No Extension")]
-    NoFileExtension,
-    #[error("File Is Not Supported")]
-    UnsupportedFile,
-    #[error("File Failed To Import")]
-    FailedImport,
-    #[error("Failed To Read SMD File")]
-    SmdReadError(#[from] ParseSMDError),
+#[derive(Default, Debug)]
+pub struct ImportFileData {
+    pub skeleton: Vec<ImportBone>,
+    pub animations: Vec<ImportAnimation>,
+    pub parts: Vec<ImportPart>,
 }
 
-#[derive(Default)]
-pub struct ImportedFile {
-    pub skeleton: Vec<ImportedBone>,
-    pub remapped_bones: HashMap<usize, usize>,
-    pub animation: Vec<IndexMap<usize, ImportedBoneAnimation>>,
-    pub model: ImportedModel,
-    pub flexes: Vec<ImportedFlexKey>,
-}
-
-impl ImportedFile {
-    pub fn add_bone(&mut self, new_bone: ImportedBone) -> usize {
-        self.skeleton.push(new_bone);
-        self.animation.push(IndexMap::new());
-        self.skeleton.len() - 1
-    }
-
-    pub fn get_frame_count(&self) -> usize {
-        *self.animation.iter().flat_map(|bone| bone.keys()).max().unwrap_or(&usize::MAX) + 1
-    }
-}
-pub struct ImportedBone {
+#[derive(Default, Debug)]
+pub struct ImportBone {
     pub name: String,
-    pub position: Vector3,
-    pub orientation: Quaternion,
     pub parent: Option<usize>,
-}
-
-impl ImportedBone {
-    pub fn new(name: String, position: Vector3, orientation: Quaternion, parent: Option<usize>) -> Self {
-        Self {
-            name,
-            position,
-            orientation,
-            parent,
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct ImportedBoneAnimation {
     pub position: Vector3,
     pub orientation: Quaternion,
 }
 
-impl ImportedBoneAnimation {
-    pub fn new(position: Vector3, orientation: Quaternion) -> Self {
-        Self { position, orientation }
-    }
+#[derive(Default, Debug)]
+pub struct ImportAnimation {
+    pub name: String,
+    pub frame_count: usize,
+    pub channels: Vec<ImportChannel>,
 }
 
-#[derive(Default)]
-pub struct ImportedModel {
-    pub materials: HashMap<String, Vec<Vec<usize>>>,
-    pub vertices: Vec<ImportedVertex>,
+#[derive(Default, Debug)]
+pub struct ImportChannel {
+    pub bone: usize,
+    pub position: Vec<ImportKeyFrame<Vector3>>,
+    pub orientation: Vec<ImportKeyFrame<Quaternion>>,
 }
 
-impl ImportedModel {
-    fn add_vertex(&mut self, vertex: ImportedVertex) {
-        self.vertices.push(vertex);
-    }
+#[derive(Default, Debug)]
+pub struct ImportKeyFrame<T> {
+    pub frame: usize,
+    pub value: T,
 }
 
-#[derive(Clone)]
-pub struct ImportedVertex {
+#[derive(Default, Debug)]
+pub struct ImportPart {
+    pub name: String,
+    pub vertices: Vec<ImportVertex>,
+    pub polygons: HashMap<String, Vec<Vec<usize>>>,
+    pub flexes: Vec<ImportFlex>,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct ImportVertex {
     pub position: Vector3,
     pub normal: Vector3,
-    pub uv: Vector2,
-    pub weights: Vec<(usize, f64)>,
+    pub texture_coordinate: Vector2,
+    pub links: Vec<ImportLink>,
 }
 
-impl ImportedVertex {
-    pub fn new(position: Vector3, normal: Vector3, uv: Vector2) -> Self {
-        Self {
-            position,
-            normal,
-            uv,
-            weights: Vec::new(),
-        }
-    }
-
-    pub fn add_weight(&mut self, bone_index: usize, weight: f64) {
-        self.weights.push((bone_index, weight));
-    }
+#[derive(Default, Debug, Clone)]
+pub struct ImportLink {
+    pub bone: usize,
+    pub weight: f64,
 }
 
-pub struct ImportedFlexKey {}
-
-impl ImportedFlexKey {}
-
-pub fn load_all_source_files(input_data: &ImputedCompilationData) -> Result<HashMap<String, ImportedFile>, ImportingError> {
-    log("Loading all source files.", LogLevel::Info);
-
-    let mut loaded_files: HashMap<String, ImportedFile> = HashMap::new();
-
-    for body_part in &input_data.body_parts {
-        for models in &body_part.models {
-            load_file(&mut loaded_files, &models.model_source)?;
-        }
-    }
-
-    for animation in &input_data.animations {
-        load_file(&mut loaded_files, &animation.source_file)?;
-    }
-
-    Ok(loaded_files)
+#[derive(Default, Debug)]
+pub struct ImportFlex {
+    pub name: Option<String>,
+    pub vertices: Vec<ImportFlexVertex>,
 }
 
-fn load_file(loaded_files: &mut HashMap<String, ImportedFile>, source_path: &str) -> Result<(), ImportingError> {
-    if loaded_files.contains_key(source_path) {
-        return Ok(());
+#[derive(Default, Debug)]
+pub struct ImportFlexVertex {
+    pub index: usize,
+    pub position: Vector3,
+    pub normal: Vector3,
+}
+
+#[derive(ThisError, Debug)]
+pub enum ParseError {
+    #[error("File Does Not Exist")]
+    FileDoesNotExist,
+    #[error("Failed To Open File")]
+    FailedFileOpen(#[from] Error),
+    #[error("File Does Not Have Extension")]
+    FileDoesNotHaveExtension,
+    #[error("File Format Is Not Supported")]
+    UnsupportedFileFormat,
+    #[error("Failed To Parse SMD File")]
+    FailedSMDFileParse(#[from] ParseSMDError),
+}
+
+#[derive(Default, Debug)]
+pub struct FileManager {
+    pub files: Mutex<HashMap<String, (usize, Arc<ImportFileData>)>>,
+}
+
+impl FileManager {
+    pub fn load_file(&self, path: String) -> Result<(), ParseError> {
+        let file_path = Path::new(&path);
+        let mut files = self.files.lock().unwrap();
+
+        if files.contains_key(&path) {
+            files.get_mut(&path).unwrap().0 += 1;
+            return Ok(());
+        }
+
+        let exists = file_path.try_exists()?;
+
+        if !exists {
+            return Err(ParseError::FileDoesNotExist);
+        }
+
+        let file_extension = match file_path.extension() {
+            Some(extension) => extension,
+            None => return Err(ParseError::FileDoesNotHaveExtension),
+        };
+
+        let imported_file = match file_extension.to_str().expect("Failed To Convert File Extension To String!") {
+            "smd" => smd::load_smd(file_path)?,
+            "vta" => todo!("Support VTA Files!"),
+            _ => return Err(ParseError::UnsupportedFileFormat),
+        };
+
+        log(format!("Loaded {:?} file: {}", file_extension.to_ascii_uppercase(), path), LogLevel::Verbose);
+        files.insert(path, (1, Arc::new(imported_file)));
+        Ok(())
     }
 
-    let file_path = Path::new(source_path);
-    let file_exists = match file_path.try_exists() {
-        Ok(exists) => exists,
-        Err(error) => {
-            log(error.to_string(), LogLevel::Verbose);
-            return Err(ImportingError::FileNotFound); // FIXME: This should be a different error.
-        }
-    };
+    pub fn unload_file(&self, path: String) {
+        let mut files = self.files.lock().unwrap();
 
-    if !file_exists {
-        log(format!("File {} could not be found!", source_path), LogLevel::Verbose);
-        return Err(ImportingError::FileNotFound);
+        if let Some((ref mut count, _)) = files.get_mut(&path) {
+            *count -= 1;
+            if *count == 0 {
+                files.remove(&path);
+            }
+        }
     }
 
-    let file_extension = match file_path.extension() {
-        Some(extension) => extension,
-        None => {
-            log(format!("File {} has no extension!", source_path), LogLevel::Verbose);
-            return Err(ImportingError::NoFileExtension);
+    pub fn get_file(&self, path: &str) -> Option<Arc<ImportFileData>> {
+        match self.files.lock().unwrap().get(path) {
+            Some((_, file_data)) => Some(Arc::clone(file_data)),
+            None => None,
         }
-    };
-
-    let imported_file = match file_extension.to_str().expect("Failed To Convert File Extension To String!") {
-        "smd" => smd::load_smd(file_path, None)?, // TODO: Support vta file
-        _ => {
-            log(format!("File {} is an unsupported format!", source_path), LogLevel::Verbose);
-            return Err(ImportingError::UnsupportedFile);
-        }
-    };
-
-    loaded_files.insert(source_path.to_string(), imported_file);
-
-    Ok(())
+    }
 }

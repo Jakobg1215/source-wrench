@@ -29,6 +29,7 @@ const BodyPart: Component<BodyPartProps> = (props) => {
             name: 'New Model',
             is_blank: false,
             model_source: '',
+            part_name: [],
         };
     };
 

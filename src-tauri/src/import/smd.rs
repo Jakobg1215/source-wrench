@@ -5,19 +5,13 @@ use std::{
     path::Path,
 };
 
-use thiserror::Error;
+use thiserror::Error as ThisError;
 
-use crate::{
-    import::ImportedBone,
-    utilities::{
-        logging::{log, LogLevel},
-        mathematics::{Angles, Vector2, Vector3},
-    },
-};
+use crate::utilities::mathematics::{Angles, Vector2, Vector3};
 
-use super::{ImportedBoneAnimation, ImportedFile, ImportedVertex};
+use super::{ImportAnimation, ImportBone, ImportChannel, ImportFileData, ImportKeyFrame, ImportLink, ImportPart, ImportVertex};
 
-#[derive(Error, Debug)]
+#[derive(ThisError, Debug)]
 pub enum ParseSMDError {
     #[error("Failed To Open File")]
     FailedFileOpen(#[from] Error),
@@ -113,12 +107,7 @@ impl Link {
     }
 }
 
-pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFile, ParseSMDError> {
-    log(
-        format!("Loading SMD File: {:?}", file_path.file_name().expect("File Path To Be Validated!")),
-        LogLevel::Verbose,
-    );
-
+pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
     let file = File::open(file_path)?;
     let file_buffer = BufReader::new(file);
     let mut lines = file_buffer.lines().flatten();
@@ -239,18 +228,17 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
                 };
 
                 let parent = match line_arguments.next() {
-                    Some(parent) => match parent.parse::<isize>() {
-                        Ok(parent) => parent,
-                        Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                    Some(parent) => match parent.contains('-') {
+                        true => None,
+                        false => match parent.parse::<usize>() {
+                            Ok(parent) => Some(parent),
+                            Err(_) => return Err(ParseSMDError::FailedIntegerParse(line_count)),
+                        },
                     },
                     None => return Err(ParseSMDError::MissingArgument("parent", line_count)),
                 };
 
-                if parent < -1 || parent != -1 && parent as usize > smd_data.nodes.len() {
-                    return Err(ParseSMDError::InvalidNodeIndex(line_count));
-                }
-
-                smd_data.nodes.push(Node::new(name, if parent == -1 { None } else { Some(parent as usize) }))
+                smd_data.nodes.push(Node::new(name, parent))
             },
             Some("skeleton") => loop {
                 let current_line = match lines.next() {
@@ -519,7 +507,7 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
         }
     }
 
-    let mut file_data = ImportedFile::default();
+    let mut file_data = ImportFileData::default();
 
     if smd_data.frames.len() == 0 {
         return Err(ParseSMDError::NoBindFrame);
@@ -539,36 +527,69 @@ pub fn load_smd(file_path: &Path, _vta_path: Option<&Path>) -> Result<ImportedFi
             None => return Err(ParseSMDError::MissingBoneBind),
         };
 
-        let parent = match node.parent {
-            Some(parent) => match mapped_nodes.get(&parent) {
-                Some(parent) => Some(*parent),
-                None => None,
-            },
-            None => None,
-        };
+        let mut bone = ImportBone::default();
+        bone.name = node.name;
+        bone.parent = node.parent;
+        bone.position = bind_pose.position;
+        bone.orientation = bind_pose.rotation.to_quaternion();
 
-        let index = file_data.add_bone(ImportedBone::new(node.name, bind_pose.position, bind_pose.rotation.to_quaternion(), parent));
-        mapped_nodes.insert(id, index);
+        file_data.skeleton.push(bone);
+        mapped_nodes.insert(id, file_data.skeleton.len() - 1);
     }
+
+    let mut animation = ImportAnimation::default();
+    animation.name = file_path.file_stem().unwrap().to_string_lossy().to_string();
+    animation.frame_count = smd_data.frames.len();
 
     for (frame, keys) in smd_data.frames.into_iter().enumerate() {
         for bone in keys {
-            let index = mapped_nodes.get(&bone.node).expect("Node Not Found!");
-            let animation = file_data.animation.get_mut(*index).expect("Animation Not Found!");
-            animation.insert(frame, ImportedBoneAnimation::new(bone.position, bone.rotation.to_quaternion()));
+            let bone_index = mapped_nodes.get(&bone.node).expect("Bone Not Found!");
+            let channel = match animation.channels.iter_mut().position(|x| x.bone == *bone_index) {
+                Some(index) => &mut animation.channels[index],
+                None => {
+                    let mut channel = ImportChannel::default();
+                    channel.bone = *bone_index;
+
+                    animation.channels.push(channel);
+                    animation.channels.last_mut().unwrap()
+                }
+            };
+
+            let mut position = ImportKeyFrame::default();
+            position.frame = frame;
+            position.value = bone.position;
+            channel.position.push(position);
+
+            let mut orientation = ImportKeyFrame::default();
+            orientation.frame = frame;
+            orientation.value = bone.rotation.to_quaternion();
+            channel.orientation.push(orientation);
         }
     }
 
-    file_data.model.materials = smd_data.materials;
+    file_data.animations.push(animation);
+
+    let mut part = ImportPart::default();
+    part.name = file_path.file_stem().unwrap().to_string_lossy().to_string();
+    part.polygons = smd_data.materials;
 
     for vertex in smd_data.vertices {
-        let mut vert = ImportedVertex::new(vertex.position, vertex.normal, vertex.texture_coordinate);
+        let mut vert = ImportVertex::default();
+        vert.position = vertex.position;
+        vert.normal = vertex.normal;
+        vert.texture_coordinate = vertex.texture_coordinate;
         for link in vertex.links {
             let bone_index = mapped_nodes.get(&link.bone).expect("Bone Not Found!");
-            vert.add_weight(*bone_index, link.weight)
+            let mut vert_link = ImportLink::default();
+            vert_link.bone = *bone_index;
+            vert_link.weight = link.weight;
+
+            vert.links.push(vert_link);
         }
-        file_data.model.add_vertex(vert);
+        part.vertices.push(vert);
     }
+
+    file_data.parts.push(part);
 
     Ok(file_data)
 }
