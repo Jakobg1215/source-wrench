@@ -136,6 +136,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
                 for strip_group in processed_mesh.strip_groups {
                     let mut mesh_strip_group_header = StripGroupHeader::default();
+                    mesh_strip_group_header.flags = 2;
 
                     for vertex in strip_group.vertices {
                         let mut mesh_vertex = VertexHeader::default();
@@ -150,6 +151,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
                     for strip in strip_group.strips {
                         let mut mesh_strip_header = StripHeader::default();
+                        mesh_strip_header.flags = 1;
                         mesh_strip_header.indices_count = mesh_strip_group_header.indices.len() as i32;
                         mesh_strip_header.vertices_count = mesh_strip_group_header.vertices.len() as i32;
                         mesh_strip_header.bone_count = strip.bone_count as i16;
@@ -178,8 +180,8 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
         mdl_header.body_parts.push(body_part);
         vtx_header.body_parts.push(mesh_body_part_header);
-        vtx_header.material_replacement_lists.push(MaterialReplacementListHeader::default());
     }
+    vtx_header.material_replacement_lists.push(MaterialReplacementListHeader::default());
 
     for processed_material in processed_data.model_data.materials {
         let mut material = Material::new();

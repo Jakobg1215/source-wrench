@@ -24,19 +24,6 @@ impl StructWriting for MeshFileHeader {
         writer.write_int(self.body_parts.len() as i32); // numBodyParts
         self.body_part_index = writer.write_index(); // bodyPartOffset
 
-        writer.write_to_index(self.material_replacement_list_index, writer.get_size() as i32);
-
-        for material_replacement_list in &mut self.material_replacement_lists {
-            material_replacement_list.write_to_writer(writer);
-        }
-
-        for material_replacement_list in &mut self.material_replacement_lists {
-            material_replacement_list.write_material_replacement_index(writer);
-            for replacement in &mut material_replacement_list.material_replacements {
-                replacement.write_to_writer(writer);
-            }
-        }
-
         writer.write_to_index(self.body_part_index, writer.get_size() as i32);
 
         for body_part in &mut self.body_parts {
@@ -142,6 +129,19 @@ impl StructWriting for MeshFileHeader {
                         }
                     }
                 }
+            }
+        }
+
+        writer.write_to_index(self.material_replacement_list_index, writer.get_size() as i32);
+
+        for material_replacement_list in &mut self.material_replacement_lists {
+            material_replacement_list.write_to_writer(writer);
+        }
+
+        for material_replacement_list in &mut self.material_replacement_lists {
+            material_replacement_list.write_material_replacement_index(writer);
+            for replacement in &mut material_replacement_list.material_replacements {
+                replacement.write_to_writer(writer);
             }
         }
 
@@ -353,7 +353,7 @@ impl StructWriting for StripHeader {
 
         writer.write_short(self.bone_count); // numBones
         writer.write_unsigned_byte(self.flags); // flags
-        writer.write_int(dbg!(self.bone_state_changes.len()) as i32); // numBoneStateChanges
+        writer.write_int(self.bone_state_changes.len() as i32); // numBoneStateChanges
         self.bone_state_change_index = writer.write_index(); // boneStateChangeOffset
     }
 }
