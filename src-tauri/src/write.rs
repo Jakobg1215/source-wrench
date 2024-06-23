@@ -1,5 +1,7 @@
 use std::fs::write;
 
+use mesh::MaterialReplacementListHeader;
+
 use crate::{
     process::ProcessedData,
     utilities::{binarydata::DataWriter, mathematics::Vector3},
@@ -78,7 +80,8 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     let mut vvd_header = VertexFileHeader::new(69420);
 
     let mut vtx_writer = DataWriter::default();
-    let mut vtx_header = MeshFileHeader::new(69420);
+    let mut vtx_header = MeshFileHeader::default();
+    vtx_header.check_sum = 69420;
 
     mdl_header.material_paths.push(String::from("\\"));
 
@@ -99,7 +102,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
         previous_base = Some((body_part.base, processed_body_part.parts.len()));
 
-        let mut mesh_body_part_header = BodyPartHeader::new();
+        let mut mesh_body_part_header = BodyPartHeader::default();
 
         for processed_part in processed_body_part.parts {
             let mut model = Model::new();
@@ -108,8 +111,8 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             model.vertex_index = (vvd_header.vertexes.len() * 48) as i32;
             model.tangent_index = (vvd_header.tangents.len() * 16) as i32;
 
-            let mut mesh_model_header = ModelHeader::new();
-            let mut mesh_model_lod_header = ModelLODHeader::new(0.0);
+            let mut mesh_model_header = ModelHeader::default();
+            let mut mesh_model_lod_header = ModelLODHeader::default();
 
             let mut vertex_count = 0;
             for processed_mesh in processed_part.meshes {
@@ -129,32 +132,32 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                     vvd_header.tangents.push(vertex.tangent);
                 }
 
-                let mut mesh_mesh_header = MeshHeader::new();
+                let mut mesh_mesh_header = MeshHeader::default();
 
                 for strip_group in processed_mesh.strip_groups {
-                    let mut mesh_strip_group_header = StripGroupHeader::new();
+                    let mut mesh_strip_group_header = StripGroupHeader::default();
 
                     for vertex in strip_group.vertices {
-                        let mut mesh_vertex = VertexHeader::new();
-                        mesh_vertex.bone_count = vertex.bone_count;
-                        mesh_vertex.vertex_index = vertex.vertex_index;
-                        mesh_vertex.bone_weight_bones = vertex.bones;
+                        let mut mesh_vertex = VertexHeader::default();
+                        mesh_vertex.bone_count = vertex.bone_count as u8;
+                        mesh_vertex.vertex_index = vertex.vertex_index as u16;
+                        mesh_vertex.bone_weight_bones = [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8];
                         mesh_strip_group_header.vertices.push(mesh_vertex);
                     }
 
                     mesh_strip_group_header.indices = strip_group.indices.iter().map(|index| *index as u16).collect();
+                    mesh_strip_group_header.indices.reverse(); // FIXME: This is a hack to fix inverted faces.
 
                     for strip in strip_group.strips {
-                        let mut mesh_strip_header = StripHeader::new(
-                            mesh_strip_group_header.indices.len() as i32,
-                            0,
-                            mesh_strip_group_header.vertices.len() as i32,
-                            0,
-                            strip.bone_count as i16,
-                        );
+                        let mut mesh_strip_header = StripHeader::default();
+                        mesh_strip_header.indices_count = mesh_strip_group_header.indices.len() as i32;
+                        mesh_strip_header.vertices_count = mesh_strip_group_header.vertices.len() as i32;
+                        mesh_strip_header.bone_count = strip.bone_count as i16;
 
                         for bone_change in strip.hardware_bones {
-                            let mesh_bone_state_change = BoneStateChangeHeader::new(bone_change.hardware_bone, bone_change.bone_table_bone);
+                            let mut mesh_bone_state_change = BoneStateChangeHeader::default();
+                            mesh_bone_state_change.hardware_id = bone_change.hardware_bone as i32;
+                            mesh_bone_state_change.new_bone_id = bone_change.bone_table_bone as i32;
                             mesh_strip_header.bone_state_changes.push(mesh_bone_state_change);
                         }
 
@@ -169,12 +172,13 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             }
 
             body_part.models.push(model);
-            mesh_model_header.models.push(mesh_model_lod_header);
-            mesh_body_part_header.parts.push(mesh_model_header);
+            mesh_model_header.model_lods.push(mesh_model_lod_header);
+            mesh_body_part_header.models.push(mesh_model_header);
         }
 
         mdl_header.body_parts.push(body_part);
         vtx_header.body_parts.push(mesh_body_part_header);
+        vtx_header.material_replacement_lists.push(MaterialReplacementListHeader::default());
     }
 
     for processed_material in processed_data.model_data.materials {

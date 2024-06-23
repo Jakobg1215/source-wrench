@@ -2,325 +2,334 @@ use crate::utilities::binarydata::DataWriter;
 
 use super::StructWriting;
 
+#[derive(Debug, Default)]
 pub struct MeshFileHeader {
-    checksum: i32,
-    material_replacement_index: usize,
+    pub check_sum: i32,
+    pub material_replacement_lists: Vec<MaterialReplacementListHeader>,
     pub body_parts: Vec<BodyPartHeader>,
-    body_parts_index: usize,
+    material_replacement_list_index: usize,
+    body_part_index: usize,
 }
 
 impl StructWriting for MeshFileHeader {
-    fn write_to_writer(&mut self, mut writer: &mut DataWriter) {
+    fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_int(7); // version
         writer.write_int(24); // vertCacheSize
         writer.write_unsigned_short(53); // maxBonesPerStrip
         writer.write_unsigned_short(9); // maxBonesPerTri
         writer.write_int(3); // maxBonesPerVert
-        writer.write_int(self.checksum); // checkSum
-        writer.write_int(1); // numLODs
-        self.material_replacement_index = writer.write_index(); // materialReplacementListOffset
+        writer.write_int(self.check_sum); // checkSum
+        writer.write_int(self.material_replacement_lists.len() as i32); // numLODs
+        self.material_replacement_list_index = writer.write_index(); // materialReplacementListOffset
         writer.write_int(self.body_parts.len() as i32); // numBodyParts
-        self.body_parts_index = writer.write_index(); // bodyPartOffset
+        self.body_part_index = writer.write_index(); // bodyPartOffset
 
-        writer.write_to_index(self.body_parts_index, writer.get_size() as i32);
+        writer.write_to_index(self.material_replacement_list_index, writer.get_size() as i32);
+
+        for material_replacement_list in &mut self.material_replacement_lists {
+            material_replacement_list.write_to_writer(writer);
+        }
+
+        for material_replacement_list in &mut self.material_replacement_lists {
+            material_replacement_list.write_material_replacement_index(writer);
+            for replacement in &mut material_replacement_list.material_replacements {
+                replacement.write_to_writer(writer);
+            }
+        }
+
+        writer.write_to_index(self.body_part_index, writer.get_size() as i32);
+
         for body_part in &mut self.body_parts {
-            body_part.write_to_writer(&mut writer);
+            body_part.write_to_writer(writer);
         }
 
         for body_part in &mut self.body_parts {
-            body_part.write_parts(&mut writer);
+            body_part.write_model_index(writer);
+            for model in &mut body_part.models {
+                model.write_to_writer(writer);
+            }
         }
 
-        writer.write_to_index(self.material_replacement_index, writer.get_size() as i32);
-        MaterialReplacementListHeader::new().write_to_writer(&mut writer);
+        for body_part in &mut self.body_parts {
+            for model in &mut body_part.models {
+                model.write_model_lod_index(writer);
+                for model_lod in &mut model.model_lods {
+                    model_lod.write_to_writer(writer);
+                }
+            }
+        }
+
+        for body_part in &mut self.body_parts {
+            for model in &mut body_part.models {
+                for model_lod in &mut model.model_lods {
+                    model_lod.write_mesh_index(writer);
+                    for mesh in &mut model_lod.meshes {
+                        mesh.write_to_writer(writer);
+                    }
+                }
+            }
+        }
+
+        for body_part in &mut self.body_parts {
+            for model in &mut body_part.models {
+                for model_lod in &mut model.model_lods {
+                    for mesh in &mut model_lod.meshes {
+                        mesh.write_strip_group_index(writer);
+                        for strip_group in &mut mesh.strip_groups {
+                            strip_group.write_to_writer(writer);
+                        }
+                    }
+                }
+            }
+        }
+
+        for body_part in &mut self.body_parts {
+            for model in &mut body_part.models {
+                for model_lod in &mut model.model_lods {
+                    for mesh in &mut model_lod.meshes {
+                        for strip_group in &mut mesh.strip_groups {
+                            strip_group.write_strip_index(writer);
+                            for strip in &mut strip_group.strips {
+                                strip.write_to_writer(writer);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for body_part in &mut self.body_parts {
+            for model in &mut body_part.models {
+                for model_lod in &mut model.model_lods {
+                    for mesh in &mut model_lod.meshes {
+                        for strip_group in &mut mesh.strip_groups {
+                            strip_group.write_vertex_index(writer);
+                            for vertex in &mut strip_group.vertices {
+                                vertex.write_to_writer(writer);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for body_part in &mut self.body_parts {
+            for model in &mut body_part.models {
+                for model_lod in &mut model.model_lods {
+                    for mesh in &mut model_lod.meshes {
+                        for strip_group in &mut mesh.strip_groups {
+                            strip_group.write_index_index(writer);
+                            for index in &strip_group.indices {
+                                writer.write_unsigned_short(*index);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        for body_part in &mut self.body_parts {
+            for model in &mut body_part.models {
+                for model_lod in &mut model.model_lods {
+                    for mesh in &mut model_lod.meshes {
+                        for strip_group in &mut mesh.strip_groups {
+                            for strip in &mut strip_group.strips {
+                                strip.write_bone_state_change_index(writer);
+                                for bone_state_change in &mut strip.bone_state_changes {
+                                    bone_state_change.write_to_writer(writer)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        writer.write_string_table();
     }
 }
 
-impl MeshFileHeader {
-    pub fn new(checksum: i32) -> Self {
-        Self {
-            checksum,
-            material_replacement_index: usize::MAX,
-            body_parts: Vec::new(),
-            body_parts_index: usize::MAX,
-        }
-    }
+#[derive(Debug, Default)]
+pub struct MaterialReplacementListHeader {
+    index_start: usize,
+    pub material_replacements: Vec<MaterialReplacementHeader>,
+    material_replacement_index: usize,
 }
-
-pub struct MaterialReplacementListHeader {}
 
 impl StructWriting for MaterialReplacementListHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
-        writer.write_int(0); // numReplacements
-        writer.write_int(0); // replacementOffset
+        self.index_start = writer.get_size();
+        writer.write_int(self.material_replacements.len() as i32); // numReplacements
+        self.material_replacement_index = writer.write_index(); // replacementOffset
     }
 }
 
 impl MaterialReplacementListHeader {
-    pub fn new() -> Self {
-        Self {}
+    fn write_material_replacement_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.material_replacement_index, (writer.get_size() - self.index_start) as i32);
     }
 }
 
+#[derive(Debug, Default)]
+pub struct MaterialReplacementHeader {
+    index_start: usize,
+    pub material_id: i16,
+    pub replacement_material_name: String,
+}
+
+impl StructWriting for MaterialReplacementHeader {
+    fn write_to_writer(&mut self, writer: &mut DataWriter) {
+        self.index_start = writer.get_size();
+        writer.write_short(self.material_id); // materialID
+        writer.add_string_to_table(self.index_start, &self.replacement_material_name);
+        // replacementMaterialNameOffset
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct BodyPartHeader {
     index_start: usize,
-    pub parts: Vec<ModelHeader>,
-    parts_index: usize,
+    pub models: Vec<ModelHeader>,
+    model_index: usize,
 }
 
 impl StructWriting for BodyPartHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
-
-        writer.write_int(self.parts.len() as i32); // numModels
-        self.parts_index = writer.write_index(); // modelOffset
+        writer.write_int(self.models.len() as i32); // numModels
+        self.model_index = writer.write_index(); // modelOffset
     }
 }
 
 impl BodyPartHeader {
-    pub fn new() -> Self {
-        Self {
-            index_start: usize::MAX,
-            parts: Vec::new(),
-            parts_index: usize::MAX,
-        }
-    }
-
-    fn write_parts(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.parts_index, (writer.get_size() - self.index_start) as i32);
-
-        for part in &mut self.parts {
-            part.write_to_writer(writer);
-        }
-
-        for part in &mut self.parts {
-            part.write_models(writer);
-        }
+    fn write_model_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.model_index, (writer.get_size() - self.index_start) as i32);
     }
 }
 
+#[derive(Debug, Default)]
 pub struct ModelHeader {
     index_start: usize,
-    pub models: Vec<ModelLODHeader>,
-    models_index: usize,
+    pub model_lods: Vec<ModelLODHeader>,
+    model_lod_index: usize,
 }
 
 impl StructWriting for ModelHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
-
-        writer.write_int(self.models.len() as i32); // numLODs
-        self.models_index = writer.write_index(); // lodOffset
+        writer.write_int(self.model_lods.len() as i32); // numLODs
+        self.model_lod_index = writer.write_index(); // lodOffset
     }
 }
 
 impl ModelHeader {
-    pub fn new() -> Self {
-        Self {
-            index_start: usize::MAX,
-            models: Vec::new(),
-            models_index: usize::MAX,
-        }
-    }
-
-    fn write_models(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.models_index, (writer.get_size() - self.index_start) as i32);
-
-        for model in &mut self.models {
-            model.write_to_writer(writer);
-        }
-
-        for model in &mut self.models {
-            model.write_meshes(writer);
-        }
+    fn write_model_lod_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.model_lod_index, (writer.get_size() - self.index_start) as i32);
     }
 }
 
+#[derive(Debug, Default)]
 pub struct ModelLODHeader {
     index_start: usize,
     pub meshes: Vec<MeshHeader>,
-    meshes_index: usize,
-    switch_point: f64,
+    pub switch_point: f32,
+    mesh_index: usize,
 }
 
 impl StructWriting for ModelLODHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
-
         writer.write_int(self.meshes.len() as i32); // numMeshes
-        self.meshes_index = writer.write_index(); // meshOffset
-        writer.write_float(self.switch_point as f32); // switchPoint
+        self.mesh_index = writer.write_index(); // meshOffset
+        writer.write_float(self.switch_point); // switchPoint
     }
 }
 
 impl ModelLODHeader {
-    pub fn new(switch_point: f64) -> Self {
-        Self {
-            index_start: usize::MAX,
-            meshes: Vec::new(),
-            meshes_index: usize::MAX,
-            switch_point,
-        }
-    }
-
-    fn write_meshes(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.meshes_index, (writer.get_size() - self.index_start) as i32);
-
-        for mesh in &mut self.meshes {
-            mesh.write_to_writer(writer);
-        }
-
-        for mesh in &mut self.meshes {
-            mesh.write_strip_groups(writer);
-        }
+    fn write_mesh_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.mesh_index, (writer.get_size() - self.index_start) as i32);
     }
 }
 
+#[derive(Debug, Default)]
 pub struct MeshHeader {
     index_start: usize,
     pub strip_groups: Vec<StripGroupHeader>,
-    strip_groups_index: usize,
+    strip_group_index: usize,
+    pub flags: u8,
 }
 
 impl StructWriting for MeshHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
-
         writer.write_int(self.strip_groups.len() as i32); // numStripGroups
-        self.strip_groups_index = writer.write_index(); // stripGroupHeaderOffset
-        writer.write_unsigned_byte(0); // flags
+        self.strip_group_index = writer.write_index(); // stripGroupHeaderOffset
+        writer.write_unsigned_byte(self.flags); // flags
     }
 }
 
 impl MeshHeader {
-    pub fn new() -> Self {
-        Self {
-            index_start: usize::MAX,
-            strip_groups: Vec::new(),
-            strip_groups_index: usize::MAX,
-        }
-    }
-
-    fn write_strip_groups(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.strip_groups_index, (writer.get_size() - self.index_start) as i32);
-
-        for strip_group in &mut self.strip_groups {
-            strip_group.write_to_writer(writer);
-        }
-
-        for strip_group in &mut self.strip_groups {
-            strip_group.write_strip(writer);
-        }
-
-        for strip_group in &mut self.strip_groups {
-            strip_group.write_vertices(writer);
-        }
-
-        for strip_group in &mut self.strip_groups {
-            strip_group.write_indices(writer);
-        }
-
-        for strip_group in &mut self.strip_groups {
-            strip_group.write_bone_state_change(writer);
-        }
+    fn write_strip_group_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.strip_group_index, (writer.get_size() - self.index_start) as i32);
     }
 }
 
+#[derive(Debug, Default)]
 pub struct StripGroupHeader {
     index_start: usize,
     pub vertices: Vec<VertexHeader>,
-    vertices_index: usize,
+    vertex_index: usize,
     pub indices: Vec<u16>,
-    indices_index: usize,
+    index_index: usize,
     pub strips: Vec<StripHeader>,
-    strips_index: usize,
+    strip_index: usize,
+    pub flags: u8,
 }
 
 impl StructWriting for StripGroupHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
-
         writer.write_int(self.vertices.len() as i32); // numVerts
-        self.vertices_index = writer.write_index(); // vertOffset
+        self.vertex_index = writer.write_index(); // vertOffset
         writer.write_int(self.indices.len() as i32); // numIndices
-        self.indices_index = writer.write_index(); // indexOffset
+        self.index_index = writer.write_index(); // indexOffset
         writer.write_int(self.strips.len() as i32); // numStrips
-        self.strips_index = writer.write_index(); // stripOffset
-        writer.write_unsigned_byte(2); // flags
+        self.strip_index = writer.write_index(); // stripOffset
+        writer.write_unsigned_byte(self.flags); // flags
     }
 }
 
 impl StripGroupHeader {
-    pub fn new() -> Self {
-        Self {
-            index_start: usize::MAX,
-            vertices: Vec::new(),
-            vertices_index: usize::MAX,
-            indices: Vec::new(),
-            indices_index: usize::MAX,
-            strips: Vec::new(),
-            strips_index: usize::MAX,
-        }
+    fn write_vertex_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.vertex_index, (writer.get_size() - self.index_start) as i32);
     }
 
-    fn write_strip(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.strips_index, (writer.get_size() - self.index_start) as i32);
-
-        for strip in &mut self.strips {
-            strip.write_to_writer(writer);
-        }
+    fn write_index_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.index_index, (writer.get_size() - self.index_start) as i32);
     }
 
-    fn write_vertices(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.vertices_index, (writer.get_size() - self.index_start) as i32);
-
-        for vertex in &mut self.vertices {
-            vertex.write_to_writer(writer);
-        }
-    }
-
-    fn write_indices(&mut self, writer: &mut DataWriter) {
-        writer.write_to_index(self.indices_index, (writer.get_size() - self.index_start) as i32);
-        self.indices.reverse(); // FIXME: This is a hack to fix inverted faces.
-        writer.write_unsigned_short_array(&self.indices);
-    }
-
-    fn write_bone_state_change(&mut self, writer: &mut DataWriter) {
-        for strip in &mut self.strips {
-            writer.write_to_index(strip.bone_state_changes_index, (writer.get_size() - strip.index_start) as i32);
-            for bone_state_change in &mut strip.bone_state_changes {
-                bone_state_change.write_to_writer(writer);
-            }
-        }
+    fn write_strip_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.strip_index, (writer.get_size() - self.index_start) as i32);
     }
 }
 
+#[derive(Debug, Default)]
 pub struct VertexHeader {
-    pub bone_count: usize,
-    pub vertex_index: usize,
-    pub bone_weight_bones: [usize; 3],
+    pub vertex_index: u16,
+    pub bone_count: u8,
+    pub bone_weight_bones: [u8; 3],
 }
 
 impl StructWriting for VertexHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         writer.write_unsigned_byte_array(&vec![0, 1, 2]); // boneWeightIndex
-        writer.write_unsigned_byte(self.bone_count as u8); // numBones
-        writer.write_unsigned_short(self.vertex_index as u16); // origMeshVertID
-        writer.write_unsigned_byte_array(&self.bone_weight_bones.map(|index| index as u8).to_vec());
-        // boneID
+        writer.write_unsigned_byte(self.bone_count); // numBones
+        writer.write_unsigned_short(self.vertex_index); // origMeshVertID
+        writer.write_unsigned_byte_array(&self.bone_weight_bones.to_vec()); // boneID
     }
 }
 
-impl VertexHeader {
-    pub fn new() -> Self {
-        Self {
-            bone_count: usize::MAX,
-            vertex_index: usize::MAX,
-            bone_weight_bones: [usize::MAX; 3],
-        }
-    }
-}
-
+#[derive(Debug, Default)]
 pub struct StripHeader {
     index_start: usize,
     pub indices_count: i32,
@@ -328,54 +337,42 @@ pub struct StripHeader {
     pub vertices_count: i32,
     pub vertices_offset: i32,
     pub bone_count: i16,
+    pub flags: u8,
     pub bone_state_changes: Vec<BoneStateChangeHeader>,
-    bone_state_changes_index: usize,
+    bone_state_change_index: usize,
 }
 
 impl StructWriting for StripHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.index_start = writer.get_size();
-
         writer.write_int(self.indices_count); // numIndices
         writer.write_int(self.indices_offset); // indexOffset
+
         writer.write_int(self.vertices_count); // numVerts
         writer.write_int(self.vertices_offset); // vertOffset
+
         writer.write_short(self.bone_count); // numBones
-        writer.write_unsigned_byte(1); // flags
-        writer.write_int(self.bone_state_changes.len() as i32); // numBoneStateChanges
-        self.bone_state_changes_index = writer.write_index(); // boneStateChangeOffset
+        writer.write_unsigned_byte(self.flags); // flags
+        writer.write_int(dbg!(self.bone_state_changes.len()) as i32); // numBoneStateChanges
+        self.bone_state_change_index = writer.write_index(); // boneStateChangeOffset
     }
 }
 
 impl StripHeader {
-    pub fn new(indices_count: i32, indices_offset: i32, vertices_count: i32, vertices_offset: i32, bone_count: i16) -> Self {
-        Self {
-            index_start: 0,
-            indices_count,
-            indices_offset,
-            vertices_count,
-            vertices_offset,
-            bone_count,
-            bone_state_changes: Vec::new(),
-            bone_state_changes_index: 0,
-        }
+    fn write_bone_state_change_index(&mut self, writer: &mut DataWriter) {
+        writer.write_to_index(self.bone_state_change_index, (writer.get_size() - self.index_start) as i32);
     }
 }
 
+#[derive(Debug, Default)]
 pub struct BoneStateChangeHeader {
-    hardware_id: usize,
-    new_bone_id: usize,
+    pub hardware_id: i32,
+    pub new_bone_id: i32,
 }
 
 impl StructWriting for BoneStateChangeHeader {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
-        writer.write_int(self.hardware_id as i32); // hardwareID
-        writer.write_int(self.new_bone_id as i32); // newBoneID
-    }
-}
-
-impl BoneStateChangeHeader {
-    pub fn new(hardware_id: usize, new_bone_id: usize) -> Self {
-        Self { hardware_id, new_bone_id }
+        writer.write_int(self.hardware_id); // hardwareID
+        writer.write_int(self.new_bone_id); // newBoneID
     }
 }
