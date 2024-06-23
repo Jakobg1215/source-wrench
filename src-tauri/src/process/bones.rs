@@ -11,7 +11,7 @@ use super::{ProcessedBone, ProcessedBoneData, ProcessingDataError};
 
 #[derive(Default, Debug)]
 pub struct BoneTable {
-    pub bones: Vec<GlobalBone>,
+    pub bones: Vec<GlobalBone>, // TODO: This should be a indexmap with the bone name as the key.
     pub remapped_bones: HashMap<String, HashMap<usize, usize>>,
 }
 
@@ -89,12 +89,32 @@ pub fn create_bone_table(import: &State<FileManager>) -> Result<BoneTable, Proce
                 if bone_table.has_parent(&bone.name) && parent.is_none() {
                     return Err(ProcessingDataError::BoneHierarchyError);
                 }
-
+                // TODO: This needs a better solution to create the bone mapping.
                 if parent.is_none() {
+                    let bone_table_index = bone_table.bones.iter().position(|table_bone| table_bone.name == bone.name).unwrap();
+                    let remap = match bone_table.remapped_bones.get_mut(file_name) {
+                        Some(remap) => remap,
+                        None => {
+                            bone_table.remapped_bones.insert(file_name.clone(), HashMap::new());
+                            bone_table.remapped_bones.get_mut(file_name).unwrap()
+                        }
+                    };
+
+                    remap.insert(index, bone_table_index);
                     continue;
                 }
 
                 if bone_table.is_same_hierarchy(&bone.name, &parent.expect("Parent Should Exist!").name) {
+                    let bone_table_index = bone_table.bones.iter().position(|table_bone| table_bone.name == bone.name).unwrap();
+                    let remap = match bone_table.remapped_bones.get_mut(file_name) {
+                        Some(remap) => remap,
+                        None => {
+                            bone_table.remapped_bones.insert(file_name.clone(), HashMap::new());
+                            bone_table.remapped_bones.get_mut(file_name).unwrap()
+                        }
+                    };
+
+                    remap.insert(index, bone_table_index);
                     continue;
                 }
 
