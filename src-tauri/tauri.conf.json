@@ -8,8 +8,14 @@
             }
         ],
         "security": {
-            "csp": "default-src 'self",
-            "devCsp": "default-src 'self'"
+            "csp": {
+                "default-src": "'self' customprotocol: asset:",
+                "connect-src": "ipc: http://ipc.localhost"
+            },
+            "devCsp": {
+                "default-src": "'self' customprotocol: asset:",
+                "connect-src": "ipc: http://ipc.localhost"
+            }
         }
     },
     "build": {
