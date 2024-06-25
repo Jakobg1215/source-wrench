@@ -44,10 +44,10 @@ pub fn process_animations(
         processed_animation.name = input_animation.name.clone();
         processed_animation.frame_count = imported_animation.frame_count;
 
-        for bone in &mut bone_table.bones {
+        for (_, bone_data) in &mut bone_table.bones {
             // TODO: Make this get the best scale values for best quality.
-            bone.position_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
-            bone.rotation_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
+            bone_data.position_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
+            bone_data.rotation_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
         }
 
         let mapped_bone = bone_table.remapped_bones.get(&input_animation.source_file).expect("Source File Not Remapped!");
@@ -55,19 +55,19 @@ pub fn process_animations(
         for channel in &imported_animation.channels {
             let mut processed_bone_data = ProcessedAnimatedBoneData::default();
             processed_bone_data.bone = *mapped_bone.get(&channel.bone).expect("Mapped Bone Not Found!");
-            let bone = bone_table.bones.get(processed_bone_data.bone).expect("Bone Not Found!");
+            let (_, bone_data) = bone_table.bones.get_index(processed_bone_data.bone).expect("Bone Not Found!");
 
             if imported_animation.frame_count == 1 {
                 let position_frame = channel.position.first().expect("No Position First Frame!");
-                if (position_frame.value - bone.position).sum() > FLOAT_TOLERANCE {
+                if (position_frame.value - bone_data.position).sum() > FLOAT_TOLERANCE {
                     // TODO: If the animation is delta then it should just pass the raw animated position.
-                    processed_bone_data.position = Some(ProcessedAnimationPosition::Raw(position_frame.value - bone.position));
+                    processed_bone_data.position = Some(ProcessedAnimationPosition::Raw(position_frame.value - bone_data.position));
                 }
 
                 let rotation_frame = channel.orientation.first().expect("No Rotation First Frame!");
-                if (rotation_frame.value.to_angles() - bone.orientation.to_angles()).sum() > FLOAT_TOLERANCE {
+                if (rotation_frame.value.to_angles() - bone_data.orientation.to_angles()).sum() > FLOAT_TOLERANCE {
                     processed_bone_data.rotation = Some(ProcessedAnimationRotation::Raw(
-                        (rotation_frame.value.to_angles() - bone.orientation.to_angles()).to_quaternion(),
+                        (rotation_frame.value.to_angles() - bone_data.orientation.to_angles()).to_quaternion(),
                     ));
                 }
 
