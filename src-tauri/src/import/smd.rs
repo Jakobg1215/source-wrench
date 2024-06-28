@@ -11,7 +11,7 @@ use crate::utilities::mathematics::{Angles, Vector2, Vector3};
 
 use super::{ImportAnimation, ImportBone, ImportChannel, ImportFileData, ImportKeyFrame, ImportLink, ImportPart, ImportVertex};
 
-#[derive(ThisError, Debug)]
+#[derive(Debug, ThisError)]
 pub enum ParseSMDError {
     #[error("Failed To Open File")]
     FailedFileOpen(#[from] Error),

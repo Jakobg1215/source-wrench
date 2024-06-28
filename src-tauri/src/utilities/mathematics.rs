@@ -1,7 +1,7 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::ops::{Add, Index, IndexMut, Sub};
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Vector2 {
     pub x: f64,
     pub y: f64,
@@ -21,7 +21,7 @@ impl Sub for Vector2 {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Vector3 {
     pub x: f64,
     pub y: f64,
@@ -90,7 +90,7 @@ impl Add for Vector3 {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Vector4 {
     pub x: f64,
     pub y: f64,
@@ -109,7 +109,7 @@ impl Vector4 {
 }
 
 /// Euler angles in radians. Roll, Pitch, Yaw
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Angles {
     pub x: f64,
     pub y: f64,
@@ -172,7 +172,7 @@ impl Sub for Angles {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Quaternion {
     pub x: f64,
     pub y: f64,
@@ -223,7 +223,7 @@ impl From<Angles> for Quaternion {
 }
 
 /// A 3 by 4 matrix.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Matrix {
     pub entries: [[f64; 4]; 3],
 }

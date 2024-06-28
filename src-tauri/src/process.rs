@@ -1,6 +1,7 @@
 use animation::{process_animations, process_sequences};
 use bones::process_bone_table;
-use mesh::process_mesh_data;
+use indexmap::IndexSet;
+use mesh::{process_mesh_data, ProcessingMeshError};
 use tauri::State;
 use thiserror::Error as ThisError;
 
@@ -18,7 +19,7 @@ mod animation;
 mod bones;
 mod mesh;
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedData {
     pub bone_data: ProcessedBoneData,
     pub animation_data: Vec<ProcessedAnimation>,
@@ -26,13 +27,13 @@ pub struct ProcessedData {
     pub model_data: ProcessedModelData,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedBoneData {
     pub processed_bones: Vec<ProcessedBone>,
     pub sorted_bones_by_name: Vec<usize>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedBone {
     pub name: String,
     pub parent: Option<usize>,
@@ -42,14 +43,14 @@ pub struct ProcessedBone {
     pub animation_rotation_scale: Vector3,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedAnimation {
     pub name: String,
     pub frame_count: usize,
     pub bones: Vec<ProcessedAnimatedBoneData>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedAnimatedBoneData {
     pub bone: usize,
     pub position: Option<ProcessedAnimationPosition>,
@@ -68,49 +69,38 @@ pub enum ProcessedAnimationRotation {
     Compressed, // TODO: Implement compression
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedSequence {
     pub name: String,
     pub animations: Vec<usize>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedModelData {
     pub body_parts: Vec<ProcessedBodyPart>,
-    pub materials: Vec<String>,
+    pub materials: IndexSet<String>,
 }
 
-impl ProcessedModelData {
-    pub fn add_material(&mut self, new_material: String) -> usize {
-        match self.materials.iter().position(|material| material == &new_material) {
-            Some(index) => return index,
-            None => self.materials.push(new_material),
-        };
-
-        self.materials.len() - 1
-    }
-}
-
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedBodyPart {
     pub name: String,
     pub parts: Vec<ProcessedModel>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedModel {
     pub name: String,
     pub meshes: Vec<ProcessedMesh>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedMesh {
     pub material: usize,
     pub vertex_data: Vec<ProcessedVertex>,
     pub strip_groups: Vec<ProcessedStripGroup>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct ProcessedVertex {
     pub weights: [f64; 3],
     pub bones: [usize; 3],
@@ -121,22 +111,22 @@ pub struct ProcessedVertex {
     pub tangent: Vector4,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedStripGroup {
     pub vertices: Vec<ProcessedMeshVertex>,
-    pub indices: Vec<usize>,
+    pub indices: Vec<u16>,
     pub strips: Vec<ProcessedStrip>,
     pub is_flexed: bool,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedMeshVertex {
     pub bone_count: usize,
     pub vertex_index: usize,
     pub bones: [usize; 3],
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedStrip {
     pub indices_count: usize,
     pub vertex_count: usize,
@@ -144,7 +134,7 @@ pub struct ProcessedStrip {
     pub hardware_bones: Vec<ProcessedHardwareBone>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ProcessedHardwareBone {
     pub hardware_bone: usize,
     pub bone_table_bone: usize,
@@ -164,23 +154,17 @@ pub enum ProcessingDataError {
     SequenceAnimationNotFound,
     #[error("Model Has No Sequences")]
     NoSequences,
-    #[error("Body Part Name Is Too Long")]
-    BodyPartNameTooLong,
-    #[error("Vertex Has More That 3 Weight Links")]
-    VertHasTooManyLinks,
-    #[error("Face Did Not Have 3 Indices")]
-    IncompleteFace,
-    #[error("Failed To Generated Tangents")]
-    FailedTangentGeneration,
     #[error("Model Has Too Many Materials")]
     TooManyMaterials,
     #[error("Model Has Too Many Body Parts")]
     TooManyBodyParts,
+    #[error("Failed To Process Mesh Data")]
+    ProcessingMeshError(#[from] ProcessingMeshError),
 }
 
 /// The tolerance for floating point numbers until they are considered equal.
 // TODO: Make this an imputed value.
-const FLOAT_TOLERANCE: f64 = 0.000001;
+const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
 
 pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>) -> Result<ProcessedData, ProcessingDataError> {
     log("Creating Bone Table", LogLevel::Debug);

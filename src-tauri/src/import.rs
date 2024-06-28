@@ -15,14 +15,14 @@ use crate::utilities::{
 
 mod smd;
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportFileData {
     pub skeleton: Vec<ImportBone>,
     pub animations: Vec<ImportAnimation>,
     pub parts: Vec<ImportPart>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportBone {
     pub name: String,
     pub parent: Option<usize>,
@@ -30,27 +30,27 @@ pub struct ImportBone {
     pub orientation: Quaternion,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportAnimation {
     pub name: String,
     pub frame_count: usize,
     pub channels: Vec<ImportChannel>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportChannel {
     pub bone: usize,
     pub position: Vec<ImportKeyFrame<Vector3>>,
     pub orientation: Vec<ImportKeyFrame<Quaternion>>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportKeyFrame<T> {
     pub frame: usize,
     pub value: T,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportPart {
     pub name: String,
     pub vertices: Vec<ImportVertex>,
@@ -58,7 +58,7 @@ pub struct ImportPart {
     pub flexes: Vec<ImportFlex>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct ImportVertex {
     pub position: Vector3,
     pub normal: Vector3,
@@ -66,26 +66,26 @@ pub struct ImportVertex {
     pub links: Vec<ImportLink>,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Clone, Debug, Default)]
 pub struct ImportLink {
     pub bone: usize,
     pub weight: f64,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportFlex {
     pub name: Option<String>,
     pub vertices: Vec<ImportFlexVertex>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct ImportFlexVertex {
     pub index: usize,
     pub position: Vector3,
     pub normal: Vector3,
 }
 
-#[derive(ThisError, Debug)]
+#[derive(Debug, ThisError)]
 pub enum ParseError {
     #[error("File Does Not Exist")]
     FileDoesNotExist,
@@ -99,7 +99,7 @@ pub enum ParseError {
     FailedSMDFileParse(#[from] ParseSMDError),
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct FileManager {
     pub files: Mutex<HashMap<String, (usize, Arc<ImportFileData>)>>,
 }

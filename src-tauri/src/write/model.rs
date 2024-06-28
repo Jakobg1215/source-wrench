@@ -313,7 +313,7 @@ impl StructWriting for Bone {
         writer.write_int(self.parent_bone_index); // parent
         writer.write_int_array(&vec![-1; 6]); // bonecontroller
         writer.write_vector3(&self.position); // pos
-        writer.write_quaternion(&Quaternion::zero()); // quat
+        writer.write_quaternion(&self.rotation.to_quaternion()); // quat
         writer.write_angles(&self.rotation); // rot
         writer.write_vector3(&self.animation_position_scale); // posscale
         writer.write_vector3(&self.animation_rotation_scale); // rotscale

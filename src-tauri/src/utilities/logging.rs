@@ -6,7 +6,7 @@ use std::{
 use serde::Serialize;
 use tauri::{Manager, WebviewWindow};
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, Serialize)]
 pub enum LogLevel {
     Log,
     Info,
@@ -38,7 +38,7 @@ pub fn log<T: Into<String>>(message: T, level: LogLevel) {
     }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone, Serialize)]
 struct LogEvent {
     level: LogLevel,
     message: String,

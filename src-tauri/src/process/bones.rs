@@ -10,13 +10,13 @@ use crate::{
 
 use super::{ProcessedBone, ProcessedBoneData, ProcessingDataError};
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct BoneTable {
     pub bones: IndexMap<String, GlobalBone>,
     pub remapped_bones: HashMap<String, HashMap<usize, usize>>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct GlobalBone {
     pub parent: Option<usize>,
     pub collapsible: bool,

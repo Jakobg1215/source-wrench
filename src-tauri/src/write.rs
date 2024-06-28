@@ -146,8 +146,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                         mesh_strip_group_header.vertices.push(mesh_vertex);
                     }
 
-                    mesh_strip_group_header.indices = strip_group.indices.iter().map(|index| *index as u16).collect();
-                    mesh_strip_group_header.indices.reverse(); // FIXME: This is a hack to fix inverted faces.
+                    mesh_strip_group_header.indices = strip_group.indices;
 
                     for strip in strip_group.strips {
                         let mut mesh_strip_header = StripHeader::default();
@@ -160,6 +159,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                             let mut mesh_bone_state_change = BoneStateChangeHeader::default();
                             mesh_bone_state_change.hardware_id = bone_change.hardware_bone as i32;
                             mesh_bone_state_change.new_bone_id = bone_change.bone_table_bone as i32;
+
                             mesh_strip_header.bone_state_changes.push(mesh_bone_state_change);
                         }
 

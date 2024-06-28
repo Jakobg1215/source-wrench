@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use indexmap::IndexSet;
 use kdtree::{distance::squared_euclidean, KdTree};
 use tauri::State;
+use thiserror::Error as ThisError;
 
 use crate::{
     import::{FileManager, ImportFileData, ImportLink, ImportVertex},
@@ -15,55 +16,64 @@ use crate::{
 
 use super::{
     bones::BoneTable, ProcessedBodyPart, ProcessedHardwareBone, ProcessedMesh, ProcessedMeshVertex, ProcessedModel, ProcessedModelData, ProcessedStrip,
-    ProcessedStripGroup, ProcessedVertex, ProcessingDataError, FLOAT_TOLERANCE,
+    ProcessedStripGroup, ProcessedVertex, FLOAT_TOLERANCE,
 };
 
-// FIXME: So much cloning, need to find a way to avoid it.
+#[derive(Debug, Default)]
+struct CombinedMesh {
+    vertices: Vec<ImportVertex>,
+    polygons: Vec<CombinedMeshFace>,
+}
 
+#[derive(Debug, Default)]
+struct CombinedMeshFace {
+    material: usize,
+    vertex_offset: usize,
+    faces: Vec<Vec<usize>>,
+}
+
+#[derive(Debug, Default)]
 struct TriangleList {
     material: usize,
+    vertex_offset: usize,
     triangles: Vec<[usize; 3]>,
 }
 
-impl TriangleList {
-    fn new(material: usize, triangles: Vec<[usize; 3]>) -> Self {
-        Self { material, triangles }
-    }
-}
-
-#[derive(Default, Debug)]
-struct CombinedMesh {
-    vertices: Vec<ImportVertex>,
-    polygons: HashMap<String, Vec<Vec<usize>>>,
-    // flexes: Vec<ImportFlex>,
+#[derive(Debug, ThisError)]
+pub enum ProcessingMeshError {
+    #[error("Part Not Found: {0}")]
+    PartNotFound(String),
+    #[error("Face Has Less Than 3 Vertices")]
+    IncompleteFace,
 }
 
 pub fn process_mesh_data(
     input: &ImputedCompilationData,
     import: &State<FileManager>,
     bone_table: &BoneTable,
-) -> Result<ProcessedModelData, ProcessingDataError> {
+) -> Result<ProcessedModelData, ProcessingMeshError> {
     let mut processed_model_data = ProcessedModelData::default();
 
-    for body_part in &input.body_parts {
-        let mut body_part_data = ProcessedBodyPart::default();
-        body_part_data.name = body_part.name.clone();
+    for imputed_body_part in &input.body_parts {
+        let mut processed_body_part = ProcessedBodyPart::default();
+        processed_body_part.name = imputed_body_part.name.clone();
 
-        for model in &body_part.models {
-            if model.name.len() > 64 {
-                todo!("Warn and trim name")
+        for imputed_model in &imputed_body_part.models {
+            let mut processed_model = ProcessedModel::default();
+            processed_model.name = imputed_model.name.clone();
+
+            if processed_model.name.len() > 64 {
+                log("Model Part Name Longer That 64! Trimming!", LogLevel::Warn);
+                processed_model.name.truncate(64);
             }
 
-            let mut model_data = ProcessedModel::default();
-            model_data.name = model.name.clone();
+            let imported_file = import.get_file(&imputed_model.model_source).expect("Source File Not Found!");
 
-            let imported_file = import.get_file(&model.model_source).expect("Source File Not Found!");
+            let combined_meshes = create_combined_meshes(&imputed_model, &imported_file, &mut processed_model_data)?;
 
-            let combined_mesh = create_combined_mesh(&imported_file, &model);
+            let mut material_triangle_lists = create_triangle_lists(&combined_meshes)?;
 
-            let mut material_triangle_lists = create_triangle_lists(&mut processed_model_data, &combined_mesh);
-
-            let (unique_vertices, indices_remap) = create_unique_vertices(&combined_mesh);
+            let (unique_vertices, indices_remap) = create_unique_vertices(&combined_meshes);
 
             remap_indices(&mut material_triangle_lists, indices_remap);
 
@@ -71,97 +81,288 @@ pub fn process_mesh_data(
 
             let tangents = calculate_vertex_tangents(&unique_vertices, &combined_triangle_list);
 
-            let mapped_bone = bone_table.remapped_bones.get(&model.model_source).expect("Source File Not Remapped!");
+            let mapped_bone = bone_table.remapped_bones.get(&imputed_model.model_source).expect("Source File Not Remapped!");
 
             let combined_vertices = combine_vertex_data(&unique_vertices, &tangents, &mapped_bone);
 
             for material_triangle_list in material_triangle_lists {
-                let mut mesh_data = ProcessedMesh::default();
-                mesh_data.material = material_triangle_list.material;
-                let mut strip_group_data = ProcessedStripGroup::default();
-                let mut strip_data = ProcessedStrip::default();
-                let mut bone_changes = IndexSet::new();
+                let mut processed_mesh = ProcessedMesh::default();
+                processed_mesh.material = material_triangle_list.material;
+                let mut processed_strip_group = ProcessedStripGroup::default();
+                let mut processed_strip = ProcessedStrip::default();
 
                 let mut mapped_indices = HashMap::new();
+                let mut hardware_bones = IndexSet::new();
                 for triangle in material_triangle_list.triangles {
-                    for vertex in triangle {
-                        if mapped_indices.contains_key(&vertex) {
-                            strip_group_data.indices.push(*mapped_indices.get(&vertex).unwrap());
-                            strip_data.indices_count += 1;
+                    let new_vertex_count = triangle.iter().filter(|&&value| mapped_indices.contains_key(&value)).count();
+                    if processed_strip_group.vertices.len() + new_vertex_count > (u16::MAX - 1) as usize {
+                        for hardware_bone in &hardware_bones {
+                            let mut processed_hardware_bone = ProcessedHardwareBone::default();
+                            processed_hardware_bone.hardware_bone = processed_strip.hardware_bones.len();
+                            processed_hardware_bone.bone_table_bone = *hardware_bone;
+
+                            processed_strip.hardware_bones.push(processed_hardware_bone);
+                        }
+
+                        processed_strip.vertex_count = processed_strip_group.vertices.len();
+                        processed_strip.indices_count = processed_strip_group.indices.len();
+                        processed_strip_group.strips.push(processed_strip);
+                        processed_mesh.strip_groups.push(processed_strip_group);
+                        processed_model.meshes.push(processed_mesh);
+
+                        mapped_indices.clear();
+                        hardware_bones.clear();
+
+                        processed_mesh = ProcessedMesh::default();
+                        processed_mesh.material = material_triangle_list.material;
+                        processed_strip_group = ProcessedStripGroup::default();
+                        processed_strip = ProcessedStrip::default();
+                    }
+
+                    for index in triangle {
+                        if mapped_indices.contains_key(&index) {
+                            processed_strip_group.indices.push(*mapped_indices.get(&index).unwrap());
                             continue;
                         }
 
-                        strip_group_data.indices.push(strip_group_data.vertices.len());
-                        mapped_indices.insert(vertex, strip_group_data.vertices.len());
+                        assert!(processed_strip_group.vertices.len() < u16::MAX as usize, "Too Many Vertices!");
 
-                        strip_data.indices_count += 1;
-                        strip_data.vertex_count += 1;
+                        processed_strip_group.indices.push(processed_strip_group.vertices.len() as u16);
+                        mapped_indices.insert(index, processed_strip_group.vertices.len() as u16);
 
-                        if strip_group_data.vertices.len() > u16::MAX as usize {
-                            todo!("Split Mesh Here")
-                        }
-
-                        let vertex_data = combined_vertices[vertex].clone();
-                        let mut mesh_vertex = ProcessedMeshVertex::default();
-                        mesh_vertex.vertex_index = strip_group_data.vertices.len();
-                        mesh_vertex.bone_count = vertex_data.bone_count;
-                        strip_data.bone_count = if vertex_data.bone_count > strip_data.bone_count {
+                        let vertex_data = combined_vertices[index].clone();
+                        let mut processed_mesh_vertex = ProcessedMeshVertex::default();
+                        processed_mesh_vertex.vertex_index = processed_strip_group.vertices.len();
+                        processed_mesh_vertex.bone_count = vertex_data.bone_count;
+                        processed_strip.bone_count = if vertex_data.bone_count > processed_strip.bone_count {
                             vertex_data.bone_count
                         } else {
-                            strip_data.bone_count
+                            processed_strip.bone_count
                         };
+
                         for bone_index in 0..vertex_data.bone_count {
                             let bone = vertex_data.bones[bone_index];
-                            if bone_changes.contains(&bone) {
-                                mesh_vertex.bones[bone_index] = bone_changes.get_index_of(&bone).unwrap();
-                                continue;
-                            }
-                            mesh_vertex.bones[bone_index] = bone;
-                            bone_changes.insert(bone);
+
+                            let hardware_bone_index = hardware_bones.insert_full(bone).0;
+
+                            processed_mesh_vertex.bones[bone_index] = hardware_bone_index;
                         }
 
-                        strip_group_data.vertices.push(mesh_vertex);
-                        mesh_data.vertex_data.push(vertex_data);
+                        processed_strip_group.vertices.push(processed_mesh_vertex);
+                        processed_mesh.vertex_data.push(vertex_data);
                     }
                 }
 
-                for (hardware_bone, bone_table_bone) in bone_changes.iter().enumerate() {
-                    strip_data.hardware_bones.push(ProcessedHardwareBone {
-                        hardware_bone,
-                        bone_table_bone: *bone_table_bone,
-                    })
+                for hardware_bone in hardware_bones {
+                    let mut processed_hardware_bone = ProcessedHardwareBone::default();
+                    processed_hardware_bone.hardware_bone = processed_strip.hardware_bones.len();
+                    processed_hardware_bone.bone_table_bone = hardware_bone;
+
+                    processed_strip.hardware_bones.push(processed_hardware_bone);
                 }
 
-                strip_group_data.strips.push(strip_data);
-                mesh_data.strip_groups.push(strip_group_data);
-                model_data.meshes.push(mesh_data);
+                processed_strip.vertex_count = processed_strip_group.vertices.len();
+                processed_strip.indices_count = processed_strip_group.indices.len();
+                processed_strip_group.strips.push(processed_strip);
+                processed_mesh.strip_groups.push(processed_strip_group);
+                processed_model.meshes.push(processed_mesh);
             }
 
-            body_part_data.parts.push(model_data);
+            processed_body_part.parts.push(processed_model);
         }
 
-        processed_model_data.body_parts.push(body_part_data);
+        processed_model_data.body_parts.push(processed_body_part);
     }
 
     Ok(processed_model_data)
 }
 
-fn create_combined_mesh(imported_file: &Arc<ImportFileData>, body_part: &ImputedModel) -> CombinedMesh {
-    if imported_file.parts.len() == 0 {
-        todo!("Return Error Here")
-    }
+fn create_combined_meshes(
+    imputed_model: &ImputedModel,
+    imported_file: &Arc<ImportFileData>,
+    processed_model_data: &mut ProcessedModelData,
+) -> Result<CombinedMesh, ProcessingMeshError> {
+    let mut combined_mesh = CombinedMesh::default();
 
-    if imported_file.parts.len() == 1 || body_part.part_name.len() == 1 {
-        let mut combined = CombinedMesh::default();
-
+    // FIXME: This is a temporary solution to support single part models.
+    if imported_file.parts.len() == 1 {
         let part = imported_file.parts.first().unwrap();
-        combined.vertices = part.vertices.clone();
-        combined.polygons = part.polygons.clone();
 
-        return combined;
+        combined_mesh.vertices.extend(part.vertices.iter().cloned());
+
+        for (material, faces) in &part.polygons {
+            let material_index = processed_model_data.materials.insert_full(material.clone()).0;
+
+            let mut combined_mesh_face = CombinedMeshFace::default();
+            combined_mesh_face.material = material_index;
+            combined_mesh_face.faces = faces.clone();
+
+            combined_mesh.polygons.push(combined_mesh_face);
+        }
+
+        return Ok(combined_mesh);
     }
 
-    todo!("Support Multiple Parts Here")
+    for imputed_part_name in &imputed_model.part_name {
+        let import_part = match imported_file.parts.iter().find(|part| part.name == *imputed_part_name) {
+            Some(part) => part,
+            None => return Err(ProcessingMeshError::PartNotFound(imputed_part_name.clone())),
+        };
+
+        for (material, faces) in &import_part.polygons {
+            let material_index = processed_model_data.materials.insert_full(material.clone()).0;
+
+            let mut combined_mesh_face = CombinedMeshFace::default();
+            combined_mesh_face.material = material_index;
+            combined_mesh_face.vertex_offset = combined_mesh.vertices.len();
+            combined_mesh_face.faces = faces.clone();
+
+            combined_mesh.polygons.push(combined_mesh_face);
+        }
+
+        combined_mesh.vertices.extend(import_part.vertices.iter().cloned());
+    }
+
+    Ok(combined_mesh)
+}
+
+fn create_triangle_lists(combined_meshes: &CombinedMesh) -> Result<Vec<TriangleList>, ProcessingMeshError> {
+    let mut triangle_lists = Vec::new();
+
+    for mesh in &combined_meshes.polygons {
+        let mut triangle_list = TriangleList::default();
+        triangle_list.material = mesh.material;
+        triangle_list.vertex_offset = mesh.vertex_offset;
+
+        for face in &mesh.faces {
+            if face.len() < 3 {
+                return Err(ProcessingMeshError::IncompleteFace);
+            }
+
+            if face.len() > 3 {
+                let triangulated_faces = triangulate_face(face, &combined_meshes.vertices, mesh.vertex_offset);
+                triangle_list.triangles.extend(triangulated_faces);
+                continue;
+            }
+
+            triangle_list.triangles.push([face[2], face[1], face[0]]);
+        }
+
+        triangle_lists.push(triangle_list);
+    }
+
+    Ok(triangle_lists)
+}
+
+fn triangulate_face(_face: &Vec<usize>, _vertices: &Vec<ImportVertex>, _vertex_offset: usize) -> Vec<[usize; 3]> {
+    todo!("Triangulate Face Here")
+}
+
+fn create_unique_vertices(mesh: &CombinedMesh) -> (Vec<ImportVertex>, Vec<usize>) {
+    let mut kd_tree = KdTree::new(3);
+    let mut unique_vertices = Vec::new();
+    let mut indices_remap = Vec::with_capacity(mesh.vertices.len());
+    for vertex in &mesh.vertices {
+        let neighbors = kd_tree.within(&vertex.position.as_slice(), FLOAT_TOLERANCE, &squared_euclidean).unwrap();
+
+        if let Some(&(_, index)) = neighbors.iter().find(|(_, &i)| vertex_equals(&vertex, &unique_vertices[i])) {
+            indices_remap.push(*index);
+            continue;
+        }
+
+        kd_tree.add(vertex.position.as_slice(), unique_vertices.len()).unwrap();
+        indices_remap.push(unique_vertices.len());
+        unique_vertices.push(vertex.clone());
+    }
+
+    (unique_vertices, indices_remap)
+}
+
+fn vertex_equals(from: &ImportVertex, to: &ImportVertex) -> bool {
+    if (from.normal.x - to.normal.x).abs() > FLOAT_TOLERANCE
+        || (from.normal.y - to.normal.y).abs() > FLOAT_TOLERANCE
+        || (from.normal.z - to.normal.z).abs() > FLOAT_TOLERANCE
+    {
+        return false;
+    }
+
+    if (from.texture_coordinate.x - to.texture_coordinate.x).abs() > FLOAT_TOLERANCE
+        || (from.texture_coordinate.y - to.texture_coordinate.y).abs() > FLOAT_TOLERANCE
+    {
+        return false;
+    }
+
+    if from.links.len() != to.links.len() {
+        return false;
+    }
+
+    if from.links.iter().zip(to.links.iter()).any(|(from_link, to_link)| {
+        if from_link.bone != to_link.bone {
+            return true;
+        }
+
+        (from_link.weight - to_link.weight).abs() > FLOAT_TOLERANCE
+    }) {
+        return false;
+    }
+
+    true
+}
+
+fn remap_indices(triangle_lists: &mut Vec<TriangleList>, remap_list: Vec<usize>) {
+    for faces in triangle_lists {
+        for face in &mut faces.triangles {
+            for index in face {
+                *index = remap_list[faces.vertex_offset + *index];
+            }
+        }
+    }
+}
+
+fn calculate_vertex_tangents(vertices: &Vec<ImportVertex>, triangles: &Vec<[usize; 3]>) -> Vec<Vector4> {
+    let mut tangents = vec![Vector3::default(); vertices.len()];
+    let mut bi_tangents = vec![Vector3::default(); vertices.len()];
+
+    for face in triangles {
+        let edge1 = vertices[face[1]].position - vertices[face[0]].position;
+        let edge2 = vertices[face[2]].position - vertices[face[0]].position;
+        let delta_uv1 = vertices[face[1]].texture_coordinate - vertices[face[0]].texture_coordinate;
+        let delta_uv2 = vertices[face[2]].texture_coordinate - vertices[face[0]].texture_coordinate;
+
+        let area = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y);
+
+        let tangent = Vector3::new(
+            area * (delta_uv2.y * edge1.x - delta_uv1.y * edge2.x),
+            area * (delta_uv2.y * edge1.y - delta_uv1.y * edge2.y),
+            area * (delta_uv2.y * edge1.z - delta_uv1.y * edge2.z),
+        )
+        .normalize();
+
+        let bi_tangent = Vector3::new(
+            area * (delta_uv1.x * edge2.x - delta_uv2.x * edge1.x),
+            area * (delta_uv1.x * edge2.y - delta_uv2.x * edge1.y),
+            area * (delta_uv1.x * edge2.z - delta_uv2.x * edge1.z),
+        )
+        .normalize();
+
+        for vertex_index in 0..3 {
+            tangents[face[vertex_index]] = tangents[face[vertex_index]] + tangent;
+            bi_tangents[face[vertex_index]] = bi_tangents[face[vertex_index]] + bi_tangent;
+        }
+    }
+
+    let mut calculated_tangents = Vec::with_capacity(vertices.len());
+    for index in 0..tangents.len() {
+        tangents[index] = tangents[index].normalize();
+        bi_tangents[index] = bi_tangents[index].normalize();
+
+        let cross_product = vertices[index].normal.cross(&tangents[index]);
+        let sign = if cross_product.dot(&bi_tangents[index]) < 0.0 { -1.0 } else { 1.0 };
+
+        calculated_tangents.push(Vector4::new(tangents[index].x, tangents[index].y, tangents[index].z, sign));
+    }
+
+    calculated_tangents
 }
 
 fn combine_vertex_data(unique_vertices: &Vec<ImportVertex>, tangents: &Vec<Vector4>, mapped_bone: &HashMap<usize, usize>) -> Vec<ProcessedVertex> {
@@ -220,137 +421,4 @@ fn normalize_values(arr: &mut [f64; 3], count: usize) {
     for i in 0..count {
         arr[i] /= magnitude;
     }
-}
-
-fn calculate_vertex_tangents(vertices: &Vec<ImportVertex>, triangles: &Vec<[usize; 3]>) -> Vec<Vector4> {
-    let mut tangents = vec![Vector3::default(); vertices.len()];
-    let mut bi_tangents = vec![Vector3::default(); vertices.len()];
-
-    for face in triangles {
-        let edge1 = vertices[face[1]].position - vertices[face[0]].position;
-        let edge2 = vertices[face[2]].position - vertices[face[0]].position;
-        let delta_uv1 = vertices[face[1]].texture_coordinate - vertices[face[0]].texture_coordinate;
-        let delta_uv2 = vertices[face[2]].texture_coordinate - vertices[face[0]].texture_coordinate;
-
-        let area = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y);
-
-        let tangent = Vector3::new(
-            area * (delta_uv2.y * edge1.x - delta_uv1.y * edge2.x),
-            area * (delta_uv2.y * edge1.y - delta_uv1.y * edge2.y),
-            area * (delta_uv2.y * edge1.z - delta_uv1.y * edge2.z),
-        )
-        .normalize();
-
-        let bi_tangent = Vector3::new(
-            area * (delta_uv1.x * edge2.x - delta_uv2.x * edge1.x),
-            area * (delta_uv1.x * edge2.y - delta_uv2.x * edge1.y),
-            area * (delta_uv1.x * edge2.z - delta_uv2.x * edge1.z),
-        )
-        .normalize();
-
-        for vertex_index in 0..3 {
-            tangents[face[vertex_index]] = tangents[face[vertex_index]] + tangent;
-            bi_tangents[face[vertex_index]] = bi_tangents[face[vertex_index]] + bi_tangent;
-        }
-    }
-
-    let mut calculated_tangents = Vec::with_capacity(vertices.len());
-    for index in 0..tangents.len() {
-        tangents[index] = tangents[index].normalize();
-        bi_tangents[index] = bi_tangents[index].normalize();
-
-        let cross_product = vertices[index].normal.cross(&tangents[index]);
-        let sign = if cross_product.dot(&bi_tangents[index]) < 0.0 { -1.0 } else { 1.0 };
-
-        calculated_tangents.push(Vector4::new(tangents[index].x, tangents[index].y, tangents[index].z, sign));
-    }
-
-    calculated_tangents
-}
-
-fn remap_indices(triangle_lists: &mut Vec<TriangleList>, remap_list: Vec<usize>) {
-    for faces in triangle_lists {
-        for face in &mut faces.triangles {
-            for index in face {
-                *index = remap_list[*index];
-            }
-        }
-    }
-}
-
-fn create_triangle_lists(model_data: &mut ProcessedModelData, mesh: &CombinedMesh) -> Vec<TriangleList> {
-    let mut triangle_lists = Vec::with_capacity(mesh.polygons.len());
-
-    for (material, list) in &mesh.polygons {
-        let material_index = model_data.add_material(material.clone());
-        let mut triangles = Vec::new();
-
-        for face in list {
-            if face.len() < 3 {
-                // Will this happen, shouldn't but just to make sure.
-                todo!("Return Error Here")
-            }
-
-            if face.len() > 3 {
-                todo!("Triangulate Face Here")
-            }
-
-            triangles.push([face[0], face[1], face[2]]);
-        }
-
-        triangle_lists.push(TriangleList::new(material_index, triangles));
-    }
-
-    triangle_lists
-}
-
-fn create_unique_vertices(mesh: &CombinedMesh) -> (Vec<ImportVertex>, Vec<usize>) {
-    let mut kd_tree = KdTree::new(3);
-    let mut unique_vertices = Vec::new();
-    let mut indices_remap = Vec::with_capacity(mesh.vertices.len());
-    for vertex in &mesh.vertices {
-        let neighbors = kd_tree.within(&vertex.position.as_slice(), FLOAT_TOLERANCE, &squared_euclidean).unwrap();
-
-        if let Some(&(_, index)) = neighbors.iter().find(|(_, &i)| vertex_equals(&vertex, &unique_vertices[i])) {
-            indices_remap.push(*index);
-            continue;
-        }
-
-        kd_tree.add(vertex.position.as_slice(), unique_vertices.len()).unwrap();
-        indices_remap.push(unique_vertices.len());
-        unique_vertices.push(vertex.clone());
-    }
-
-    (unique_vertices, indices_remap)
-}
-
-fn vertex_equals(from: &ImportVertex, to: &ImportVertex) -> bool {
-    if (from.normal.x - to.normal.x).abs() > FLOAT_TOLERANCE
-        || (from.normal.y - to.normal.y).abs() > FLOAT_TOLERANCE
-        || (from.normal.z - to.normal.z).abs() > FLOAT_TOLERANCE
-    {
-        return false;
-    }
-
-    if (from.texture_coordinate.x - to.texture_coordinate.x).abs() > FLOAT_TOLERANCE
-        || (from.texture_coordinate.y - to.texture_coordinate.y).abs() > FLOAT_TOLERANCE
-    {
-        return false;
-    }
-
-    if from.links.len() != to.links.len() {
-        return false;
-    }
-
-    if from.links.iter().zip(to.links.iter()).any(|(from_link, to_link)| {
-        if from_link.bone != to_link.bone {
-            return true;
-        }
-
-        (from_link.weight - to_link.weight).abs() > FLOAT_TOLERANCE
-    }) {
-        return false;
-    }
-
-    true
 }
