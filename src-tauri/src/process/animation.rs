@@ -26,7 +26,7 @@ pub fn process_animations(
         let imported_animation = if imported_file.animations.len() == 1 {
             imported_file.animations.first().unwrap()
         } else {
-            &imported_file
+            imported_file
                 .animations
                 .iter()
                 .find(|anim| anim.name == input_animation.name)
@@ -40,9 +40,11 @@ pub fn process_animations(
             continue;
         }
 
-        let mut processed_animation = ProcessedAnimation::default();
-        processed_animation.name = input_animation.name.clone();
-        processed_animation.frame_count = imported_animation.frame_count;
+        let mut processed_animation = ProcessedAnimation {
+            name: input_animation.name.clone(),
+            frame_count: imported_animation.frame_count,
+            ..Default::default()
+        };
 
         for (_, bone_data) in &mut bone_table.bones {
             // TODO: Make this get the best scale values for best quality.
@@ -53,8 +55,11 @@ pub fn process_animations(
         let mapped_bone = bone_table.remapped_bones.get(&input_animation.source_file).expect("Source File Not Remapped!");
 
         for channel in &imported_animation.channels {
-            let mut processed_bone_data = ProcessedAnimatedBoneData::default();
-            processed_bone_data.bone = *mapped_bone.get(&channel.bone).expect("Mapped Bone Not Found!");
+            let mut processed_bone_data = ProcessedAnimatedBoneData {
+                bone: *mapped_bone.get(&channel.bone).expect("Mapped Bone Not Found!"),
+                ..Default::default()
+            };
+
             let (_, bone_data) = bone_table.bones.get_index(processed_bone_data.bone).expect("Bone Not Found!");
 
             if imported_animation.frame_count == 1 {
@@ -86,12 +91,14 @@ pub fn process_animations(
     Ok(processed_animations)
 }
 
-pub fn process_sequences(input: &ImputedCompilationData, animations: &Vec<ProcessedAnimation>) -> Result<Vec<ProcessedSequence>, ProcessingDataError> {
+pub fn process_sequences(input: &ImputedCompilationData, animations: &[ProcessedAnimation]) -> Result<Vec<ProcessedSequence>, ProcessingDataError> {
     let mut processed_sequences = Vec::new();
 
     for sequence in &input.sequences {
-        let mut processed_sequence = ProcessedSequence::default();
-        processed_sequence.name = sequence.name.clone();
+        let mut processed_sequence = ProcessedSequence {
+            name: sequence.name.clone(),
+            ..Default::default()
+        };
 
         let animation_index = animations.iter().position(|animation| animation.name == sequence.animation);
 

@@ -210,6 +210,6 @@ impl DataWriter {
     }
 
     pub fn get_data(&self) -> &[u8] {
-        &self.data.as_slice()
+        self.data.as_slice()
     }
 }

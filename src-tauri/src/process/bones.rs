@@ -50,10 +50,12 @@ pub fn create_bone_table(import: &State<FileManager>) -> Result<BoneTable, Proce
                 }
             }
 
-            let mut new_bone = GlobalBone::default();
-            new_bone.position = import_bone.position;
-            new_bone.orientation = import_bone.orientation;
-            new_bone.parent = import_bone.parent.and_then(|parent_index| remapped_bones.get(&parent_index).copied());
+            let new_bone = GlobalBone {
+                position: import_bone.position,
+                orientation: import_bone.orientation,
+                parent: import_bone.parent.and_then(|parent_index| remapped_bones.get(&parent_index).copied()),
+                ..Default::default()
+            };
 
             bone_table.bones.insert(import_bone.name.clone(), new_bone);
             remapped_bones.insert(bone_index, bone_table.bones.len() - 1);
@@ -73,13 +75,14 @@ pub fn process_bone_table(bone_table: &BoneTable) -> ProcessedBoneData {
             continue;
         }
 
-        let mut processed_bone = ProcessedBone::default();
-        processed_bone.name = bone_name.clone();
-        processed_bone.parent = bone_data.parent;
-        processed_bone.position = bone_data.position;
-        processed_bone.rotation = bone_data.orientation.to_angles();
-        processed_bone.animation_position_scale = bone_data.position_scale;
-        processed_bone.animation_rotation_scale = bone_data.rotation_scale;
+        let processed_bone = ProcessedBone {
+            name: bone_name.clone(),
+            parent: bone_data.parent,
+            position: bone_data.position,
+            rotation: bone_data.orientation.to_angles(),
+            animation_position_scale: bone_data.position_scale,
+            animation_rotation_scale: bone_data.rotation_scale,
+        };
 
         processed_bones.processed_bones.push(processed_bone);
     }

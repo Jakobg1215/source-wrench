@@ -110,15 +110,11 @@ impl Link {
 pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
     let file = File::open(file_path)?;
     let file_buffer = BufReader::new(file);
-    let mut lines = file_buffer.lines().flatten();
+    let mut lines = file_buffer.lines().map_while(Result::ok);
     let mut line_count = 0;
     let mut smd_data = SMDData::default();
 
-    loop {
-        let current_line = match lines.next() {
-            Some(line) => line,
-            None => break,
-        };
+    while let Some(current_line) = lines.next() {
         line_count += 1;
 
         let mut line_arguments = current_line.split_whitespace();
@@ -134,7 +130,7 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
                     None => return Err(ParseSMDError::MissingArgument("Version", line_count)),
                 };
 
-                if version < 1 || version > 2 {
+                if !(1..=2).contains(&version) {
                     return Err(ParseSMDError::InvalidVersion);
                 }
             }
@@ -167,9 +163,9 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
                     fn next(&mut self) -> Option<Self::Item> {
                         let mut start = None;
                         let mut end = None;
-                        let mut chars = self.input[self.index..].char_indices();
+                        let chars = self.input[self.index..].char_indices();
 
-                        while let Some((index, char)) = chars.next() {
+                        for (index, char) in chars {
                             match char {
                                 '"' => {
                                     self.in_quotes = !self.in_quotes;
@@ -509,7 +505,7 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
 
     let mut file_data = ImportFileData::default();
 
-    if smd_data.frames.len() == 0 {
+    if smd_data.frames.is_empty() {
         return Err(ParseSMDError::NoBindFrame);
     }
 
@@ -527,19 +523,22 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
             None => return Err(ParseSMDError::MissingBoneBind),
         };
 
-        let mut bone = ImportBone::default();
-        bone.name = node.name;
-        bone.parent = node.parent;
-        bone.position = bind_pose.position;
-        bone.orientation = bind_pose.rotation.to_quaternion();
+        let bone = ImportBone {
+            name: node.name,
+            parent: node.parent,
+            position: bind_pose.position,
+            orientation: bind_pose.rotation.to_quaternion(),
+        };
 
         file_data.skeleton.push(bone);
         mapped_nodes.insert(id, file_data.skeleton.len() - 1);
     }
 
-    let mut animation = ImportAnimation::default();
-    animation.name = file_path.file_stem().unwrap().to_string_lossy().to_string();
-    animation.frame_count = smd_data.frames.len();
+    let mut animation = ImportAnimation {
+        name: file_path.file_stem().unwrap().to_string_lossy().to_string(),
+        frame_count: smd_data.frames.len(),
+        ..Default::default()
+    };
 
     for (frame, keys) in smd_data.frames.into_iter().enumerate() {
         for bone in keys {
@@ -547,42 +546,48 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
             let channel = match animation.channels.iter_mut().position(|x| x.bone == *bone_index) {
                 Some(index) => &mut animation.channels[index],
                 None => {
-                    let mut channel = ImportChannel::default();
-                    channel.bone = *bone_index;
+                    let channel = ImportChannel {
+                        bone: *bone_index,
+                        ..Default::default()
+                    };
 
                     animation.channels.push(channel);
                     animation.channels.last_mut().unwrap()
                 }
             };
 
-            let mut position = ImportKeyFrame::default();
-            position.frame = frame;
-            position.value = bone.position;
+            let position = ImportKeyFrame { frame, value: bone.position };
             channel.position.push(position);
 
-            let mut orientation = ImportKeyFrame::default();
-            orientation.frame = frame;
-            orientation.value = bone.rotation.to_quaternion();
+            let orientation = ImportKeyFrame {
+                frame,
+                value: bone.rotation.to_quaternion(),
+            };
             channel.orientation.push(orientation);
         }
     }
 
     file_data.animations.push(animation);
 
-    let mut part = ImportPart::default();
-    part.name = file_path.file_stem().unwrap().to_string_lossy().to_string();
-    part.polygons = smd_data.materials;
+    let mut part = ImportPart {
+        name: file_path.file_stem().unwrap().to_string_lossy().to_string(),
+        polygons: smd_data.materials,
+        ..Default::default()
+    };
 
     for vertex in smd_data.vertices {
-        let mut vert = ImportVertex::default();
-        vert.position = vertex.position;
-        vert.normal = vertex.normal;
-        vert.texture_coordinate = vertex.texture_coordinate;
+        let mut vert = ImportVertex {
+            position: vertex.position,
+            normal: vertex.normal,
+            texture_coordinate: vertex.texture_coordinate,
+            ..Default::default()
+        };
         for link in vertex.links {
             let bone_index = mapped_nodes.get(&link.bone).expect("Bone Not Found!");
-            let mut vert_link = ImportLink::default();
-            vert_link.bone = *bone_index;
-            vert_link.weight = link.weight;
+            let vert_link = ImportLink {
+                bone: *bone_index,
+                weight: link.weight,
+            };
 
             vert.links.push(vert_link);
         }

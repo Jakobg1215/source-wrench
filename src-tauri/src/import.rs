@@ -148,9 +148,6 @@ impl FileManager {
     }
 
     pub fn get_file(&self, path: &str) -> Option<Arc<ImportFileData>> {
-        match self.files.lock().unwrap().get(path) {
-            Some((_, file_data)) => Some(Arc::clone(file_data)),
-            None => None,
-        }
+        self.files.lock().unwrap().get(path).map(|(_, file_data)| Arc::clone(file_data))
     }
 }

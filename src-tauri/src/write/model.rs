@@ -253,7 +253,7 @@ impl Header {
     fn write_material_paths(&mut self, writer: &mut DataWriter) {
         writer.write_to_index(self.write_material_paths_index, writer.get_size() as i32);
         for path in &self.material_paths {
-            writer.add_string_to_table(0, &path);
+            writer.add_string_to_table(0, path);
         }
     }
 
@@ -494,7 +494,7 @@ impl StructWriting for Animation {
     fn write_to_writer(&mut self, writer: &mut DataWriter) {
         self.write_start_index = writer.get_size();
 
-        if self.animation_data.len() == 0 {
+        if self.animation_data.is_empty() {
             writer.write_unsigned_byte(255); // bone
             writer.write_unsigned_byte(0); // flags
             writer.write_short(0);

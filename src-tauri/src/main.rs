@@ -27,7 +27,7 @@ fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileMa
     let processed_data = match process(&data, &file_manager) {
         Ok(data) => data,
         Err(error) => {
-            log(format!("Fail to compile due to: {}!", error.to_string()), LogLevel::Error);
+            log(format!("Fail to compile due to: {}!", error), LogLevel::Error);
             return;
         }
     };
@@ -42,7 +42,7 @@ fn load_file(path: String, file_manager: tauri::State<FileManager>) -> bool {
     match file_manager.load_file(path) {
         Ok(_) => true,
         Err(error) => {
-            log(format!("Fail to load file due to: {}!", error.to_string()), LogLevel::Error);
+            log(format!("Fail to load file due to: {}!", error), LogLevel::Error);
             false
         }
     }

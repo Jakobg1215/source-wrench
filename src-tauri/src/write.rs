@@ -139,10 +139,12 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                     mesh_strip_group_header.flags = 2;
 
                     for vertex in strip_group.vertices {
-                        let mut mesh_vertex = VertexHeader::default();
-                        mesh_vertex.bone_count = vertex.bone_count as u8;
-                        mesh_vertex.vertex_index = vertex.vertex_index as u16;
-                        mesh_vertex.bone_weight_bones = [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8];
+                        let mesh_vertex = VertexHeader {
+                            bone_count: vertex.bone_count as u8,
+                            vertex_index: vertex.vertex_index as u16,
+                            bone_weight_bones: [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8],
+                        };
+
                         mesh_strip_group_header.vertices.push(mesh_vertex);
                     }
 
@@ -156,9 +158,10 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                         mesh_strip_header.bone_count = strip.bone_count as i16;
 
                         for bone_change in strip.hardware_bones {
-                            let mut mesh_bone_state_change = BoneStateChangeHeader::default();
-                            mesh_bone_state_change.hardware_id = bone_change.hardware_bone as i32;
-                            mesh_bone_state_change.new_bone_id = bone_change.bone_table_bone as i32;
+                            let mesh_bone_state_change = BoneStateChangeHeader {
+                                hardware_id: bone_change.hardware_bone as i32,
+                                new_bone_id: bone_change.bone_table_bone as i32,
+                            };
 
                             mesh_strip_header.bone_state_changes.push(mesh_bone_state_change);
                         }

@@ -168,13 +168,13 @@ const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
 
 pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>) -> Result<ProcessedData, ProcessingDataError> {
     log("Creating Bone Table", LogLevel::Debug);
-    let mut bone_table = create_bone_table(&file_manager)?;
+    let mut bone_table = create_bone_table(file_manager)?;
     log(format!("Model uses {} source bones", bone_table.bones.len()), LogLevel::Verbose);
 
     // TODO: Mark bones as collapsed if they are not used.
 
     log("Processing Animations", LogLevel::Debug);
-    let processed_animations = process_animations(&input, &file_manager, &mut bone_table)?;
+    let processed_animations = process_animations(input, file_manager, &mut bone_table)?;
     log(format!("Model has {} animations", processed_animations.len()), LogLevel::Verbose);
 
     if processed_animations.len() > i16::MAX as usize {
@@ -182,10 +182,10 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
     }
 
     log("Processing Sequences", LogLevel::Debug);
-    let processed_sequences = process_sequences(&input, &processed_animations)?;
+    let processed_sequences = process_sequences(input, &processed_animations)?;
     log(format!("Model has {} sequences", processed_sequences.len()), LogLevel::Verbose);
 
-    if processed_sequences.len() == 0 {
+    if processed_sequences.is_empty() {
         return Err(ProcessingDataError::NoSequences);
     }
 
@@ -194,7 +194,7 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
     }
 
     log("Processing Mesh Data", LogLevel::Debug);
-    let processed_mesh = process_mesh_data(&input, &file_manager, &bone_table)?;
+    let processed_mesh = process_mesh_data(input, file_manager, &bone_table)?;
     log(format!("Model has {} materials", processed_mesh.materials.len()), LogLevel::Verbose);
     log(format!("Model has {} body parts", processed_mesh.body_parts.len()), LogLevel::Verbose);
 
@@ -211,10 +211,12 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
         return Err(ProcessingDataError::TooManyBones);
     }
 
-    let mut processed_data = ProcessedData::default();
-    processed_data.bone_data = processed_bone_data;
-    processed_data.animation_data = processed_animations;
-    processed_data.sequence_data = processed_sequences;
-    processed_data.model_data = processed_mesh;
+    let processed_data = ProcessedData {
+        bone_data: processed_bone_data,
+        animation_data: processed_animations,
+        sequence_data: processed_sequences,
+        model_data: processed_mesh,
+    };
+
     Ok(processed_data)
 }
