@@ -1,5 +1,5 @@
 use std::f64::consts::{FRAC_PI_2, PI};
-use std::ops::{Add, Index, IndexMut, Sub};
+use std::ops::{Add, Div, Index, Mul, Sub};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Vector2 {
@@ -33,10 +33,6 @@ impl Vector3 {
         Self { x, y, z }
     }
 
-    pub fn zero() -> Self {
-        Self::default()
-    }
-
     pub fn one() -> Self {
         Self::new(1.0, 1.0, 1.0)
     }
@@ -63,7 +59,7 @@ impl Vector3 {
         let mag = self.magnitude();
 
         if mag < f64::EPSILON {
-            return Self::zero();
+            return Self::default();
         }
 
         Self::new(self.x / mag, self.y / mag, self.z / mag)
@@ -71,6 +67,14 @@ impl Vector3 {
 
     pub fn cross(&self, other: &Self) -> Self {
         Self::new(self.y * other.z - self.z * other.x, self.z * other.x, self.x * other.y - self.y * other.x)
+    }
+}
+
+impl Add for Vector3 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
     }
 }
 
@@ -82,11 +86,32 @@ impl Sub for Vector3 {
     }
 }
 
-impl Add for Vector3 {
+impl Mul for Vector3 {
     type Output = Self;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        Self::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::new(self.x * rhs.x, self.y * rhs.y, self.z * rhs.z)
+    }
+}
+
+impl Div for Vector3 {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self::new(self.x / rhs.x, self.y / rhs.y, self.z / rhs.z)
+    }
+}
+
+impl Index<usize> for Vector3 {
+    type Output = f64;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.x,
+            1 => &self.y,
+            2 => &self.z,
+            _ => unreachable!("Index out of bounds: the index is {}, but the length is 3", index),
+        }
     }
 }
 
@@ -102,10 +127,6 @@ impl Vector4 {
     pub fn new(x: f64, y: f64, z: f64, w: f64) -> Self {
         Self { x, y, z, w }
     }
-
-    pub fn zero() -> Self {
-        Self::default()
-    }
 }
 
 /// Euler angles in radians. Roll, Pitch, Yaw
@@ -119,10 +140,6 @@ pub struct Angles {
 impl Angles {
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self { x, y, z }
-    }
-
-    pub fn zero() -> Self {
-        Self::default()
     }
 }
 
@@ -143,6 +160,31 @@ impl Angles {
         Quaternion::new(x, y, z, w)
     }
 
+    pub fn to_matrix(&self) -> Matrix {
+        let cos_roll = self.x.cos();
+        let sin_roll = self.x.sin();
+        let cos_pitch = self.y.cos();
+        let sin_pitch = self.y.sin();
+        let cos_yaw = self.z.cos();
+        let sin_yaw = self.z.sin();
+
+        Matrix {
+            entries: [
+                [
+                    cos_yaw * cos_pitch,
+                    cos_yaw * sin_pitch * sin_roll - sin_yaw * cos_roll,
+                    cos_yaw * sin_pitch * cos_roll + sin_yaw * sin_roll,
+                ],
+                [
+                    sin_yaw * cos_pitch,
+                    sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll,
+                    sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll,
+                ],
+                [-sin_pitch, cos_pitch * sin_roll, cos_pitch * cos_roll],
+            ],
+        }
+    }
+
     pub fn to_degrees(&self) -> Self {
         let degrees_conversion = 180.0 / PI;
         Self::new(self.x * degrees_conversion, self.y * degrees_conversion, self.z * degrees_conversion)
@@ -158,12 +200,6 @@ impl Angles {
     }
 }
 
-impl From<Quaternion> for Angles {
-    fn from(value: Quaternion) -> Self {
-        value.to_angles()
-    }
-}
-
 impl Sub for Angles {
     type Output = Self;
 
@@ -172,7 +208,7 @@ impl Sub for Angles {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct Quaternion {
     pub x: f64,
     pub y: f64,
@@ -180,18 +216,20 @@ pub struct Quaternion {
     pub w: f64,
 }
 
+impl Default for Quaternion {
+    fn default() -> Self {
+        Self {
+            x: Default::default(),
+            y: Default::default(),
+            z: Default::default(),
+            w: 1.0,
+        }
+    }
+}
+
 impl Quaternion {
     pub fn new(x: f64, y: f64, z: f64, w: f64) -> Self {
         Self { x, y, z, w }
-    }
-
-    pub fn zero() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-            w: 1.0,
-        }
     }
 }
 
@@ -214,139 +252,128 @@ impl Quaternion {
 
         Angles::new(roll_angle, pitch_angle, yaw_angle)
     }
-}
 
-impl From<Angles> for Quaternion {
-    fn from(value: Angles) -> Self {
-        value.to_quaternion()
+    pub fn to_matrix(&self) -> Matrix {
+        Matrix {
+            entries: [
+                [
+                    1.0 - 2.0 * self.y * self.y - 2.0 * self.z * self.z,
+                    2.0 * self.x * self.y - 2.0 * self.w * self.z,
+                    2.0 * self.x * self.z + 2.0 * self.w * self.y,
+                ],
+                [
+                    2.0 * self.x * self.y + 2.0 * self.w * self.z,
+                    1.0 - 2.0 * self.x * self.x - 2.0 * self.z * self.z,
+                    2.0 * self.y * self.z - 2.0 * self.w * self.x,
+                ],
+                [
+                    2.0 * self.x * self.z - 2.0 * self.w * self.y,
+                    2.0 * self.y * self.z + 2.0 * self.w * self.x,
+                    1.0 - 2.0 * self.x * self.x - 2.0 * self.y * self.y,
+                ],
+            ],
+        }
     }
 }
 
 /// A 3 by 4 matrix.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Matrix {
-    pub entries: [[f64; 4]; 3],
+    pub entries: [[f64; 3]; 3],
 }
 
 impl Matrix {
-    pub fn zero() -> Self {
-        Self::default()
-    }
-
-    pub fn new<T: Into<Angles>>(orientation: T, position: Vector3) -> Self {
-        let mut new_matrix = Self::default();
-        let angles = orientation.into();
-
-        let cos_roll = angles.x.cos();
-        let sin_roll = angles.x.sin();
-        let cos_pitch = angles.y.cos();
-        let sin_pitch = angles.y.sin();
-        let cos_yaw = angles.z.cos();
-        let sin_yaw = angles.z.sin();
-
-        new_matrix[0][0] = cos_yaw * cos_pitch;
-        new_matrix[1][0] = sin_yaw * cos_pitch;
-        new_matrix[2][0] = -sin_pitch;
-
-        new_matrix[0][1] = cos_yaw * sin_pitch * sin_roll - sin_yaw * cos_roll;
-        new_matrix[1][1] = sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll;
-        new_matrix[2][1] = cos_pitch * sin_roll;
-
-        new_matrix[0][2] = cos_yaw * sin_pitch * cos_roll + sin_yaw * sin_roll;
-        new_matrix[1][2] = sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll;
-        new_matrix[2][2] = cos_pitch * cos_roll;
-
-        new_matrix[0][3] = position.x;
-        new_matrix[1][3] = position.y;
-        new_matrix[2][3] = position.z;
-
-        new_matrix
-    }
-
     pub fn identity() -> Self {
-        let mut new_matrix = Self::zero();
-        new_matrix[0][0] = 1.0;
-        new_matrix[1][1] = 1.0;
-        new_matrix[2][2] = 1.0;
-        new_matrix
+        Self {
+            entries: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        }
     }
-}
 
-impl Matrix {
     pub fn to_angles(&self) -> Angles {
-        let mut angles = Angles::zero();
-
         let singularity = (self[0][0] * self[0][0] + self[1][0] * self[1][0]).sqrt();
 
-        if singularity > f64::EPSILON {
-            angles.x = self[2][1].atan2(self[2][2]);
-            angles.y = -self[2][0].atan2(singularity);
-            angles.z = self[1][0].atan2(self[0][0]);
-        } else {
-            angles.x = 0.0;
-            angles.y = -self[2][0].atan2(singularity);
-            angles.z = -self[0][1].atan2(self[1][1]);
+        Angles {
+            x: if singularity > f64::EPSILON { self[2][1].atan2(self[2][2]) } else { 0.0 },
+            y: -self[2][0].atan2(singularity),
+            z: if singularity > f64::EPSILON {
+                self[1][0].atan2(self[0][0])
+            } else {
+                -self[0][1].atan2(self[1][1])
+            },
         }
-
-        angles
     }
 
-    pub fn to_vector(&self) -> Vector3 {
-        Vector3::new(self[0][3], self[1][3], self[2][3])
+    pub fn to_quaternion(&self) -> Quaternion {
+        let trace = self.entries[0][0] + self.entries[1][1] + self.entries[2][2];
+        if trace > 0.0 {
+            let s = (trace + 1.0).sqrt() * 2.0;
+            let w = 0.25 * s;
+            let x = (self.entries[2][1] - self.entries[1][2]) / s;
+            let y = (self.entries[0][2] - self.entries[2][0]) / s;
+            let z = (self.entries[1][0] - self.entries[0][1]) / s;
+            Quaternion { w, x, y, z }
+        } else if self.entries[0][0] > self.entries[1][1] && self.entries[0][0] > self.entries[2][2] {
+            let s = (1.0 + self.entries[0][0] - self.entries[1][1] - self.entries[2][2]).sqrt() * 2.0;
+            let w = (self.entries[2][1] - self.entries[1][2]) / s;
+            let x = 0.25 * s;
+            let y = (self.entries[0][1] + self.entries[1][0]) / s;
+            let z = (self.entries[0][2] + self.entries[2][0]) / s;
+            Quaternion { w, x, y, z }
+        } else if self.entries[1][1] > self.entries[2][2] {
+            let s = (1.0 + self.entries[1][1] - self.entries[0][0] - self.entries[2][2]).sqrt() * 2.0;
+            let w = (self.entries[0][2] - self.entries[2][0]) / s;
+            let x = (self.entries[0][1] + self.entries[1][0]) / s;
+            let y = 0.25 * s;
+            let z = (self.entries[1][2] + self.entries[2][1]) / s;
+            Quaternion { w, x, y, z }
+        } else {
+            let s = (1.0 + self.entries[2][2] - self.entries[0][0] - self.entries[1][1]).sqrt() * 2.0;
+            let w = (self.entries[1][0] - self.entries[0][1]) / s;
+            let x = (self.entries[0][2] + self.entries[2][0]) / s;
+            let y = (self.entries[1][2] + self.entries[2][1]) / s;
+            let z = 0.25 * s;
+            Quaternion { w, x, y, z }
+        }
     }
 
     pub fn transpose(&self) -> Self {
-        let mut new_matrix = Self::zero();
-
-        new_matrix[0][0] = self[0][0];
-        new_matrix[0][1] = self[1][0];
-        new_matrix[0][2] = self[2][0];
-
-        new_matrix[1][0] = self[0][1];
-        new_matrix[1][1] = self[1][1];
-        new_matrix[1][2] = self[2][1];
-
-        new_matrix[2][0] = self[0][2];
-        new_matrix[2][1] = self[1][2];
-        new_matrix[2][2] = self[2][2];
-
-        let position = self.to_vector();
-
-        new_matrix[0][3] = -position.dot(&Vector3::new(self[0][0], self[0][1], self[0][2]));
-        new_matrix[1][3] = -position.dot(&Vector3::new(self[1][0], self[1][1], self[1][2]));
-        new_matrix[2][3] = -position.dot(&Vector3::new(self[2][0], self[2][1], self[2][2]));
-
-        new_matrix
+        Self {
+            entries: [
+                [self[0][0], self[1][0], self[2][0]],
+                [self[0][1], self[1][1], self[2][1]],
+                [self[0][2], self[1][2], self[2][2]],
+            ],
+        }
     }
 
     pub fn concatenate(&self, other: &Self) -> Self {
-        let mut new_matrix = Self::zero();
-
-        for i in 0..3 {
-            for j in 0..4 {
-                new_matrix[i][j] = self[i][0] * other[0][j] + self[i][1] * other[1][j] + self[i][2] * other[2][j];
-            }
+        Self {
+            entries: [
+                [
+                    self[0][0] * other[0][0] + self[0][1] * other[1][0] + self[0][2] * other[2][0],
+                    self[0][0] * other[0][1] + self[0][1] * other[1][1] + self[0][2] * other[2][1],
+                    self[0][0] * other[0][2] + self[0][1] * other[1][2] + self[0][2] * other[2][2],
+                ],
+                [
+                    self[1][0] * other[0][0] + self[1][1] * other[1][0] + self[1][2] * other[2][0],
+                    self[1][0] * other[0][1] + self[1][1] * other[1][1] + self[1][2] * other[2][1],
+                    self[1][0] * other[0][2] + self[1][1] * other[1][2] + self[1][2] * other[2][2],
+                ],
+                [
+                    self[2][0] * other[0][0] + self[2][1] * other[1][0] + self[2][2] * other[2][0],
+                    self[2][0] * other[0][1] + self[2][1] * other[1][1] + self[2][2] * other[2][1],
+                    self[2][0] * other[0][2] + self[2][1] * other[1][2] + self[2][2] * other[2][2],
+                ],
+            ],
         }
-
-        new_matrix[0][3] += self[0][3];
-        new_matrix[1][3] += self[1][3];
-        new_matrix[2][3] += self[2][3];
-
-        new_matrix
     }
 }
 
 impl Index<usize> for Matrix {
-    type Output = [f64; 4];
+    type Output = [f64; 3];
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.entries[index]
-    }
-}
-
-impl IndexMut<usize> for Matrix {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.entries[index]
     }
 }
 

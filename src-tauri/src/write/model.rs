@@ -318,7 +318,7 @@ impl StructWriting for Bone {
         writer.write_vector3(&self.animation_position_scale); // posscale
         writer.write_vector3(&self.animation_rotation_scale); // rotscale
         writer.write_matrix(Matrix::identity()); // poseToBone
-        writer.write_quaternion(&Quaternion::zero()); // qAlignment
+        writer.write_quaternion(&Quaternion::default()); // qAlignment
         writer.write_int(1024); // flags
         writer.write_int(0); // proctype
         writer.write_int(-1); // procindex
