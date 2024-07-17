@@ -116,6 +116,18 @@ impl Index<usize> for Vector3 {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
+pub struct BoundingBox {
+    pub minimum: Vector3,
+    pub maximum: Vector3,
+}
+
+impl BoundingBox {
+    pub fn is_valid(&self) -> bool {
+        self.minimum.x <= self.maximum.x && self.minimum.y <= self.maximum.y && self.minimum.z <= self.maximum.z
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Vector4 {
     pub x: f64,
     pub y: f64,
@@ -276,7 +288,7 @@ impl Quaternion {
     }
 }
 
-/// A 3 by 4 matrix.
+/// A 3 by 3 matrix.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Matrix {
     pub entries: [[f64; 3]; 3],

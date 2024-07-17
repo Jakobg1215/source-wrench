@@ -1,9 +1,6 @@
-use crate::utilities::{
-    binarydata::DataWriter,
-    mathematics::{Vector2, Vector3, Vector4},
-};
+use crate::utilities::mathematics::{Vector2, Vector3, Vector4};
 
-use super::StructWriting;
+use super::{FileWriteError, FileWriter, WriteToWriter};
 
 pub struct VertexFileHeader {
     checksum: i32,
@@ -15,29 +12,30 @@ pub struct VertexFileHeader {
     tangents_index: usize,
 }
 
-impl StructWriting for VertexFileHeader {
-    fn write_to_writer(&mut self, writer: &mut DataWriter) {
-        writer.write_int(1448297545); // id
-        writer.write_int(4); // version
-        writer.write_int(self.checksum); // checksum
-        writer.write_int(1); // numLODs
-        writer.write_int_array(&vec![self.vertexes.len() as i32; 8]); // numLODVertexes
-        writer.write_int(self.fixups.len() as i32); // numFixups
-        self.fixups_index = writer.write_index(); // fixupTableStart
-        self.vertexes_index = writer.write_index(); // vertexDataStart
-        self.tangents_index = writer.write_index(); // tangentDataStart
+impl WriteToWriter for VertexFileHeader {
+    fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
+        writer.write_integer(1448297545); // id
+        writer.write_integer(4); // version
+        writer.write_integer(self.checksum); // checksum
+        writer.write_integer(1); // numLODs
+        writer.write_integer_array(&[self.vertexes.len() as i32; 8]); // numLODVertexes
+        writer.write_integer(self.fixups.len() as i32); // numFixups
+        self.fixups_index = writer.write_integer_index(); // fixupTableStart
+        self.vertexes_index = writer.write_integer_index(); // vertexDataStart
+        self.tangents_index = writer.write_integer_index(); // tangentDataStart
 
-        writer.write_to_index(self.fixups_index, writer.get_size() as i32);
+        writer.write_to_integer_offset(self.fixups_index, writer.data.len())?;
 
-        writer.write_to_index(self.vertexes_index, writer.get_size() as i32);
+        writer.write_to_integer_offset(self.vertexes_index, writer.data.len())?;
         for vertex in &mut self.vertexes {
-            vertex.write_to_writer(writer);
+            vertex.write(writer)?;
         }
 
-        writer.write_to_index(self.tangents_index, writer.get_size() as i32);
+        writer.write_to_integer_offset(self.tangents_index, writer.data.len())?;
         for tangent in &self.tangents {
-            writer.write_vector4(tangent);
+            writer.write_vector4(*tangent);
         }
+        Ok(())
     }
 }
 
@@ -66,14 +64,15 @@ pub struct Vertex {
     uv: Vector2,
 }
 
-impl StructWriting for Vertex {
-    fn write_to_writer(&mut self, writer: &mut DataWriter) {
-        writer.write_float_array(&self.weights.iter().map(|f| *f as f32).collect()); // weight
-        writer.write_unsigned_byte_array(&self.bones.iter().map(|b| *b as u8).collect()); // bone
+impl WriteToWriter for Vertex {
+    fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
+        writer.write_float_array(&[self.weights[0] as f32, self.weights[1] as f32, self.weights[2] as f32]); // weight
+        writer.write_unsigned_byte_array(&[self.bones[0] as u8, self.bones[1] as u8, self.bones[2] as u8]); // bone
         writer.write_unsigned_byte(self.bone_count as u8); // numBones
-        writer.write_vector3(&self.position); // m_vecPosition
-        writer.write_vector3(&self.normal); // m_vecNormal
-        writer.write_vector2(&self.uv); // m_vecTexCoord
+        writer.write_vector3(self.position); // m_vecPosition
+        writer.write_vector3(self.normal); // m_vecNormal
+        writer.write_vector2(self.uv); // m_vecTexCoord
+        Ok(())
     }
 }
 
