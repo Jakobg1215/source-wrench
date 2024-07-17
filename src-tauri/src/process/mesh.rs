@@ -344,7 +344,13 @@ fn calculate_vertex_tangents(vertices: &[ImportVertex], triangles: &Vec<[usize; 
         let delta_uv1 = vertices[face[1]].texture_coordinate - vertices[face[0]].texture_coordinate;
         let delta_uv2 = vertices[face[2]].texture_coordinate - vertices[face[0]].texture_coordinate;
 
-        let area = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y);
+        let denominator = delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y;
+
+        if denominator.abs() < f64::EPSILON {
+            continue;
+        }
+
+        let area = 1.0 / denominator;
 
         let tangent = Vector3::new(
             area * (delta_uv2.y * edge1.x - delta_uv1.y * edge2.x),
