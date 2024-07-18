@@ -32,7 +32,15 @@ fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileMa
         }
     };
 
-    write_files(data.model_name, processed_data, data.export_path);
+    log(String::from("Writing Files!"), LogLevel::Info);
+
+    match write_files(data.model_name, processed_data, data.export_path) {
+        Ok(_) => {}
+        Err(error) => {
+            log(format!("Fail to write files due to: {}!", error), LogLevel::Error);
+            return;
+        }
+    }
 
     log("Model compiled successfully!", LogLevel::Info);
 }

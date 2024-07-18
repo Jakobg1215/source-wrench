@@ -178,6 +178,8 @@ pub fn process_mesh_data(
                 processed_model.meshes.push(processed_mesh);
             }
 
+            log(format!("Processed {} vertices", combined_vertices.len()), LogLevel::Verbose);
+
             processed_body_part.parts.push(processed_model);
         }
 
