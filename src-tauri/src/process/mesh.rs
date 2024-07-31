@@ -101,7 +101,7 @@ pub fn process_mesh_data(
                 let mut hardware_bones = IndexSet::new();
                 for triangle in material_triangle_list.triangles {
                     let new_vertex_count = triangle.iter().filter(|&&value| mapped_indices.contains_key(&value)).count();
-                    if processed_strip_group.vertices.len() + new_vertex_count > (u16::MAX - 1) as usize {
+                    if processed_strip_group.vertices.len() + new_vertex_count > (u16::MAX - 3) as usize {
                         for hardware_bone in &hardware_bones {
                             let processed_hardware_bone = ProcessedHardwareBone {
                                 hardware_bone: processed_strip.hardware_bones.len(),
@@ -397,7 +397,7 @@ fn combine_vertex_data(unique_vertices: &[ImportVertex], tangents: &[Vector4], m
         create_weight_link(&mut combined_vertex, &vertex.links, mapped_bone);
 
         combined_vertex.position = vertex.position;
-        combined_vertex.normal = vertex.normal;
+        combined_vertex.normal = vertex.normal.normalize();
         combined_vertex.uv = vertex.texture_coordinate;
         combined_vertex.tangent = tangents[vertex_index];
 
