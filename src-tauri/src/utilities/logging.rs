@@ -1,6 +1,6 @@
 use std::{
     fmt::{self, Display, Formatter},
-    ptr::addr_of,
+    sync::OnceLock,
 };
 
 use serde::Serialize;
@@ -33,7 +33,7 @@ impl Display for LogLevel {
 pub fn log<T: Into<String>>(message: T, level: LogLevel) {
     let log_message = message.into();
     println!("[{}] {}", level, log_message);
-    if let Some(window) = unsafe { &*addr_of!(LOGGER) } {
+    if let Some(window) = LOGGER.get() {
         let _ = window.emit("source-wrench-log", LogEvent::new(level, log_message));
     }
 }
@@ -50,4 +50,4 @@ impl LogEvent {
     }
 }
 
-pub static mut LOGGER: Option<WebviewWindow> = None;
+pub static LOGGER: OnceLock<WebviewWindow> = OnceLock::new();

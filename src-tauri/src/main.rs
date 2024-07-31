@@ -67,7 +67,7 @@ fn main() {
         .manage(FileManager::default())
         .setup(|app| {
             let window = app.get_webview_window("main");
-            unsafe { LOGGER = window };
+            LOGGER.set(window.expect("Window Was Not Created!")).expect("LOGGER Was Already In Use?");
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![compile_model, load_file, unload_file])
