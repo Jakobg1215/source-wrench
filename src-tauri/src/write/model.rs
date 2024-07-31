@@ -383,6 +383,7 @@ impl WriteToWriter for ModelHeader {
 }
 
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub enum ModelHeaderIdentifier {
     #[default]
     Studio,
@@ -592,6 +593,7 @@ bitflags! {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ProceduralType {
     // TODO: Add Structure Values To Enum Options.
     AxisInterpolation,
@@ -896,6 +898,7 @@ impl WriteToWriter for ModelAnimation {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ModelAnimationData<T> {
     Single(T),
     Array(ModelAnimationValue),
@@ -939,6 +942,7 @@ impl WriteToWriter for ModelAnimationValue {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ModelAnimationEncoding {
     Header(ModelAnimationEncodingHeader),
     Value(i16),

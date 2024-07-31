@@ -17,12 +17,14 @@ use self::{
     mesh::{
         MeshBodyPartHeader, MeshBoneStateChangeHeader, MeshFileHeader, MeshMeshHeader, MeshModelLODHeader, MeshStripGroupHeader, StripHeader, VertexHeader,
     },
-    vertex::{Vertex, VertexFileHeader},
+    vertex::{VertexFileHeader, VertexFileVertex},
 };
 
 mod mesh;
 mod model;
 mod vertex;
+
+pub const MAX_LOD_COUNT: usize = 8;
 
 #[derive(Debug, ThisError)]
 pub enum FileWriteError {
@@ -294,7 +296,12 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     }
 
     let mut vvd_writer = FileWriter::default();
-    let mut vvd_header = VertexFileHeader::new(69420);
+    let mut vvd_header = VertexFileHeader {
+        version: 4,
+        checksum: 69420,
+        lod_count: 1,
+        ..Default::default()
+    };
 
     let mut vtx_writer = FileWriter::default();
     let mut vtx_header = MeshFileHeader::default();
@@ -322,7 +329,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             let mut model = ModelModel {
                 name: processed_part.name,
                 vertex_count: processed_part.meshes.iter().map(|mesh| mesh.vertex_data.len()).sum::<usize>() as i32,
-                vertex_offset: (vvd_header.vertexes.len() * 48) as i32,
+                vertex_offset: (vvd_header.vertices.len() * 48) as i32,
                 tangent_offset: (vvd_header.tangents.len() * 16) as i32,
                 ..Default::default()
             };
@@ -346,8 +353,16 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                 for vertex in processed_mesh.vertex_data {
                     let mut uv_fix = vertex.uv; // FIXME: This should be in the mesh processing stage.
                     uv_fix.y = 1.0 - uv_fix.y;
-                    let vvd_vertex = Vertex::new(vertex.weights, vertex.bones, vertex.bone_count, vertex.position, vertex.normal, uv_fix);
-                    vvd_header.vertexes.push(vvd_vertex);
+                    // let vvd_vertex = Vertex::new(vertex.weights, vertex.bones, vertex.bone_count, vertex.position, vertex.normal, uv_fix);
+                    let vvd_vertex = VertexFileVertex {
+                        weights: [vertex.weights[0] as f32, vertex.weights[1] as f32, vertex.weights[2] as f32],
+                        bones: [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8],
+                        bone_count: vertex.bone_count as u8,
+                        position: vertex.position,
+                        normal: vertex.normal,
+                        texture_coordinate: vertex.uv,
+                    };
+                    vvd_header.vertices.push(vvd_vertex);
                     vvd_header.tangents.push(vertex.tangent);
                 }
 
@@ -404,6 +419,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         vtx_header.body_parts.push(mesh_body_part_header);
     }
     vtx_header.material_replacement_lists.push(MeshMaterialReplacementListHeader::default());
+    vvd_header.lod_vertex_count = [vvd_header.vertices.len() as i32; MAX_LOD_COUNT];
 
     for processed_material in processed_data.model_data.materials {
         let material = ModelMaterial {

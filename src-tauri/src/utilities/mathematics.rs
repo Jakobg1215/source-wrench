@@ -13,6 +13,12 @@ impl Vector2 {
     }
 }
 
+impl Vector2 {
+    pub fn is_finite(&self) -> bool {
+        self.x.is_finite() && self.y.is_finite()
+    }
+}
+
 impl Sub for Vector2 {
     type Output = Self;
 
@@ -67,6 +73,16 @@ impl Vector3 {
 
     pub fn cross(&self, other: &Self) -> Self {
         Self::new(self.y * other.z - self.z * other.x, self.z * other.x, self.x * other.y - self.y * other.x)
+    }
+
+    pub fn is_normalized(&self) -> bool {
+        const EPSILON: f64 = 1e-15;
+        let length_squared = self.x * self.x + self.y * self.y + self.z * self.z;
+        (length_squared - 1.0).abs() < EPSILON
+    }
+
+    pub fn is_finite(&self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite()
     }
 }
 
@@ -138,6 +154,12 @@ pub struct Vector4 {
 impl Vector4 {
     pub fn new(x: f64, y: f64, z: f64, w: f64) -> Self {
         Self { x, y, z, w }
+    }
+}
+
+impl Vector4 {
+    pub fn is_finite(&self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite() && self.w.is_finite()
     }
 }
 
