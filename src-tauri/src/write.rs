@@ -353,7 +353,6 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                 for vertex in processed_mesh.vertex_data {
                     let mut uv_fix = vertex.uv; // FIXME: This should be in the mesh processing stage.
                     uv_fix.y = 1.0 - uv_fix.y;
-                    // let vvd_vertex = Vertex::new(vertex.weights, vertex.bones, vertex.bone_count, vertex.position, vertex.normal, uv_fix);
                     let vvd_vertex = VertexFileVertex {
                         weights: [vertex.weights[0] as f32, vertex.weights[1] as f32, vertex.weights[2] as f32],
                         bones: [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8],
@@ -362,6 +361,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                         normal: vertex.normal,
                         texture_coordinate: vertex.uv,
                     };
+
                     vvd_header.vertices.push(vvd_vertex);
                     vvd_header.tangents.push(vertex.tangent);
                 }

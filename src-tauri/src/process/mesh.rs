@@ -430,18 +430,17 @@ fn create_weight_link(vertex: &mut ProcessedVertex, weights: &[ImportLink], mapp
 }
 
 fn normalize_values(arr: &mut [f64; 3], count: usize) {
-    if count == 1 {
-        arr[0] = 1.0;
-        return;
-    }
+    let sum = arr.iter().take(count).sum::<f64>();
 
-    let magnitude = arr.iter().take(count).map(|&x| x * x).sum::<f64>().sqrt();
-
-    if magnitude < f64::EPSILON {
+    if sum < f64::EPSILON {
         todo!("Return Error Of No Weights")
     }
 
     for weight in arr.iter_mut().take(count) {
-        *weight /= magnitude;
+        *weight /= sum;
+    }
+
+    for weight in arr.iter_mut().skip(count) {
+        *weight = 0.0;
     }
 }
