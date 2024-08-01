@@ -75,6 +75,16 @@ impl WriteToWriter for VertexFileHeader {
 
         for tangent in &self.tangents {
             debug_assert!(tangent.is_finite(), "Tangent Is Not Finite! tangent: {:?}", tangent);
+            debug_assert!(
+                Vector3::new(tangent.x, tangent.y, tangent.z).is_normalized(),
+                "Tangent Is Not Normalized! tangent: {:?}",
+                tangent
+            );
+            debug_assert!(
+                tangent.w == 1.0 || tangent.w == -1.0,
+                "Tangent Mirroring Value Not 1 or -1! tangent.w: {}",
+                tangent.w
+            );
             writer.write_vector4(*tangent);
         }
 

@@ -349,6 +349,11 @@ fn calculate_vertex_tangents(vertices: &[ImportVertex], triangles: &Vec<[usize; 
         let denominator = delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y;
 
         if denominator.abs() < f64::EPSILON {
+            for vertex_index in 0..3 {
+                // TODO: Are these values correct?
+                tangents[face[vertex_index]] = Vector3::new(1.0, 0.0, 0.0);
+                bi_tangents[face[vertex_index]] = Vector3::new(0.0, 1.0, 0.0);
+            }
             continue;
         }
 
