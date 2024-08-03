@@ -11,7 +11,7 @@ use crate::{
     process::bones::create_bone_table,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{Angles, Quaternion, Vector2, Vector3, Vector4},
+        mathematics::{Angles, Matrix, Quaternion, Vector2, Vector3, Vector4},
     },
 };
 
@@ -39,6 +39,7 @@ pub struct ProcessedBone {
     pub parent: Option<usize>,
     pub position: Vector3,
     pub rotation: Angles,
+    pub pose: (Matrix, Vector3),
     pub animation_position_scale: Vector3,
     pub animation_rotation_scale: Vector3,
 }

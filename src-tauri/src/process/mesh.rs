@@ -384,8 +384,8 @@ fn calculate_vertex_tangents(vertices: &[ImportVertex], triangles: &Vec<[usize; 
         tangents[index] = tangents[index].normalize();
         bi_tangents[index] = bi_tangents[index].normalize();
 
-        let cross_product = vertices[index].normal.cross(&tangents[index]);
-        let sign = if cross_product.dot(&bi_tangents[index]) < 0.0 { -1.0 } else { 1.0 };
+        let cross_product = vertices[index].normal.cross(tangents[index]);
+        let sign = if cross_product.dot(bi_tangents[index]) < 0.0 { -1.0 } else { 1.0 };
 
         calculated_tangents.push(Vector4::new(tangents[index].x, tangents[index].y, tangents[index].z, sign));
     }

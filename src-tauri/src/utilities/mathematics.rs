@@ -45,7 +45,7 @@ impl Vector3 {
 }
 
 impl Vector3 {
-    pub fn dot(&self, other: &Self) -> f64 {
+    pub fn dot(&self, other: Self) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
@@ -71,7 +71,7 @@ impl Vector3 {
         Self::new(self.x / mag, self.y / mag, self.z / mag)
     }
 
-    pub fn cross(&self, other: &Self) -> Self {
+    pub fn cross(&self, other: Self) -> Self {
         Self::new(self.y * other.z - self.z * other.x, self.z * other.x, self.x * other.y - self.y * other.x)
     }
 
@@ -380,7 +380,7 @@ impl Matrix {
         }
     }
 
-    pub fn concatenate(&self, other: &Self) -> Self {
+    pub fn concatenate(&self, other: Self) -> Self {
         Self {
             entries: [
                 [

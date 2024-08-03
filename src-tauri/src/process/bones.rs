@@ -71,15 +71,40 @@ pub fn process_bone_table(bone_table: &BoneTable) -> ProcessedBoneData {
     let mut processed_bones = ProcessedBoneData::default();
 
     for (bone_name, bone_data) in &bone_table.bones {
-        if bone_data.collapsible {
-            continue;
-        }
+        // TODO: Remove collapsed bones.
+
+        let pose = match bone_data.parent {
+            Some(index) => {
+                let parent = &processed_bones.processed_bones[index];
+
+                let raw_rotation = parent.pose.0.concatenate(bone_data.orientation.to_matrix());
+                // TODO: This should be moved to the mathematics library.
+                let raw_position = Vector3::new(
+                    parent.pose.0[0][0] * bone_data.position.x
+                        + parent.pose.0[0][1] * bone_data.position.y
+                        + parent.pose.0[0][2] * bone_data.position.z
+                        + parent.pose.1.x,
+                    parent.pose.0[1][0] * bone_data.position.x
+                        + parent.pose.0[1][1] * bone_data.position.y
+                        + parent.pose.0[1][2] * bone_data.position.z
+                        + parent.pose.1.y,
+                    parent.pose.0[2][0] * bone_data.position.x
+                        + parent.pose.0[2][1] * bone_data.position.y
+                        + parent.pose.0[2][2] * bone_data.position.z
+                        + parent.pose.1.z,
+                );
+
+                (raw_rotation, raw_position)
+            }
+            None => (bone_data.orientation.to_matrix(), bone_data.position),
+        };
 
         let processed_bone = ProcessedBone {
             name: bone_name.clone(),
             parent: bone_data.parent,
             position: bone_data.position,
             rotation: bone_data.orientation.to_angles(),
+            pose,
             animation_position_scale: bone_data.position_scale,
             animation_rotation_scale: bone_data.rotation_scale,
         };

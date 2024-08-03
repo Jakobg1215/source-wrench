@@ -10,7 +10,7 @@ use thiserror::Error as ThisError;
 
 use crate::{
     process::ProcessedData,
-    utilities::mathematics::{clamp, Angles, BoundingBox, Quaternion, Vector2, Vector3, Vector4},
+    utilities::mathematics::{clamp, Angles, BoundingBox, Matrix, Quaternion, Vector2, Vector3, Vector4},
 };
 
 use self::{
@@ -239,6 +239,20 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     };
 
     for processed_bone in processed_data.bone_data.processed_bones {
+        // TODO: This should be moved to the mathematics library.
+        fn invert(rotation: Matrix, position: Vector3) -> (Matrix, Vector3) {
+            let transposed = rotation.transpose();
+
+            (
+                transposed,
+                Vector3::new(
+                    -position.dot(Vector3::new(transposed[0][0], transposed[0][1], transposed[0][2])),
+                    -position.dot(Vector3::new(transposed[1][0], transposed[1][1], transposed[1][2])),
+                    -position.dot(Vector3::new(transposed[2][0], transposed[2][1], transposed[2][2])),
+                ),
+            )
+        }
+
         let bone = ModelBone {
             name: processed_bone.name,
             parent: match processed_bone.parent {
@@ -247,9 +261,10 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             },
             position: processed_bone.position,
             rotation: processed_bone.rotation,
+            quaternion: processed_bone.rotation.to_quaternion(),
             animation_position_scale: processed_bone.animation_position_scale,
             animation_rotation_scale: processed_bone.animation_rotation_scale,
-            pose: (processed_bone.rotation.to_matrix(), processed_bone.position),
+            pose: invert(processed_bone.pose.0, processed_bone.pose.1),
             flags: ModelBoneFlags::USED_BY_VERTEX_AT_LOD0,
             ..Default::default()
         };
