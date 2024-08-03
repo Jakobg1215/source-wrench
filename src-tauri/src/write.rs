@@ -374,7 +374,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                         bone_count: vertex.bone_count as u8,
                         position: vertex.position,
                         normal: vertex.normal,
-                        texture_coordinate: vertex.uv,
+                        texture_coordinate: uv_fix,
                     };
 
                     vvd_header.vertices.push(vvd_vertex);
