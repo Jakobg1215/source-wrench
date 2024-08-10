@@ -45,7 +45,7 @@ fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileMa
     log("Model compiled successfully!", LogLevel::Info);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn load_file(path: String, file_manager: tauri::State<FileManager>) -> bool {
     match file_manager.load_file(path) {
         Ok(_) => true,
@@ -56,7 +56,7 @@ fn load_file(path: String, file_manager: tauri::State<FileManager>) -> bool {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn unload_file(path: String, file_manager: tauri::State<FileManager>) {
     file_manager.unload_file(path);
 }

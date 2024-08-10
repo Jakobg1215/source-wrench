@@ -29,7 +29,7 @@ pub struct GlobalBone {
 pub fn create_bone_table(import: &State<FileManager>) -> Result<BoneTable, ProcessingDataError> {
     let mut bone_table = BoneTable::default();
 
-    for (file_name, (_, file_data)) in import.files.lock().unwrap().iter() {
+    for (file_name, file_data) in import.files.lock().unwrap().iter() {
         let mut remapped_bones = HashMap::new();
 
         for (bone_index, import_bone) in file_data.skeleton.iter().enumerate() {

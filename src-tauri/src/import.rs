@@ -101,7 +101,7 @@ pub enum ParseError {
 
 #[derive(Debug, Default)]
 pub struct FileManager {
-    pub files: Mutex<HashMap<String, (usize, Arc<ImportFileData>)>>,
+    pub files: Mutex<HashMap<String, Arc<ImportFileData>>>,
 }
 
 impl FileManager {
@@ -110,7 +110,6 @@ impl FileManager {
         let mut files = self.files.lock().unwrap();
 
         if files.contains_key(&path) {
-            files.get_mut(&path).unwrap().0 += 1;
             return Ok(());
         }
 
@@ -132,22 +131,17 @@ impl FileManager {
         };
 
         log(format!("Loaded {:?} file: {}", file_extension.to_ascii_uppercase(), path), LogLevel::Verbose);
-        files.insert(path, (1, Arc::new(imported_file)));
+        files.insert(path, Arc::new(imported_file));
         Ok(())
     }
 
     pub fn unload_file(&self, path: String) {
         let mut files = self.files.lock().unwrap();
 
-        if let Some((ref mut count, _)) = files.get_mut(&path) {
-            *count -= 1;
-            if *count == 0 {
-                files.remove(&path);
-            }
-        }
+        files.remove(&path);
     }
 
     pub fn get_file(&self, path: &str) -> Option<Arc<ImportFileData>> {
-        self.files.lock().unwrap().get(path).map(|(_, file_data)| Arc::clone(file_data))
+        self.files.lock().unwrap().get(path).cloned()
     }
 }
