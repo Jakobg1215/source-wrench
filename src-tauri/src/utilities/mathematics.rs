@@ -19,11 +19,35 @@ impl Vector2 {
     }
 }
 
+impl Add for Vector2 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(self.x + rhs.x, self.y + rhs.y)
+    }
+}
+
 impl Sub for Vector2 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
         Self::new(self.x - rhs.x, self.y - rhs.y)
+    }
+}
+
+impl Mul for Vector2 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::new(self.x * rhs.x, self.y * rhs.y)
+    }
+}
+
+impl Div for Vector2 {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self::new(self.x / rhs.x, self.y / rhs.y)
     }
 }
 
@@ -115,19 +139,6 @@ impl Div for Vector3 {
 
     fn div(self, rhs: Self) -> Self::Output {
         Self::new(self.x / rhs.x, self.y / rhs.y, self.z / rhs.z)
-    }
-}
-
-impl Index<usize> for Vector3 {
-    type Output = f64;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match index {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => unreachable!("Index out of bounds: the index is {}, but the length is 3", index),
-        }
     }
 }
 
@@ -232,6 +243,26 @@ impl Angles {
     pub fn sum(&self) -> f64 {
         self.x + self.y + self.z
     }
+
+    pub fn normalize(&self) -> Self {
+        let x = self.x % (2.0 * PI);
+        let y = self.y % (2.0 * PI);
+        let z = self.z % (2.0 * PI);
+
+        Self::new(
+            if x > PI { x - 2.0 * PI } else { x },
+            if y > PI { y - 2.0 * PI } else { y },
+            if z > PI { z - 2.0 * PI } else { z },
+        )
+    }
+}
+
+impl Add for Angles {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
+    }
 }
 
 impl Sub for Angles {
@@ -308,6 +339,20 @@ impl Quaternion {
             ],
         }
     }
+
+    pub fn magnitude(&self) -> f64 {
+        (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w).sqrt()
+    }
+
+    pub fn normalize(&self) -> Self {
+        let mag = self.magnitude();
+
+        if mag < f64::EPSILON {
+            return Self::default();
+        }
+
+        Self::new(self.x / mag, self.y / mag, self.z / mag, self.w / mag)
+    }
 }
 
 /// A 3 by 3 matrix.
@@ -338,33 +383,33 @@ impl Matrix {
     }
 
     pub fn to_quaternion(&self) -> Quaternion {
-        let trace = self.entries[0][0] + self.entries[1][1] + self.entries[2][2];
+        let trace = self[0][0] + self[1][1] + self[2][2];
         if trace > 0.0 {
             let s = (trace + 1.0).sqrt() * 2.0;
             let w = 0.25 * s;
-            let x = (self.entries[2][1] - self.entries[1][2]) / s;
-            let y = (self.entries[0][2] - self.entries[2][0]) / s;
-            let z = (self.entries[1][0] - self.entries[0][1]) / s;
+            let x = (self[2][1] - self[1][2]) / s;
+            let y = (self[0][2] - self[2][0]) / s;
+            let z = (self[1][0] - self[0][1]) / s;
             Quaternion { w, x, y, z }
-        } else if self.entries[0][0] > self.entries[1][1] && self.entries[0][0] > self.entries[2][2] {
-            let s = (1.0 + self.entries[0][0] - self.entries[1][1] - self.entries[2][2]).sqrt() * 2.0;
-            let w = (self.entries[2][1] - self.entries[1][2]) / s;
+        } else if self[0][0] > self[1][1] && self[0][0] > self[2][2] {
+            let s = (1.0 + self[0][0] - self[1][1] - self[2][2]).sqrt() * 2.0;
+            let w = (self[2][1] - self[1][2]) / s;
             let x = 0.25 * s;
-            let y = (self.entries[0][1] + self.entries[1][0]) / s;
-            let z = (self.entries[0][2] + self.entries[2][0]) / s;
+            let y = (self[0][1] + self[1][0]) / s;
+            let z = (self[0][2] + self[2][0]) / s;
             Quaternion { w, x, y, z }
-        } else if self.entries[1][1] > self.entries[2][2] {
-            let s = (1.0 + self.entries[1][1] - self.entries[0][0] - self.entries[2][2]).sqrt() * 2.0;
-            let w = (self.entries[0][2] - self.entries[2][0]) / s;
-            let x = (self.entries[0][1] + self.entries[1][0]) / s;
+        } else if self[1][1] > self[2][2] {
+            let s = (1.0 + self[1][1] - self[0][0] - self[2][2]).sqrt() * 2.0;
+            let w = (self[0][2] - self[2][0]) / s;
+            let x = (self[0][1] + self[1][0]) / s;
             let y = 0.25 * s;
-            let z = (self.entries[1][2] + self.entries[2][1]) / s;
+            let z = (self[1][2] + self[2][1]) / s;
             Quaternion { w, x, y, z }
         } else {
-            let s = (1.0 + self.entries[2][2] - self.entries[0][0] - self.entries[1][1]).sqrt() * 2.0;
-            let w = (self.entries[1][0] - self.entries[0][1]) / s;
-            let x = (self.entries[0][2] + self.entries[2][0]) / s;
-            let y = (self.entries[1][2] + self.entries[2][1]) / s;
+            let s = (1.0 + self[2][2] - self[0][0] - self[1][1]).sqrt() * 2.0;
+            let w = (self[1][0] - self[0][1]) / s;
+            let x = (self[0][2] + self[2][0]) / s;
+            let y = (self[1][2] + self[2][1]) / s;
             let z = 0.25 * s;
             Quaternion { w, x, y, z }
         }
