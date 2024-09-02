@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use serde::Serialize;
 use smd::ParseSMDError;
 use thiserror::Error as ThisError;
 
@@ -15,25 +16,29 @@ use crate::utilities::{
 
 mod smd;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct ImportFileData {
     pub skeleton: Vec<ImportBone>,
     pub animations: Vec<ImportAnimation>,
     pub parts: Vec<ImportPart>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct ImportBone {
     pub name: String,
     pub parent: Option<usize>,
+    #[serde(skip_serializing)]
     pub position: Vector3,
+    #[serde(skip_serializing)]
     pub orientation: Quaternion,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct ImportAnimation {
     pub name: String,
+    #[serde(skip_serializing)]
     pub frame_count: usize,
+    #[serde(skip_serializing)]
     pub channels: Vec<ImportChannel>,
 }
 
@@ -50,11 +55,14 @@ pub struct ImportKeyFrame<T> {
     pub value: T,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize)]
 pub struct ImportPart {
     pub name: String,
+    #[serde(skip_serializing)]
     pub vertices: Vec<ImportVertex>,
+    #[serde(skip_serializing)]
     pub polygons: HashMap<String, Vec<Vec<usize>>>,
+    #[serde(skip_serializing)]
     pub flexes: Vec<ImportFlex>,
 }
 
@@ -105,12 +113,12 @@ pub struct FileManager {
 }
 
 impl FileManager {
-    pub fn load_file(&self, path: String) -> Result<(), ParseError> {
+    pub fn load_file(&self, path: String) -> Result<Arc<ImportFileData>, ParseError> {
         let file_path = Path::new(&path);
         let mut files = self.files.lock().unwrap();
 
-        if files.contains_key(&path) {
-            return Ok(());
+        if let Some(file) = files.get(&path) {
+            return Ok(Arc::clone(file));
         }
 
         let exists = file_path.try_exists()?;
@@ -131,8 +139,9 @@ impl FileManager {
         };
 
         log(format!("Loaded {:?} file: {}", file_extension.to_ascii_uppercase(), path), LogLevel::Verbose);
-        files.insert(path, Arc::new(imported_file));
-        Ok(())
+        let file = Arc::new(imported_file);
+        files.insert(path, Arc::clone(&file));
+        Ok(file)
     }
 
     pub fn unload_file(&self, path: String) {

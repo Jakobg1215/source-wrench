@@ -22,7 +22,7 @@ pub fn process_animations(
     let mut processed_animations = Vec::new();
 
     for input_animation in &input.animations {
-        let imported_file = import.get_file(&input_animation.source_file).expect("Source File Not Found!");
+        let imported_file = import.get_file(&input_animation.file_source).expect("Source File Not Found!");
         let imported_animation = if imported_file.animations.len() == 1 {
             imported_file.animations.first().unwrap()
         } else {
@@ -33,7 +33,10 @@ pub fn process_animations(
                 .expect("Animation Not Found!")
         };
 
-        let is_used = input.sequences.iter().any(|sequence| sequence.animation == input_animation.name);
+        let is_used = input
+            .sequences
+            .iter()
+            .any(|sequence| sequence.animations.iter().any(|animation| animation == &input_animation.name));
 
         if !is_used {
             log(format!("Animation \"{}\" Not Used!", input_animation.name), LogLevel::Warn);
@@ -52,7 +55,7 @@ pub fn process_animations(
             bone_data.rotation_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
         }
 
-        let mapped_bone = bone_table.remapped_bones.get(&input_animation.source_file).expect("Source File Not Remapped!");
+        let mapped_bone = bone_table.remapped_bones.get(&input_animation.file_source).expect("Source File Not Remapped!");
 
         for channel in &imported_animation.channels {
             let mut processed_bone_data = ProcessedAnimatedBoneData {
@@ -100,12 +103,14 @@ pub fn process_sequences(input: &ImputedCompilationData, animations: &[Processed
             ..Default::default()
         };
 
-        let animation_index = animations.iter().position(|animation| animation.name == sequence.animation);
+        for sequence_animation in &sequence.animations {
+            let animation_index = animations.iter().position(|animation| &animation.name == sequence_animation);
 
-        match animation_index {
-            Some(index) => processed_sequence.animations.push(index),
-            None => return Err(ProcessingDataError::SequenceAnimationNotFound),
-        };
+            match animation_index {
+                Some(index) => processed_sequence.animations.push(index),
+                None => return Err(ProcessingDataError::SequenceAnimationNotFound),
+            };
+        }
 
         processed_sequences.push(processed_sequence);
     }

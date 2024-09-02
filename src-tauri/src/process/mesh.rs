@@ -71,7 +71,7 @@ pub fn process_mesh_data(
                 processed_model.name.truncate(64);
             }
 
-            let imported_file = import.get_file(&imputed_model.model_source).expect("Source File Not Found!");
+            let imported_file = import.get_file(&imputed_model.file_source).expect("Source File Not Found!");
 
             let combined_meshes = create_combined_meshes(imputed_model, &imported_file, &mut processed_model_data)?;
 
@@ -85,7 +85,7 @@ pub fn process_mesh_data(
 
             let tangents = calculate_vertex_tangents(&unique_vertices, &combined_triangle_list);
 
-            let mapped_bone = bone_table.remapped_bones.get(&imputed_model.model_source).expect("Source File Not Remapped!");
+            let mapped_bone = bone_table.remapped_bones.get(&imputed_model.file_source).expect("Source File Not Remapped!");
 
             let combined_vertices = combine_vertex_data(&unique_vertices, &tangents, mapped_bone);
 
@@ -196,28 +196,12 @@ fn create_combined_meshes(
 ) -> Result<CombinedMesh, ProcessingMeshError> {
     let mut combined_mesh = CombinedMesh::default();
 
-    // FIXME: This is a temporary solution to support single part models.
-    if imported_file.parts.len() == 1 {
-        let part = imported_file.parts.first().unwrap();
+    for part_name in &imputed_model.part_names {
+        let imputed_part_name = match part_name {
+            Some(name) => name,
+            None => continue,
+        };
 
-        combined_mesh.vertices.extend(part.vertices.iter().cloned());
-
-        for (material, faces) in &part.polygons {
-            let material_index = processed_model_data.materials.insert_full(material.clone()).0;
-
-            let combined_mesh_face = CombinedMeshFace {
-                material: material_index,
-                faces: faces.clone(),
-                ..Default::default()
-            };
-
-            combined_mesh.polygons.push(combined_mesh_face);
-        }
-
-        return Ok(combined_mesh);
-    }
-
-    for imputed_part_name in &imputed_model.part_name {
         let import_part = match imported_file.parts.iter().find(|part| part.name == *imputed_part_name) {
             Some(part) => part,
             None => return Err(ProcessingMeshError::PartNotFound(imputed_part_name.clone())),

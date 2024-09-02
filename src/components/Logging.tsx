@@ -23,19 +23,20 @@ const SourceFileSelector: Component = () => {
     });
 
     return (
-        <div class="LoggerMenu">
+        <section id="Logging-Menu">
+            <h2>Log</h2>
             <label>
                 Verbose
-                <input type="checkbox" checked={true} onChange={(event) => setEmitVerbose(event.target.checked)}></input>
+                <input name="Verbose" type="checkbox" checked={true} onChange={(event) => setEmitVerbose(event.target.checked)}></input>
             </label>
             <label>
                 Debug
-                <input type="checkbox" checked={true} onChange={(event) => setEmitDebug(event.target.checked)}></input>
+                <input name="Debug" type="checkbox" checked={true} onChange={(event) => setEmitDebug(event.target.checked)}></input>
             </label>
             <ul>
                 <For each={logs()}>{(log) => <li>{log}</li>}</For>
             </ul>
-        </div>
+        </section>
     );
 };
 

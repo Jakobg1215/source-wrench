@@ -7,7 +7,9 @@ pub mod process;
 pub mod utilities;
 pub mod write;
 
-use import::FileManager;
+use std::sync::Arc;
+
+use import::{FileManager, ImportFileData};
 use input::ImputedCompilationData;
 use process::process;
 use tauri::Manager;
@@ -46,12 +48,12 @@ fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileMa
 }
 
 #[tauri::command(async)]
-fn load_file(path: String, file_manager: tauri::State<FileManager>) -> bool {
+fn load_file(path: String, file_manager: tauri::State<FileManager>) -> Option<Arc<ImportFileData>> {
     match file_manager.load_file(path) {
-        Ok(_) => true,
+        Ok(file) => Some(file),
         Err(error) => {
             log(format!("Fail to load file due to: {}!", error), LogLevel::Error);
-            false
+            None
         }
     }
 }

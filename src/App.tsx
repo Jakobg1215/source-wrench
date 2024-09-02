@@ -1,46 +1,68 @@
 import { invoke } from '@tauri-apps/api/core';
 import { documentDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
-import { createSignal, type Component } from 'solid-js';
+import { createSignal, Show, type Component } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { AnimationEntryProperties } from './components/AnimationEntry';
+import AnimationMenu from './components/AnimationMenu';
+import { BodyPartEntryProperties } from './components/BodyPartEntry';
+import BodyPartMenu from './components/BodyPartMenu';
 import Logging from './components/Logging';
-import AnimatingMenu from './components/animating/AnimatingMenu';
-import { AnimationData } from './components/animating/Animation';
-import { SequenceData } from './components/animating/Sequence';
-import { BodyPartData } from './components/bodyparts/BodyPart';
-import BodyPartsMenu from './components/bodyparts/BodyPartsMenu';
+import { SequenceEntryProperties } from './components/SequenceEntry';
+import SequenceMenu from './components/SequenceMenu';
 
-type CompilationData = {
+type ImputedCompilationData = {
     model_name: string;
-    body_parts: Array<BodyPartData>;
-    animations: Array<AnimationData>;
-    sequences: Array<SequenceData>;
     export_path: string;
+    body_parts: {
+        name: string;
+        models: {
+            name: string;
+            is_blank: boolean;
+            file_source: string;
+            part_names: (string | null)[];
+        }[];
+    }[];
+    animations: {
+        name: string;
+        file_source: string;
+        animation_name: string;
+    }[];
+    sequences: {
+        name: string;
+        animations: string[];
+    }[];
 };
 
 const App: Component = () => {
+    const [modelExportPath, setModelExportPath] = createSignal('');
     const [modelName, setModelName] = createSignal('');
-    const [bodyParts, setBodyParts] = createStore<BodyPartData[]>([]);
-    const [animations, setAnimations] = createStore<AnimationData[]>([]);
-    const [sequences, setSequences] = createStore<SequenceData[]>([]);
+    const [bodyPartEntries, setBodyPartEntries] = createStore<BodyPartEntryProperties[]>([]);
+    const [animationEntries, setAnimationEntries] = createStore<AnimationEntryProperties[]>([]);
+    const [sequenceEntries, setSequenceEntries] = createStore<SequenceEntryProperties[]>([]);
 
     const compileModel = async () => {
-        const selectedDirectory = await open({
-            defaultPath: await documentDir(),
-            directory: true,
-            title: 'Select Output Directory',
-        });
-
-        if (selectedDirectory === null) {
-            return;
-        }
-
-        const data: CompilationData = {
+        const data: ImputedCompilationData = {
             model_name: modelName(),
-            body_parts: bodyParts,
-            animations,
-            sequences,
-            export_path: selectedDirectory,
+            export_path: modelExportPath(),
+            body_parts: bodyPartEntries.map((bodyPart) => ({
+                name: bodyPart.data.name,
+                models: bodyPart.data.models.map((model) => ({
+                    name: model.data.name,
+                    is_blank: model.data.blank,
+                    file_source: model.data.file_source,
+                    part_names: model.data.part_names,
+                })),
+            })),
+            animations: animationEntries.map((animation) => ({
+                name: animation.data.name,
+                file_source: animation.data.file_source,
+                animation_name: animation.data.source_animation,
+            })),
+            sequences: sequenceEntries.map((sequence) => ({
+                name: sequence.data.name,
+                animations: sequence.data.animations.flat(1),
+            })),
         };
 
         invoke('compile_model', { data });
@@ -48,35 +70,65 @@ const App: Component = () => {
 
     return (
         <>
-            <div class="MainMenu">
-                <header>
-                    <h1>Source Wrench</h1>
-                    <nav>
-                        <ul>
-                            <li>
-                                <a href="#bodyparts">Body Parts</a>
-                            </li>
-                            <li>
-                                <a href="#animating">Animating</a>
-                            </li>
-                        </ul>
-                    </nav>
-                </header>
-
-                <main>
-                    <button onClick={compileModel}>Compile Model</button>
-                    <br />
+            <header>
+                <nav>
+                    <ul>
+                        <li>
+                            <a href="#Compile-Menu">Compilation</a>
+                        </li>
+                        <li>
+                            <a href="#Body-Part-Menu">Body Parts</a>
+                        </li>
+                        <li>
+                            <a href="#Animation-Menu">Animations</a>
+                        </li>
+                        <li>
+                            <a href="Sequence-Menu">Sequences</a>
+                        </li>
+                    </ul>
+                </nav>
+            </header>
+            <main>
+                <h1>Source Wrench</h1>
+                <section id="Compile-Menu">
                     <label>
-                        Model Name:
-                        <input type="text" onChange={(event) => setModelName(event.target.value)}></input>
-                        .mdl
-                    </label>
-                    <BodyPartsMenu id="bodyparts" setBodyParts={setBodyParts} bodyParts={bodyParts} />
-                    <AnimatingMenu id="animating" animations={animations} setAnimations={setAnimations} sequences={sequences} setSequences={setSequences} />
-                </main>
-            </div>
+                        Export Path
+                        <input
+                            name="ExportPath"
+                            type="text"
+                            readonly
+                            value={modelExportPath()}
+                            onClick={async () => {
+                                const selectedFile = await open({
+                                    defaultPath: await documentDir(),
+                                    directory: true,
+                                    title: 'Model Export Path',
+                                });
 
-            <Logging />
+                                if (selectedFile === null) {
+                                    setModelExportPath('');
+                                    return;
+                                }
+
+                                setModelExportPath(selectedFile);
+                            }}
+                        />
+                    </label>
+                    <Show when={modelExportPath()}>
+                        <br />
+                        <label>
+                            Model Name
+                            <input name="ModelName" type="text" onChange={(event) => setModelName(event.target.value)} />
+                        </label>
+                        <br />
+                        <button onclick={() => compileModel()}>Compile Model</button>
+                    </Show>
+                </section>
+                <Logging />
+                <BodyPartMenu bodyPartEntries={bodyPartEntries} setBodyPartEntries={setBodyPartEntries} />
+                <AnimationMenu animationEntries={animationEntries} setAnimationEntries={setAnimationEntries} />
+                <SequenceMenu sequenceEntries={sequenceEntries} setSequenceEntries={setSequenceEntries} />
+            </main>
         </>
     );
 };

@@ -1,36 +1,37 @@
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ImputedCompilationData {
     pub model_name: String,
+    pub export_path: String,
     pub body_parts: Vec<ImputedBodyPart>,
     pub animations: Vec<ImputedAnimation>,
     pub sequences: Vec<ImputedSequence>,
-    pub export_path: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ImputedBodyPart {
     pub name: String,
     pub models: Vec<ImputedModel>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ImputedModel {
     pub name: String,
-    pub model_source: String,
-    pub part_name: Vec<String>,
+    pub is_blank: bool,
+    pub file_source: String,
+    pub part_names: Vec<Option<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ImputedAnimation {
     pub name: String,
-    pub source_file: String,
+    pub file_source: String,
     pub animation_name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct ImputedSequence {
     pub name: String,
-    pub animation: String,
+    pub animations: Vec<String>,
 }
