@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs::write, mem::size_of};
 
 use half::f16;
-use mesh::{MeshMaterialReplacementListHeader, MeshModelHeader};
+use mesh::{MeshFileMaterialReplacementListHeader, MeshFileModelHeader, MeshFileStripFlags, MeshFileStripGroupHeaderFlags, MAX_HARDWARE_BONES_PER_STRIP};
 use model::{
     ModelAnimationDescription, ModelAnimationSection, ModelBodyPart, ModelBone, ModelBoneFlags, ModelHeader, ModelHitBox, ModelHitboxSet, ModelMaterial,
     ModelMesh, ModelModel, ModelSequenceDescription, SecondModelHeader,
@@ -15,7 +15,8 @@ use crate::{
 
 use self::{
     mesh::{
-        MeshBodyPartHeader, MeshBoneStateChangeHeader, MeshFileHeader, MeshMeshHeader, MeshModelLODHeader, MeshStripGroupHeader, StripHeader, VertexHeader,
+        MeshFileBodyPartHeader, MeshFileBoneStateChangeHeader, MeshFileHeader, MeshFileMeshHeader, MeshFileModelLODHeader, MeshFileStripGroupHeader,
+        MeshFileStripHeader, MeshFileVertexHeader,
     },
     vertex::{VertexFileHeader, VertexFileVertex},
 };
@@ -319,8 +320,14 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     };
 
     let mut vtx_writer = FileWriter::default();
-    let mut vtx_header = MeshFileHeader::default();
-    vtx_header.check_sum = 69420;
+    let mut vtx_header = MeshFileHeader {
+        version: 7,
+        vertex_cache_size: 24,
+        max_bones_per_strip: MAX_HARDWARE_BONES_PER_STRIP as u16,
+        max_bones_per_vertex: 3,
+        checksum: 69420,
+        ..Default::default()
+    };
 
     mdl_header.material_paths.push(String::from("\\"));
 
@@ -338,7 +345,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
         previous_base = Some((body_part.base, processed_body_part.parts.len()));
 
-        let mut mesh_body_part_header = MeshBodyPartHeader::default();
+        let mut mesh_body_part_header = MeshFileBodyPartHeader::default();
 
         for processed_part in processed_body_part.parts {
             let mut model = ModelModel {
@@ -349,8 +356,8 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                 ..Default::default()
             };
 
-            let mut mesh_model_header = MeshModelHeader::default();
-            let mut mesh_model_lod_header = MeshModelLODHeader::default();
+            let mut mesh_model_header = MeshFileModelHeader::default();
+            let mut mesh_model_lod_header = MeshFileModelLODHeader::default();
 
             let mut vertex_count = 0;
             for processed_mesh in processed_part.meshes {
@@ -381,14 +388,17 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                     vvd_header.tangents.push(vertex.tangent);
                 }
 
-                let mut mesh_mesh_header = MeshMeshHeader::default();
+                let mut mesh_mesh_header = MeshFileMeshHeader::default();
 
                 for strip_group in processed_mesh.strip_groups {
-                    let mut mesh_strip_group_header = MeshStripGroupHeader::default();
-                    mesh_strip_group_header.flags = 2;
+                    let mut mesh_strip_group_header = MeshFileStripGroupHeader {
+                        flags: MeshFileStripGroupHeaderFlags::IS_HARDWARE_SKINNED,
+                        indices: strip_group.indices,
+                        ..Default::default()
+                    };
 
                     for vertex in strip_group.vertices {
-                        let mesh_vertex = VertexHeader {
+                        let mesh_vertex = MeshFileVertexHeader {
                             bone_count: vertex.bone_count as u8,
                             vertex_index: vertex.vertex_index as u16,
                             bone_weight_bones: [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8],
@@ -397,23 +407,30 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                         mesh_strip_group_header.vertices.push(mesh_vertex);
                     }
 
-                    mesh_strip_group_header.indices = strip_group.indices;
-
                     for strip in strip_group.strips {
-                        let mut mesh_strip_header = StripHeader::default();
-                        mesh_strip_header.flags = 1;
-                        mesh_strip_header.indices_count = mesh_strip_group_header.indices.len() as i32;
-                        mesh_strip_header.vertices_count = mesh_strip_group_header.vertices.len() as i32;
-                        mesh_strip_header.bone_count = strip.bone_count as i16;
+                        let mut mesh_strip_header = MeshFileStripHeader {
+                            flags: MeshFileStripFlags::IS_TRIANGLE_LIST,
+                            indices_count: mesh_strip_group_header.indices.len() as i32, // FIXME: Add check for these count.
+                            vertices_count: mesh_strip_group_header.vertices.len() as i32,
+                            bone_count: strip.bone_count as i16,
+                            ..Default::default()
+                        };
 
                         for bone_change in strip.hardware_bones {
-                            let mesh_bone_state_change = MeshBoneStateChangeHeader {
+                            let mesh_bone_state_change = MeshFileBoneStateChangeHeader {
                                 hardware_id: bone_change.hardware_bone as i32,
-                                new_bone_id: bone_change.bone_table_bone as i32,
+                                bone_table_index: bone_change.bone_table_bone as i32,
                             };
 
                             mesh_strip_header.bone_state_changes.push(mesh_bone_state_change);
                         }
+
+                        debug_assert!(
+                            mesh_strip_header.bone_state_changes.len() < MAX_HARDWARE_BONES_PER_STRIP,
+                            "Bone State Changes Exceeds {}! mesh_strip_header.bone_state_changes.len(): {}",
+                            MAX_HARDWARE_BONES_PER_STRIP,
+                            mesh_strip_header.bone_state_changes.len()
+                        );
 
                         mesh_strip_group_header.strips.push(mesh_strip_header);
                     }
@@ -433,7 +450,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         mdl_header.body_parts.push(body_part);
         vtx_header.body_parts.push(mesh_body_part_header);
     }
-    vtx_header.material_replacement_lists.push(MeshMaterialReplacementListHeader::default());
+    vtx_header.material_replacement_lists.push(MeshFileMaterialReplacementListHeader::default());
     vvd_header.lod_vertex_count = [vvd_header.vertices.len() as i32; MAX_LOD_COUNT];
 
     for processed_material in processed_data.model_data.materials {
