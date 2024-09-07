@@ -101,14 +101,14 @@ pub struct ProcessedMesh {
     pub strip_groups: Vec<ProcessedStripGroup>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ProcessedVertex {
     pub weights: [f64; 3],
     pub bones: [usize; 3],
     pub bone_count: usize,
     pub position: Vector3,
     pub normal: Vector3,
-    pub uv: Vector2,
+    pub texture_coordinate: Vector2,
     pub tangent: Vector4,
 }
 
@@ -130,7 +130,9 @@ pub struct ProcessedMeshVertex {
 #[derive(Debug, Default)]
 pub struct ProcessedStrip {
     pub indices_count: usize,
+    pub indices_offset: usize,
     pub vertex_count: usize,
+    pub vertex_offset: usize,
     pub bone_count: usize,
     pub hardware_bones: Vec<ProcessedHardwareBone>,
 }
@@ -162,6 +164,9 @@ pub enum ProcessingDataError {
     #[error("Failed To Process Mesh Data")]
     ProcessingMeshError(#[from] ProcessingMeshError),
 }
+
+pub const MAX_HARDWARE_BONES_PER_STRIP: usize = 53;
+pub const VERTEX_CACHE_SIZE: usize = 16;
 
 /// The tolerance for floating point numbers until they are considered equal.
 // TODO: Make this an imputed value.

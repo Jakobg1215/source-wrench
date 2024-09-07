@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs::write, mem::size_of};
 
 use half::f16;
-use mesh::{MeshFileMaterialReplacementListHeader, MeshFileModelHeader, MeshFileStripFlags, MeshFileStripGroupHeaderFlags, MAX_HARDWARE_BONES_PER_STRIP};
+use mesh::{MeshFileMaterialReplacementListHeader, MeshFileModelHeader, MeshFileStripFlags, MeshFileStripGroupHeaderFlags};
 use model::{
     ModelAnimationDescription, ModelAnimationSection, ModelBodyPart, ModelBone, ModelBoneFlags, ModelHeader, ModelHitBox, ModelHitboxSet, ModelMaterial,
     ModelMesh, ModelModel, ModelSequenceDescription, SecondModelHeader,
@@ -9,7 +9,7 @@ use model::{
 use thiserror::Error as ThisError;
 
 use crate::{
-    process::ProcessedData,
+    process::{ProcessedData, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE},
     utilities::mathematics::{clamp, Angles, BoundingBox, Matrix, Quaternion, Vector2, Vector3, Vector4},
 };
 
@@ -137,7 +137,7 @@ impl FileWriter {
     }
 
     pub fn write_string_table(&mut self) -> Result<(), FileWriteError> {
-        let mut entries = self.string_table.drain().collect::<Vec<(String, Vec<(usize, usize)>)>>();
+        let mut entries = self.string_table.drain().collect::<Vec<_>>();
 
         entries.sort_by(|(to, _), (from, _)| to.cmp(from));
 
@@ -322,7 +322,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     let mut vtx_writer = FileWriter::default();
     let mut vtx_header = MeshFileHeader {
         version: 7,
-        vertex_cache_size: 24,
+        vertex_cache_size: VERTEX_CACHE_SIZE as i32,
         max_bones_per_strip: MAX_HARDWARE_BONES_PER_STRIP as u16,
         max_bones_per_vertex: 3,
         checksum: 69420,
@@ -373,7 +373,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                 mesh_id += 1;
                 vertex_count += processed_mesh.vertex_data.len();
                 for vertex in processed_mesh.vertex_data {
-                    let mut uv_fix = vertex.uv; // FIXME: This should be in the mesh processing stage.
+                    let mut uv_fix = vertex.texture_coordinate; // FIXME: This should be in the mesh processing stage.
                     uv_fix.y = 1.0 - uv_fix.y;
                     let vvd_vertex = VertexFileVertex {
                         weights: [vertex.weights[0] as f32, vertex.weights[1] as f32, vertex.weights[2] as f32],
@@ -410,8 +410,10 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
                     for strip in strip_group.strips {
                         let mut mesh_strip_header = MeshFileStripHeader {
                             flags: MeshFileStripFlags::IS_TRIANGLE_LIST,
-                            indices_count: mesh_strip_group_header.indices.len() as i32, // FIXME: Add check for these count.
-                            vertices_count: mesh_strip_group_header.vertices.len() as i32,
+                            indices_count: strip.indices_count as i32, // FIXME: Add check for these count.
+                            indices_offset: strip.indices_offset as i32,
+                            vertices_count: strip.vertex_count as i32,
+                            vertices_offset: strip.vertex_offset as i32,
                             bone_count: strip.bone_count as i16,
                             ..Default::default()
                         };

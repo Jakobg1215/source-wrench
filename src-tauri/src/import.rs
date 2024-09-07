@@ -66,7 +66,7 @@ pub struct ImportPart {
     pub flexes: Vec<ImportFlex>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ImportVertex {
     pub position: Vector3,
     pub normal: Vector3,
@@ -74,7 +74,7 @@ pub struct ImportVertex {
     pub links: Vec<ImportLink>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ImportLink {
     pub bone: usize,
     pub weight: f64,
