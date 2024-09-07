@@ -1,19 +1,10 @@
-import presetIcons from '@unocss/preset-icons';
-import presetUno from '@unocss/preset-uno';
-import UnoCSS from 'unocss/vite';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
     plugins: [
-        solid(),
-        UnoCSS({
-            presets: [
-                presetIcons(),
-                presetUno()
-            ]
-        })
+        solid()
     ],
 
     // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
