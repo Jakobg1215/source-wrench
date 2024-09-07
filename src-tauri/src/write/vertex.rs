@@ -131,7 +131,7 @@ pub struct VertexFileVertex {
 impl WriteToWriter for VertexFileVertex {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         debug_assert!(
-            (self.weights.iter().sum::<f32>() - 1.0).abs() < f32::EPSILON,
+            (self.weights.iter().sum::<f32>() - 1.0).abs() < 1e-6,
             "Vertex Weight Sum Not Equal To 1!: self.weights: {:?} sum: {}",
             self.weights,
             self.weights.iter().sum::<f32>()

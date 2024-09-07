@@ -1,13 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, usize};
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use kdtree::{distance::squared_euclidean, KdTree};
 use tauri::State;
 use thiserror::Error as ThisError;
 
 use crate::{
-    import::{FileManager, ImportFileData, ImportLink, ImportVertex},
-    input::{ImputedCompilationData, ImputedModel},
+    import::{FileManager, ImportLink, ImportPart, ImportVertex},
+    input::ImputedCompilationData,
+    process::VERTEX_CACHE_SIZE,
     utilities::{
         logging::{log, LogLevel},
         mathematics::{Vector3, Vector4},
@@ -20,31 +21,21 @@ use super::{
 };
 
 #[derive(Debug, Default)]
-struct CombinedMesh {
-    vertices: Vec<ImportVertex>,
-    polygons: Vec<CombinedMeshFace>,
-}
-
-#[derive(Debug, Default)]
-struct CombinedMeshFace {
-    material: usize,
-    vertex_offset: usize,
-    faces: Vec<Vec<usize>>,
-}
-
-#[derive(Debug, Default)]
 struct TriangleList {
-    material: usize,
-    vertex_offset: usize,
+    vertices: Vec<ProcessedVertex>,
     triangles: Vec<[usize; 3]>,
 }
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingMeshError {
+    #[error("Model File Source Not Loaded!")]
+    FileSourceNotLoaded,
     #[error("Part Not Found: {0}")]
     PartNotFound(String),
-    #[error("Face Has Less Than 3 Vertices")]
+    #[error("Face Was Incomplete!")]
     IncompleteFace,
+    #[error("Vertex Weights Were Not Found!")]
+    VertexHasNoWeights,
 }
 
 pub fn process_mesh_data(
@@ -61,6 +52,16 @@ pub fn process_mesh_data(
         };
 
         for imputed_model in &imputed_body_part.models {
+            if imputed_model.is_blank {
+                let processed_model = ProcessedModel {
+                    name: String::from("blank"),
+                    ..Default::default()
+                };
+
+                processed_body_part.parts.push(processed_model);
+                continue;
+            }
+
             let mut processed_model = ProcessedModel {
                 name: imputed_model.name.clone(),
                 ..Default::default()
@@ -71,48 +72,46 @@ pub fn process_mesh_data(
                 processed_model.name.truncate(64);
             }
 
-            let imported_file = import.get_file(&imputed_model.file_source).expect("Source File Not Found!");
+            let imported_file = match import.get_file(&imputed_model.file_source) {
+                Some(file) => file,
+                None => {
+                    log("File {} Was Not Loaded!", LogLevel::Error);
+                    return Err(ProcessingMeshError::FileSourceNotLoaded);
+                }
+            };
 
-            let combined_meshes = create_combined_meshes(imputed_model, &imported_file, &mut processed_model_data)?;
+            let mut triangle_lists = create_triangle_lists(
+                &imputed_model.part_names,
+                &imported_file.parts,
+                &mut processed_model_data.materials,
+                bone_table.remapped_bones.get(&imputed_model.file_source).unwrap(),
+            )?;
 
-            let mut material_triangle_lists = create_triangle_lists(&combined_meshes)?;
+            for list in triangle_lists.values_mut() {
+                calculate_vertex_tangents(list);
+                optimize_indices_order(list);
+            }
 
-            let (unique_vertices, indices_remap) = create_unique_vertices(&combined_meshes);
+            // Sort Triangles for optimization
 
-            remap_indices(&mut material_triangle_lists, indices_remap);
-
-            let combined_triangle_list: Vec<[usize; 3]> = material_triangle_lists.iter().flat_map(|list| list.triangles.iter().cloned()).collect();
-
-            let tangents = calculate_vertex_tangents(&unique_vertices, &combined_triangle_list);
-
-            let mapped_bone = bone_table.remapped_bones.get(&imputed_model.file_source).expect("Source File Not Remapped!");
-
-            let combined_vertices = combine_vertex_data(&unique_vertices, &tangents, mapped_bone);
-
-            for material_triangle_list in material_triangle_lists {
+            // TODO: Split this into functions as its a bit confusing.
+            let mut vertex_count = 0;
+            let mut triangle_count = 0;
+            for (material, list) in triangle_lists {
                 let mut processed_mesh = ProcessedMesh {
-                    material: material_triangle_list.material,
+                    material,
                     ..Default::default()
                 };
+                vertex_count += list.vertices.len();
                 let mut processed_strip_group = ProcessedStripGroup::default();
                 let mut processed_strip = ProcessedStrip::default();
 
                 let mut mapped_indices = HashMap::new();
                 let mut hardware_bones = IndexSet::new();
-                for triangle in material_triangle_list.triangles {
+                for triangle in list.triangles {
+                    triangle_count += 1;
                     let new_vertex_count = triangle.iter().filter(|&&value| mapped_indices.contains_key(&value)).count();
                     if processed_strip_group.vertices.len() + new_vertex_count > (u16::MAX - 3) as usize {
-                        for hardware_bone in &hardware_bones {
-                            let processed_hardware_bone = ProcessedHardwareBone {
-                                hardware_bone: processed_strip.hardware_bones.len(),
-                                bone_table_bone: *hardware_bone,
-                            };
-
-                            processed_strip.hardware_bones.push(processed_hardware_bone);
-                        }
-
-                        processed_strip.vertex_count = processed_strip_group.vertices.len();
-                        processed_strip.indices_count = processed_strip_group.indices.len();
                         processed_strip_group.strips.push(processed_strip);
                         processed_mesh.strip_groups.push(processed_strip_group);
                         processed_model.meshes.push(processed_mesh);
@@ -120,8 +119,10 @@ pub fn process_mesh_data(
                         mapped_indices.clear();
                         hardware_bones.clear();
 
-                        processed_mesh = ProcessedMesh::default();
-                        processed_mesh.material = material_triangle_list.material;
+                        processed_mesh = ProcessedMesh {
+                            material,
+                            ..Default::default()
+                        };
                         processed_strip_group = ProcessedStripGroup::default();
                         processed_strip = ProcessedStrip::default();
                     }
@@ -129,20 +130,29 @@ pub fn process_mesh_data(
                     for index in triangle {
                         if mapped_indices.contains_key(&index) {
                             processed_strip_group.indices.push(*mapped_indices.get(&index).unwrap());
+                            processed_strip.indices_count += 1;
                             continue;
                         }
 
-                        assert!(processed_strip_group.vertices.len() < u16::MAX as usize, "Too Many Vertices!");
-
-                        processed_strip_group.indices.push(processed_strip_group.vertices.len() as u16);
-                        mapped_indices.insert(index, processed_strip_group.vertices.len() as u16);
-
-                        let vertex_data = combined_vertices[index].clone();
+                        let vertex_data = list.vertices[index];
                         let mut processed_mesh_vertex = ProcessedMeshVertex {
                             vertex_index: processed_strip_group.vertices.len(),
                             bone_count: vertex_data.bone_count,
                             ..Default::default()
                         };
+
+                        // FIXME: This doesn't work, but it should work or it won't load.
+                        /* if hardware_bones.len() + vertex_data.bone_count > MAX_HARDWARE_BONES_PER_STRIP {
+                            let new_strip = ProcessedStrip {
+                                indices_offset: processed_strip.indices_count - 1,
+                                vertex_offset: processed_strip.vertex_count,
+                                ..Default::default()
+                            };
+                            processed_strip_group.strips.push(processed_strip);
+                            hardware_bones.clear();
+                            processed_strip = new_strip;
+                        } */
+
                         processed_strip.bone_count = if vertex_data.bone_count > processed_strip.bone_count {
                             vertex_data.bone_count
                         } else {
@@ -152,34 +162,35 @@ pub fn process_mesh_data(
                         for bone_index in 0..vertex_data.bone_count {
                             let bone = vertex_data.bones[bone_index];
 
-                            let hardware_bone_index = hardware_bones.insert_full(bone).0;
-
-                            processed_mesh_vertex.bones[bone_index] = hardware_bone_index;
+                            let hardware_bone_index = hardware_bones.insert_full(bone);
+                            processed_mesh_vertex.bones[bone_index] = hardware_bone_index.0;
+                            if hardware_bone_index.1 {
+                                let processed_hardware_bone = ProcessedHardwareBone {
+                                    hardware_bone: processed_strip.hardware_bones.len(),
+                                    bone_table_bone: bone,
+                                };
+                                processed_strip.hardware_bones.push(processed_hardware_bone);
+                            }
                         }
+
+                        processed_strip_group.indices.push(processed_strip_group.vertices.len() as u16);
+                        mapped_indices.insert(index, processed_strip_group.vertices.len() as u16);
+                        processed_strip.indices_count += 1;
 
                         processed_strip_group.vertices.push(processed_mesh_vertex);
                         processed_mesh.vertex_data.push(vertex_data);
+                        processed_strip.vertex_count += 1;
                     }
                 }
 
-                for hardware_bone in hardware_bones {
-                    let processed_hardware_bone = ProcessedHardwareBone {
-                        hardware_bone: processed_strip.hardware_bones.len(),
-                        bone_table_bone: hardware_bone,
-                    };
-
-                    processed_strip.hardware_bones.push(processed_hardware_bone);
-                }
-
-                processed_strip.vertex_count = processed_strip_group.vertices.len();
-                processed_strip.indices_count = processed_strip_group.indices.len();
                 processed_strip_group.strips.push(processed_strip);
                 processed_mesh.strip_groups.push(processed_strip_group);
                 processed_model.meshes.push(processed_mesh);
             }
-
-            log(format!("Processed {} vertices", combined_vertices.len()), LogLevel::Verbose);
-
+            log(
+                format!("Processed {} triangles and {} vertices", triangle_count, vertex_count),
+                LogLevel::Verbose,
+            );
             processed_body_part.parts.push(processed_model);
         }
 
@@ -189,97 +200,133 @@ pub fn process_mesh_data(
     Ok(processed_model_data)
 }
 
-fn create_combined_meshes(
-    imputed_model: &ImputedModel,
-    imported_file: &Arc<ImportFileData>,
-    processed_model_data: &mut ProcessedModelData,
-) -> Result<CombinedMesh, ProcessingMeshError> {
-    let mut combined_mesh = CombinedMesh::default();
+fn create_triangle_lists(
+    part_names: &[Option<String>],
+    parts: &[ImportPart],
+    material_table: &mut IndexSet<String>,
+    mapped_bone: &HashMap<usize, usize>,
+) -> Result<IndexMap<usize, TriangleList>, ProcessingMeshError> {
+    let mut triangle_lists = IndexMap::new();
+    let mut processed_vertices_trees = IndexMap::new();
 
-    for part_name in &imputed_model.part_names {
+    for part_name in part_names {
         let imputed_part_name = match part_name {
             Some(name) => name,
             None => continue,
         };
 
-        let import_part = match imported_file.parts.iter().find(|part| part.name == *imputed_part_name) {
+        let import_part = match parts.iter().find(|part| part.name == *imputed_part_name) {
             Some(part) => part,
             None => return Err(ProcessingMeshError::PartNotFound(imputed_part_name.clone())),
         };
 
         for (material, faces) in &import_part.polygons {
-            let material_index = processed_model_data.materials.insert_full(material.clone()).0;
+            let material_index = material_table.insert_full(material.clone()).0;
 
-            let combined_mesh_face = CombinedMeshFace {
-                material: material_index,
-                vertex_offset: combined_mesh.vertices.len(),
-                faces: faces.clone(),
-            };
+            let triangle_list: &mut TriangleList = triangle_lists.entry(material_index).or_default();
+            let processed_vertices_tree: &mut KdTree<f64, usize, [f64; 3]> = processed_vertices_trees.entry(material_index).or_insert_with(|| KdTree::new(3));
 
-            combined_mesh.polygons.push(combined_mesh_face);
-        }
+            for face in faces {
+                if face.len() < 3 {
+                    return Err(ProcessingMeshError::IncompleteFace);
+                }
 
-        combined_mesh.vertices.extend(import_part.vertices.iter().cloned());
-    }
+                let triangulated_face = triangulate_face(face, &import_part.vertices);
 
-    Ok(combined_mesh)
-}
+                for mut triangle in triangulated_face {
+                    for point in &mut triangle {
+                        let import_vertex = &import_part.vertices[*point];
 
-fn create_triangle_lists(combined_meshes: &CombinedMesh) -> Result<Vec<TriangleList>, ProcessingMeshError> {
-    let mut triangle_lists = Vec::new();
+                        let mut processed_vertex = ProcessedVertex {
+                            position: import_vertex.position,
+                            normal: import_vertex.normal.normalize(),
+                            texture_coordinate: import_vertex.texture_coordinate,
+                            ..Default::default()
+                        };
 
-    for mesh in &combined_meshes.polygons {
-        let mut triangle_list = TriangleList {
-            material: mesh.material,
-            vertex_offset: mesh.vertex_offset,
-            ..Default::default()
-        };
+                        create_bone_links(&mut processed_vertex, import_vertex, mapped_bone)?;
 
-        for face in &mesh.faces {
-            if face.len() < 3 {
-                return Err(ProcessingMeshError::IncompleteFace);
+                        let neighbors = processed_vertices_tree
+                            .within(&processed_vertex.position.as_slice(), FLOAT_TOLERANCE, &squared_euclidean)
+                            .unwrap();
+
+                        if let Some(&(_, index)) = neighbors.iter().find(|(_, &i)| vertex_equals(&processed_vertex, &triangle_list.vertices[i])) {
+                            *point = *index;
+                            continue;
+                        }
+
+                        processed_vertices_tree
+                            .add(processed_vertex.position.as_slice(), triangle_list.vertices.len())
+                            .unwrap();
+                        *point = triangle_list.vertices.len();
+                        triangle_list.vertices.push(processed_vertex);
+                    }
+
+                    triangle_list.triangles.push([triangle[0], triangle[1], triangle[2]]);
+                }
             }
-
-            if face.len() > 3 {
-                let triangulated_faces = triangulate_face(face, &combined_meshes.vertices, mesh.vertex_offset);
-                triangle_list.triangles.extend(triangulated_faces);
-                continue;
-            }
-
-            triangle_list.triangles.push([face[2], face[1], face[0]]);
         }
-
-        triangle_lists.push(triangle_list);
     }
 
     Ok(triangle_lists)
 }
 
-fn triangulate_face(_face: &[usize], _vertices: &[ImportVertex], _vertex_offset: usize) -> Vec<[usize; 3]> {
+fn triangulate_face(face: &[usize], _vertices: &[ImportVertex]) -> Vec<[usize; 3]> {
+    if face.len() == 3 {
+        return vec![[face[2], face[1], face[0]]];
+    }
     todo!("Triangulate Face Here")
 }
 
-fn create_unique_vertices(mesh: &CombinedMesh) -> (Vec<ImportVertex>, Vec<usize>) {
-    let mut kd_tree = KdTree::new(3);
-    let mut unique_vertices = Vec::new();
-    let mut indices_remap = Vec::with_capacity(mesh.vertices.len());
-    for vertex in &mesh.vertices {
-        let neighbors = kd_tree.within(&vertex.position.as_slice(), FLOAT_TOLERANCE, &squared_euclidean).unwrap();
+fn create_bone_links(processed_vertex: &mut ProcessedVertex, vertex: &ImportVertex, mapped_bone: &HashMap<usize, usize>) -> Result<(), ProcessingMeshError> {
+    let remapped_weights = vertex
+        .links
+        .iter()
+        .map(|link| ImportLink {
+            bone: *mapped_bone.get(&link.bone).expect("Mapped Bone Not Found!"),
+            weight: link.weight,
+        })
+        .collect::<Vec<_>>();
 
-        if let Some(&(_, index)) = neighbors.iter().find(|(_, &i)| vertex_equals(vertex, &unique_vertices[i])) {
-            indices_remap.push(*index);
-            continue;
+    for weight in remapped_weights {
+        if processed_vertex.bone_count == 3 {
+            log("Vertex had more that 3 weight links! Culling links to 3!", LogLevel::Warn);
+            break;
         }
 
-        kd_tree.add(vertex.position.as_slice(), unique_vertices.len()).unwrap();
-        indices_remap.push(unique_vertices.len());
-        unique_vertices.push(vertex.clone());
+        processed_vertex.weights[processed_vertex.bone_count] = weight.weight;
+        processed_vertex.bones[processed_vertex.bone_count] = *mapped_bone.get(&weight.bone).expect("Mapped Bone Not Found!");
+        processed_vertex.bone_count += 1;
     }
 
-    (unique_vertices, indices_remap)
+    if processed_vertex.bone_count == 0 {
+        log("Vertex Has No Weight Links!", LogLevel::Error);
+        return Err(ProcessingMeshError::VertexHasNoWeights);
+    }
+
+    normalize_bone_links(&mut processed_vertex.weights, processed_vertex.bone_count)
 }
 
-fn vertex_equals(from: &ImportVertex, to: &ImportVertex) -> bool {
+fn normalize_bone_links(arr: &mut [f64; 3], count: usize) -> Result<(), ProcessingMeshError> {
+    let sum = arr.iter().take(count).sum::<f64>();
+
+    if sum < f64::EPSILON {
+        log("Vertex Weight Total To 0!", LogLevel::Error);
+        return Err(ProcessingMeshError::VertexHasNoWeights);
+    }
+
+    for weight in arr.iter_mut().take(count) {
+        *weight /= sum;
+    }
+
+    for weight in arr.iter_mut().skip(count) {
+        *weight = 0.0;
+    }
+
+    Ok(())
+}
+
+fn vertex_equals(from: &ProcessedVertex, to: &ProcessedVertex) -> bool {
     if (from.normal.x - to.normal.x).abs() > FLOAT_TOLERANCE
         || (from.normal.y - to.normal.y).abs() > FLOAT_TOLERANCE
         || (from.normal.z - to.normal.z).abs() > FLOAT_TOLERANCE
@@ -293,48 +340,40 @@ fn vertex_equals(from: &ImportVertex, to: &ImportVertex) -> bool {
         return false;
     }
 
-    if from.links.len() != to.links.len() {
+    if from.bone_count != to.bone_count {
         return false;
     }
 
-    if from.links.iter().zip(to.links.iter()).any(|(from_link, to_link)| {
-        if from_link.bone != to_link.bone {
-            return true;
-        }
+    if from.bones.iter().zip(to.bones.iter()).any(|(from_bone, to_bone)| from_bone != to_bone) {
+        return false;
+    }
 
-        (from_link.weight - to_link.weight).abs() > FLOAT_TOLERANCE
-    }) {
+    if from
+        .weights
+        .iter()
+        .zip(to.weights.iter())
+        .any(|(from_weight, to_weight)| (from_weight - to_weight).abs() > FLOAT_TOLERANCE)
+    {
         return false;
     }
 
     true
 }
 
-fn remap_indices(triangle_lists: &mut Vec<TriangleList>, remap_list: Vec<usize>) {
-    for faces in triangle_lists {
-        for face in &mut faces.triangles {
-            for index in face {
-                *index = remap_list[faces.vertex_offset + *index];
-            }
-        }
-    }
-}
+fn calculate_vertex_tangents(triangle_list: &mut TriangleList) {
+    let mut tangents = vec![Vector3::default(); triangle_list.vertices.len()];
+    let mut bi_tangents = vec![Vector3::default(); triangle_list.vertices.len()];
 
-fn calculate_vertex_tangents(vertices: &[ImportVertex], triangles: &Vec<[usize; 3]>) -> Vec<Vector4> {
-    let mut tangents = vec![Vector3::default(); vertices.len()];
-    let mut bi_tangents = vec![Vector3::default(); vertices.len()];
-
-    for face in triangles {
-        let edge1 = vertices[face[1]].position - vertices[face[0]].position;
-        let edge2 = vertices[face[2]].position - vertices[face[0]].position;
-        let delta_uv1 = vertices[face[1]].texture_coordinate - vertices[face[0]].texture_coordinate;
-        let delta_uv2 = vertices[face[2]].texture_coordinate - vertices[face[0]].texture_coordinate;
+    for face in &triangle_list.triangles {
+        let edge1 = triangle_list.vertices[face[1]].position - triangle_list.vertices[face[0]].position;
+        let edge2 = triangle_list.vertices[face[2]].position - triangle_list.vertices[face[0]].position;
+        let delta_uv1 = triangle_list.vertices[face[1]].texture_coordinate - triangle_list.vertices[face[0]].texture_coordinate;
+        let delta_uv2 = triangle_list.vertices[face[2]].texture_coordinate - triangle_list.vertices[face[0]].texture_coordinate;
 
         let denominator = delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y;
 
         if denominator.abs() < f64::EPSILON {
             for vertex_index in 0..3 {
-                // TODO: Are these values correct?
                 tangents[face[vertex_index]] = Vector3::new(1.0, 0.0, 0.0);
                 bi_tangents[face[vertex_index]] = Vector3::new(0.0, 1.0, 0.0);
             }
@@ -347,89 +386,214 @@ fn calculate_vertex_tangents(vertices: &[ImportVertex], triangles: &Vec<[usize; 
             area * (delta_uv2.y * edge1.x - delta_uv1.y * edge2.x),
             area * (delta_uv2.y * edge1.y - delta_uv1.y * edge2.y),
             area * (delta_uv2.y * edge1.z - delta_uv1.y * edge2.z),
-        )
-        .normalize();
+        );
 
         let bi_tangent = Vector3::new(
             area * (delta_uv1.x * edge2.x - delta_uv2.x * edge1.x),
             area * (delta_uv1.x * edge2.y - delta_uv2.x * edge1.y),
             area * (delta_uv1.x * edge2.z - delta_uv2.x * edge1.z),
-        )
-        .normalize();
+        );
 
         for vertex_index in 0..3 {
             tangents[face[vertex_index]] = tangents[face[vertex_index]] + tangent;
+            tangents[face[vertex_index]] = tangents[face[vertex_index]].normalize();
             bi_tangents[face[vertex_index]] = bi_tangents[face[vertex_index]] + bi_tangent;
+            bi_tangents[face[vertex_index]] = bi_tangents[face[vertex_index]].normalize();
         }
     }
 
-    let mut calculated_tangents = Vec::with_capacity(vertices.len());
     for index in 0..tangents.len() {
-        tangents[index] = tangents[index].normalize();
-        bi_tangents[index] = bi_tangents[index].normalize();
-
-        let cross_product = vertices[index].normal.cross(tangents[index]);
+        let cross_product = triangle_list.vertices[index].normal.cross(tangents[index]);
         let sign = if cross_product.dot(bi_tangents[index]) < 0.0 { -1.0 } else { 1.0 };
 
-        calculated_tangents.push(Vector4::new(tangents[index].x, tangents[index].y, tangents[index].z, sign));
+        triangle_list.vertices[index].tangent = Vector4::new(tangents[index].x, tangents[index].y, tangents[index].z, sign);
     }
-
-    calculated_tangents
 }
 
-fn combine_vertex_data(unique_vertices: &[ImportVertex], tangents: &[Vector4], mapped_bone: &HashMap<usize, usize>) -> Vec<ProcessedVertex> {
-    let mut combined_vertices = Vec::with_capacity(unique_vertices.len());
+// Took from https://github.com/zeux/meshoptimizer/blob/master/src/vcacheoptimizer.cpp
+fn optimize_indices_order(list: &mut TriangleList) {
+    let indices = list.triangles.iter().flatten().copied().collect::<Vec<_>>();
+    let mut adjacency = build_triangle_adjacency(list.vertices.len(), &indices);
 
-    for (vertex_index, vertex) in unique_vertices.iter().enumerate() {
-        let mut combined_vertex = ProcessedVertex::default();
-
-        create_weight_link(&mut combined_vertex, &vertex.links, mapped_bone);
-
-        combined_vertex.position = vertex.position;
-        combined_vertex.normal = vertex.normal.normalize();
-        combined_vertex.uv = vertex.texture_coordinate;
-        combined_vertex.tangent = tangents[vertex_index];
-
-        combined_vertices.push(combined_vertex);
+    let mut vertex_scores = vec![0.0; list.vertices.len()];
+    for (vertex_index, vertex_score) in vertex_scores.iter_mut().enumerate() {
+        *vertex_score = calculate_vertex_scores(None, adjacency.counts[vertex_index]);
     }
 
-    combined_vertices
-}
+    let mut triangle_scores = vec![0.0; list.triangles.len()];
+    for (triangle_index, triangle_score) in triangle_scores.iter_mut().enumerate() {
+        let point1 = indices[triangle_index * 3];
+        let point2 = indices[triangle_index * 3 + 1];
+        let point3 = indices[triangle_index * 3 + 2];
+        *triangle_score = vertex_scores[point1] + vertex_scores[point2] + vertex_scores[point3];
+    }
 
-fn create_weight_link(vertex: &mut ProcessedVertex, weights: &[ImportLink], mapped_bone: &HashMap<usize, usize>) {
-    let mut sorted_weights: Vec<ImportLink> = weights.to_vec();
-    sorted_weights.sort_by(|a, b| a.weight.partial_cmp(&b.weight).unwrap());
+    let mut emitted_flags = vec![false; list.triangles.len()];
 
-    for (weight_index, weight) in sorted_weights.iter().enumerate() {
-        if weight_index > 2 {
-            log("Vertex had more that 3 weight links! Culling links to 3!", LogLevel::Warn);
-            break;
+    let mut cache = [0; VERTEX_CACHE_SIZE + 4];
+    let mut cache_new = [0; VERTEX_CACHE_SIZE + 4];
+    let mut cache_count = 0;
+
+    let mut current_triangle = 0;
+    let mut input_cursor = 1;
+    let mut output_triangle = 0;
+
+    while current_triangle != usize::MAX {
+        let point1 = indices[current_triangle * 3];
+        let point2 = indices[current_triangle * 3 + 1];
+        let point3 = indices[current_triangle * 3 + 2];
+
+        list.triangles[output_triangle] = [point1, point2, point3];
+        output_triangle += 1;
+
+        emitted_flags[current_triangle] = true;
+        triangle_scores[current_triangle] = 0.0;
+
+        let mut cache_write = 0;
+        cache_new[cache_write] = point1;
+        cache_write += 1;
+        cache_new[cache_write] = point2;
+        cache_write += 1;
+        cache_new[cache_write] = point3;
+        cache_write += 1;
+
+        for cache_index in 0..cache_count {
+            let index = cache[cache_index];
+            cache_new[cache_write] = index;
+            cache_write += ((index != point1) as usize) & ((index != point2) as usize) & ((index != point3) as usize);
         }
 
-        vertex.weights[weight_index] = weight.weight;
-        vertex.bones[weight_index] = *mapped_bone.get(&weight.bone).expect("Mapped Bone Not Found!");
-        vertex.bone_count = weight_index + 1;
-    }
+        std::mem::swap(&mut cache, &mut cache_new);
+        cache_count = if cache_write > VERTEX_CACHE_SIZE { VERTEX_CACHE_SIZE } else { cache_write };
 
-    if vertex.bone_count == 0 {
-        todo!("Return Error 0 Vertex Weights");
-    }
+        for index_index in 0..3 {
+            let vertex_index = indices[current_triangle * 3 + index_index];
 
-    normalize_values(&mut vertex.weights, vertex.bone_count);
+            let neighbors = &mut adjacency.data[adjacency.offsets[vertex_index]..];
+            let neighbors_size = adjacency.counts[vertex_index];
+
+            for neighbor_index in 0..neighbors_size {
+                let triangle = neighbors[neighbor_index];
+
+                if triangle == current_triangle {
+                    neighbors[neighbor_index] = neighbors[neighbors_size - 1];
+                    adjacency.counts[vertex_index] -= 1;
+                    break;
+                }
+            }
+        }
+
+        let mut best_triangle = 0;
+        let mut best_score = 0.0;
+
+        for cache_index in 0..cache_write {
+            let cached_index = cache[cache_index];
+
+            if adjacency.counts[cached_index] == 0 {
+                continue;
+            }
+
+            let cache_position = if cache_index >= VERTEX_CACHE_SIZE { None } else { Some(cache_index) };
+            let score = calculate_vertex_scores(cache_position, adjacency.counts[cached_index]);
+            let score_difference = score - vertex_scores[cached_index];
+
+            vertex_scores[cached_index] = score;
+
+            for triangle_index in &adjacency.data[adjacency.offsets[cached_index]..adjacency.offsets[cached_index] + adjacency.counts[cached_index]] {
+                let triangle_score = triangle_scores[*triangle_index] + score_difference;
+
+                best_triangle = if best_score < triangle_score { *triangle_index } else { best_triangle };
+                best_score = if best_score < triangle_score { triangle_score } else { best_score };
+
+                triangle_scores[*triangle_index] = triangle_score;
+            }
+        }
+
+        current_triangle = best_triangle;
+        if current_triangle == 0 {
+            current_triangle = get_next_triangle_dead_end(&mut input_cursor, &emitted_flags, list.triangles.len());
+        }
+    }
 }
 
-fn normalize_values(arr: &mut [f64; 3], count: usize) {
-    let sum = arr.iter().take(count).sum::<f64>();
-
-    if sum < f64::EPSILON {
-        todo!("Return Error Of No Weights")
-    }
-
-    for weight in arr.iter_mut().take(count) {
-        *weight /= sum;
-    }
-
-    for weight in arr.iter_mut().skip(count) {
-        *weight = 0.0;
-    }
+#[derive(Debug, Default)]
+struct TriangleAdjacency {
+    counts: Vec<usize>,
+    offsets: Vec<usize>,
+    data: Vec<usize>,
 }
+
+fn build_triangle_adjacency(vertex_count: usize, indices: &[usize]) -> TriangleAdjacency {
+    let mut adjacency = TriangleAdjacency {
+        counts: vec![0; vertex_count],
+        offsets: vec![0; vertex_count],
+        data: vec![0; indices.len()],
+    };
+
+    for index in indices {
+        adjacency.counts[*index] += 1;
+    }
+
+    let mut offset = 0;
+    for vertex_index in 0..vertex_count {
+        adjacency.offsets[vertex_index] = offset;
+        offset += adjacency.counts[vertex_index];
+    }
+
+    let triangle_count = indices.len() / 3;
+    for triangle_index in 0..triangle_count {
+        let point1 = indices[triangle_index * 3];
+        adjacency.data[adjacency.offsets[point1]] = triangle_index;
+        adjacency.offsets[point1] += 1;
+
+        let point2 = indices[triangle_index * 3 + 1];
+        adjacency.data[adjacency.offsets[point2]] = triangle_index;
+        adjacency.offsets[point2] += 1;
+
+        let point3 = indices[triangle_index * 3 + 2];
+        adjacency.data[adjacency.offsets[point3]] = triangle_index;
+        adjacency.offsets[point3] += 1;
+    }
+
+    for vertex_index in 0..vertex_count {
+        adjacency.offsets[vertex_index] -= adjacency.counts[vertex_index];
+    }
+
+    adjacency
+}
+
+const VALENCE_MAX: usize = 8;
+
+#[derive(Debug, Default)]
+struct VertexScoreTable {
+    cache: [f64; 1 + VERTEX_CACHE_SIZE],
+    live: [f64; 1 + VALENCE_MAX],
+}
+
+const VERTEX_SCORE_TABLE: VertexScoreTable = VertexScoreTable {
+    cache: [
+        0.0, 0.779, 0.791, 0.789, 0.981, 0.843, 0.726, 0.847, 0.882, 0.867, 0.799, 0.642, 0.613, 0.6, 0.568, 0.372, 0.234,
+    ],
+    live: [0.0, 0.995, 0.713, 0.450, 0.404, 0.059, 0.005, 0.147, 0.006],
+};
+
+fn calculate_vertex_scores(cache_position: Option<usize>, live_triangle: usize) -> f64 {
+    let live_triangle_clamped = if live_triangle < VALENCE_MAX { live_triangle } else { VALENCE_MAX };
+
+    VERTEX_SCORE_TABLE.cache[1usize.wrapping_add(cache_position.unwrap_or(usize::MAX))] + VERTEX_SCORE_TABLE.live[live_triangle_clamped]
+}
+
+fn get_next_triangle_dead_end(input_cursor: &mut usize, emitted_flags: &[bool], face_count: usize) -> usize {
+    while *input_cursor < face_count {
+        if !emitted_flags[*input_cursor] {
+            return *input_cursor;
+        }
+
+        *input_cursor += 1;
+    }
+
+    usize::MAX
+}
+
+// Took from https://github.com/zeux/meshoptimizer/blob/master/src/overdrawoptimizer.cpp
+// fn optimize_triangle_order() {}

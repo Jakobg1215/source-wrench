@@ -155,8 +155,6 @@ impl WriteToWriter for MeshFileHeader {
     }
 }
 
-pub const MAX_HARDWARE_BONES_PER_STRIP: usize = (86 << 24) + (83 << 16) + (68 << 8) + 73;
-
 #[derive(Debug, Default)]
 pub struct MeshFileMaterialReplacementListHeader {
     pub write_base: usize,
@@ -365,9 +363,9 @@ impl WriteToWriter for MeshFileVertexHeader {
 pub struct MeshFileStripHeader {
     pub write_base: usize,
     pub indices_count: i32,
-    pub indices_index: i32,
+    pub indices_offset: i32,
     pub vertices_count: i32,
-    pub vertices_index: i32,
+    pub vertices_offset: i32,
     pub bone_count: i16,
     pub flags: MeshFileStripFlags,
     pub bone_state_changes: Vec<MeshFileBoneStateChangeHeader>,
@@ -378,9 +376,9 @@ impl WriteToWriter for MeshFileStripHeader {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_integer(self.indices_count);
-        writer.write_integer(self.indices_index);
+        writer.write_integer(self.indices_offset);
         writer.write_integer(self.vertices_count);
-        writer.write_integer(self.vertices_index);
+        writer.write_integer(self.vertices_offset);
         writer.write_short(self.bone_count);
         writer.write_unsigned_byte(self.flags.bits());
         writer.write_array_size(self.bone_state_changes.len())?;
