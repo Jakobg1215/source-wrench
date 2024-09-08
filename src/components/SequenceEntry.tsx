@@ -53,40 +53,90 @@ const SequenceEntry: Component<SequenceEntryProperties> = (properties) => {
     };
 
     return (
-        <div class="Sequence-Entry">
-            <h3>Sequence</h3>
-            <label>
-                Name:
-                <input name="SequenceName" type="text" value={properties.data.name} onChange={(event) => changeSequenceName(event.target.value)} />
-            </label>
+        <div class="max-w-md p-6 bg-white border border-gray-200 rounded-lg shadow dark:bg-gray-800 dark:border-gray-700 ">
+            <h5 class="mb-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Sequence</h5>
+            <div>
+                <label for="first_name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                    Name
+                </label>
+                <input
+                    type="text"
+                    id="first_name"
+                    value={properties.data.name}
+                    onChange={(event) => changeSequenceName(event.target.value)}
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                    placeholder="idkman"
+                    required
+                />
+            </div>
             <br />
             <label>
-                Animations:
+                <p class="text-sm font-medium text-gray-900 dark:text-white">Animations:</p>
                 <br />
                 <For each={grid()}>
                     {(row, rowIndex) => (
-                        <div>
+                        <div class='mt-2'>
                             <For each={row}>
                                 {(column, columnIndex) => (
-                                    <input
-                                        name={`SequenceAnimation${rowIndex()}${columnIndex()}`}
-                                        list="Animation-Names"
-                                        value={column}
-                                        onChange={(event) => updateGridValue(rowIndex(), columnIndex(), event.target.value)}
-                                    ></input>
+                                    <div>
+                                        <input
+                                            name={`SequenceAnimation${rowIndex()}${columnIndex()}`}
+                                            list="Animation-Names"
+                                            value={column}
+                                            onChange={(event) => updateGridValue(rowIndex(), columnIndex(), event.target.value)}
+                                            type="text"
+                                            class="bg-gray-50 border mb-2 border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                                            placeholder="idkman"
+                                            required
+                                        />
+                                    </div>
                                 )}
                             </For>
-                            <button onClick={() => addColumn()}>+</button>
-                            <button onClick={() => removeColumn()}>-</button>
+
+                            <div class="inline-flex rounded-md shadow-sm mt-2" role="group">
+                                <button
+                                    onClick={() => addColumn()}
+                                    type="button"
+                                    class="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-s-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-blue-500 dark:focus:text-white"
+                                >
+                                    Add Column
+                                </button>
+                                <button
+                                    onClick={() => removeColumn()}
+                                    type="button"
+                                    class="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-e-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-blue-500 dark:focus:text-white"
+                                >
+                                    Remove Column
+                                </button>
+                            </div>
                         </div>
                     )}
                 </For>
-                <button onClick={() => addRow()}>+</button>
-                <button onClick={() => removeRow()}>-</button>
+                <div class="inline-flex rounded-md shadow-sm mt-2" role="group">
+                    <button
+                        onClick={() => addRow()}
+                        type="button"
+                        class="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-s-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-blue-500 dark:focus:text-white"
+                    >
+                        Add Row
+                    </button>
+                    <button
+                        onClick={() => removeRow()}
+                        type="button"
+                        class="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-e-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-blue-500 dark:focus:text-white"
+                    >
+                        Remove Row
+                    </button>
+                </div>
                 <br />
             </label>
             <br />
-            <button onClick={() => removeSequence()}>Remove</button>
+            <button
+                class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2 dark:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none dark:focus:ring-blue-800"
+                onClick={() => removeSequence()}
+            >
+                Remove
+            </button>
         </div>
     );
 };

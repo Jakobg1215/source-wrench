@@ -23,7 +23,7 @@ const SourceFileSelector: Component = () => {
     });
 
     return (
-        <section id="Logging-Menu">
+        <section id="Logging-Menu" class='bg-orange-400'>
             <h2>Log</h2>
             <label>
                 Verbose

@@ -71,57 +71,62 @@ const App: Component = () => {
     return (
         <>
             <header>
-                <nav>
-                    <ul>
-                        <li>
-                            <a href="#Compile-Menu">Compilation</a>
-                        </li>
-                        <li>
-                            <a href="#Body-Part-Menu">Body Parts</a>
-                        </li>
-                        <li>
-                            <a href="#Animation-Menu">Animations</a>
-                        </li>
-                        <li>
-                            <a href="Sequence-Menu">Sequences</a>
-                        </li>
-                    </ul>
+                <nav class="bg-white border-gray-200 dark:bg-gray-900">
+                    <div class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto p-4">
+                        <div class="flex items-center space-x-3 rtl:space-x-reverse">
+                            <span class="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">SourceWrench</span>
+                        </div>
+                        <div class="flex md:order-2 space-x-3 gap-3 md:space-x-0 rtl:space-x-reverse">
+                            <p class="self-center dark:text-white mr-2">{modelExportPath()}</p>
+                            <button
+                                type="button"
+                                class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
+                                onClick={async () => {
+                                    const selectedFile = await open({
+                                        defaultPath: await documentDir(),
+                                        directory: true,
+                                        title: 'Model Export Path',
+                                    });
+
+                                    if (selectedFile === null) {
+                                        setModelExportPath('');
+                                        return;
+                                    }
+
+                                    setModelExportPath(selectedFile);
+                                }}
+                            >
+                                Export Path
+                            </button>
+
+                            <button
+                                type="button"
+                                class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm px-4 py-2 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800"
+                                onclick={() => compileModel()}
+                            >
+                                Compile Model
+                            </button>
+                        </div>
+                    </div>
                 </nav>
             </header>
             <main>
-                <h1>Source Wrench</h1>
                 <section id="Compile-Menu">
-                    <label>
-                        Export Path
-                        <input
-                            name="ExportPath"
-                            type="text"
-                            readonly
-                            value={modelExportPath()}
-                            onClick={async () => {
-                                const selectedFile = await open({
-                                    defaultPath: await documentDir(),
-                                    directory: true,
-                                    title: 'Model Export Path',
-                                });
-
-                                if (selectedFile === null) {
-                                    setModelExportPath('');
-                                    return;
-                                }
-
-                                setModelExportPath(selectedFile);
-                            }}
-                        />
-                    </label>
                     <Show when={modelExportPath()}>
                         <br />
-                        <label>
-                            Model Name
-                            <input name="ModelName" type="text" onChange={(event) => setModelName(event.target.value)} />
-                        </label>
-                        <br />
-                        <button onclick={() => compileModel()}>Compile Model</button>
+                        <div>
+                            <label for="first_name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                                Model Name
+                            </label>
+                            <input
+                                type="text"
+                                id="first_name"
+                                onChange={(event) => setModelName(event.target.value)}
+                                class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+                                placeholder="idkman"
+                                required
+                            />
+                        </div>
                     </Show>
                 </section>
                 <Logging />
