@@ -190,6 +190,15 @@ impl FileWriter {
         Ok(())
     }
 
+    pub fn write_negative_offset(&mut self, offset: usize) -> Result<(), FileWriteError> {
+        if offset > i32::MAX as usize {
+            return Err(FileWriteError::OffsetToLarge);
+        }
+
+        self.write_integer(offset as i32);
+        Ok(())
+    }
+
     pub fn write_quaternion64(&mut self, value: Quaternion) {
         let x = clamp((value.x * 1048576.0) as i64 + 1048576, 0, 2097151);
         let y = clamp((value.y * 1048576.0) as i64 + 1048576, 0, 2097151);

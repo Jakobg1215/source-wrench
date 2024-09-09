@@ -709,7 +709,7 @@ pub struct ModelAnimationDescription {
 impl WriteToWriter for ModelAnimationDescription {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
-        writer.write_integer(-(writer.data.len() as i32)); // FIXME: This should be checked.
+        writer.write_negative_offset(writer.data.len())?;
         writer.write_string_to_table(self.write_base, &self.name);
         writer.write_float(self.fps);
         writer.write_integer(self.flags.bits());
@@ -1034,7 +1034,7 @@ impl Default for ModelSequenceDescription {
 impl WriteToWriter for ModelSequenceDescription {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
-        writer.write_integer(-(writer.data.len() as i32)); // FIXME: This should be checked.
+        writer.write_negative_offset(writer.data.len())?;
         writer.write_string_to_table(self.write_base, &self.name);
         writer.write_string_to_table(self.write_base, &self.activity_name);
         writer.write_integer(self.flags.bits());
@@ -1044,7 +1044,7 @@ impl WriteToWriter for ModelSequenceDescription {
         self.event_offset = writer.write_integer_index();
         writer.write_vector3(self.bounding_box.minimum);
         writer.write_vector3(self.bounding_box.maximum);
-        writer.write_integer(self.animations.len() as i32); // FIXME: This should be checked.
+        writer.write_array_size(self.animations.len())?;
         self.animation_offset = writer.write_integer_index();
         writer.write_integer(0);
         writer.write_integer_array(&self.blend_size); // FIXME: This should be checked.
@@ -1216,7 +1216,7 @@ impl WriteToWriter for ModelMesh {
         self.write_base = writer.data.len();
 
         writer.write_integer(self.material);
-        writer.write_integer(-(self.write_base as i32 - self.model_index as i32)); // FIXME: This should be checked.
+        writer.write_negative_offset(self.write_base - self.model_index)?;
         writer.write_integer(self.vertex_count);
         writer.write_integer(self.vertex_offset);
         writer.write_array_size(self.flexes.len())?;
