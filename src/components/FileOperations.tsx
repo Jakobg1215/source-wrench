@@ -27,7 +27,7 @@ const loadModelFile = async (previousPath: string): Promise<LoadedFile | null> =
         directory: false,
         filters: [
             {
-                extensions: ['smd'],
+                extensions: ['smd', 'obj'],
                 name: 'Supported Files',
             },
         ],
