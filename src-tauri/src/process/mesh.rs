@@ -53,12 +53,7 @@ pub fn process_mesh_data(
 
         for imputed_model in &imputed_body_part.models {
             if imputed_model.is_blank {
-                let processed_model = ProcessedModel {
-                    name: String::from("blank"),
-                    ..Default::default()
-                };
-
-                processed_body_part.parts.push(processed_model);
+                processed_body_part.parts.push(ProcessedModel::default());
                 continue;
             }
 
@@ -86,6 +81,12 @@ pub fn process_mesh_data(
                 &mut processed_model_data.materials,
                 bone_table.remapped_bones.get(&imputed_model.file_source).unwrap(),
             )?;
+
+            if triangle_lists.is_empty() {
+                log("Model Had No Parts! Defaulting To Blank!", LogLevel::Warn);
+                processed_body_part.parts.push(ProcessedModel::default());
+                continue;
+            }
 
             for list in triangle_lists.values_mut() {
                 calculate_vertex_tangents(list);
