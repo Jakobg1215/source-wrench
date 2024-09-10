@@ -4,13 +4,9 @@ use bitflags::bitflags;
 
 use super::{FileWriteError, FileWriter, WriteToWriter};
 
-// All of the members are public, so we can use the Default trait to create a default instance of the struct.
-// This is bad as some members should not be public but the compiler will error so we can't do that.
-// Could make a builder pattern but nah.
-
 #[derive(Debug)]
-pub struct ModelHeader {
-    pub identifier: ModelHeaderIdentifier,
+pub struct ModelFileHeader {
+    pub identifier: ModelFileHeaderIdentifier,
     pub version: i32,
     pub checksum: i32,
     pub file_length_index: usize,
@@ -18,24 +14,24 @@ pub struct ModelHeader {
     pub illumination_position: Vector3,
     pub bounding_box: BoundingBox,
     pub clipping_box: BoundingBox,
-    pub flags: ModelHeaderFlags,
-    pub bones: Vec<ModelBone>,
+    pub flags: ModelFileHeaderFlags,
+    pub bones: Vec<ModelFileBone>,
     pub bone_offset: usize,
     pub bone_controllers: Vec<()>,
     pub bone_controller_offset: usize,
-    pub hitbox_sets: Vec<ModelHitboxSet>,
+    pub hitbox_sets: Vec<ModelFileHitboxSet>,
     pub hitbox_set_offset: usize,
-    pub local_animation_descriptions: Vec<ModelAnimationDescription>,
+    pub local_animation_descriptions: Vec<ModelFileAnimationDescription>,
     pub local_animation_description_offset: usize,
-    pub local_sequence_descriptions: Vec<ModelSequenceDescription>,
+    pub local_sequence_descriptions: Vec<ModelFileSequenceDescription>,
     pub local_sequence_description_offset: usize,
-    pub materials: Vec<ModelMaterial>,
+    pub materials: Vec<ModelFileMaterial>,
     pub material_offset: usize,
     pub material_paths: Vec<String>,
     pub material_path_offset: usize,
     pub material_replacements: Vec<Vec<i16>>,
     pub material_replacement_offset: usize,
-    pub body_parts: Vec<ModelBodyPart>,
+    pub body_parts: Vec<ModelFileBodyPart>,
     pub body_part_offset: usize,
     pub local_attachments: Vec<()>,
     pub local_attachment_offset: usize,
@@ -59,7 +55,7 @@ pub struct ModelHeader {
     pub local_inverse_kinematics_auto_play_locks: Vec<()>,
     pub local_inverse_kinematics_auto_play_lock_offset: usize,
     pub mass: f32,
-    pub contents: ModelHeaderContents,
+    pub contents: ModelFileHeaderContents,
     pub include_models: Vec<()>,
     pub include_model_offset: usize,
     pub animation_block_file_name: String,
@@ -73,14 +69,14 @@ pub struct ModelHeader {
     pub flex_flex_controller_remaps: Vec<()>,
     pub flex_flex_controller_remap_offset: usize,
     pub vertex_animation_scale: f32,
-    pub second_header: SecondModelHeader,
+    pub second_header: ModelFileSecondHeader,
     pub second_header_offset: usize,
 }
 
-impl Default for ModelHeader {
+impl Default for ModelFileHeader {
     fn default() -> Self {
         Self {
-            identifier: ModelHeaderIdentifier::Studio,
+            identifier: Default::default(),
             version: Default::default(),
             checksum: Default::default(),
             file_length_index: Default::default(),
@@ -88,7 +84,7 @@ impl Default for ModelHeader {
             illumination_position: Default::default(),
             bounding_box: Default::default(),
             clipping_box: Default::default(),
-            flags: ModelHeaderFlags::FORCE_OPAQUE,
+            flags: ModelFileHeaderFlags::FORCE_OPAQUE,
             bones: Default::default(),
             bone_offset: Default::default(),
             bone_controllers: Default::default(),
@@ -129,7 +125,7 @@ impl Default for ModelHeader {
             local_inverse_kinematics_auto_play_locks: Default::default(),
             local_inverse_kinematics_auto_play_lock_offset: Default::default(),
             mass: Default::default(),
-            contents: ModelHeaderContents::SOLID,
+            contents: ModelFileHeaderContents::SOLID,
             include_models: Default::default(),
             include_model_offset: Default::default(),
             animation_block_file_name: Default::default(),
@@ -149,19 +145,22 @@ impl Default for ModelHeader {
     }
 }
 
-impl WriteToWriter for ModelHeader {
+impl WriteToWriter for ModelFileHeader {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         writer.write_integer(self.identifier.to_integer());
         writer.write_integer(self.version);
         writer.write_integer(self.checksum);
-        writer.write_char_array("", 64);
+        writer.write_char_array("Model Compiled With Source Wrench!", 64);
         self.file_length_index = writer.write_integer_index();
         writer.write_vector3(self.eye_position);
         writer.write_vector3(self.illumination_position);
+        debug_assert!(self.bounding_box.is_valid(), "Bounding box is invalid!");
         writer.write_vector3(self.bounding_box.minimum);
         writer.write_vector3(self.bounding_box.maximum);
+        debug_assert!(self.bounding_box.is_valid(), "Clipping box is invalid!");
         writer.write_vector3(self.clipping_box.minimum);
         writer.write_vector3(self.clipping_box.maximum);
+        // TODO: Assert flags for flags that conflict.
         writer.write_integer(self.flags.bits());
         writer.write_array_size(self.bones.len())?;
         self.bone_offset = writer.write_integer_index();
@@ -210,6 +209,7 @@ impl WriteToWriter for ModelHeader {
         writer.write_array_size(self.local_inverse_kinematics_auto_play_locks.len())?;
         self.local_inverse_kinematics_auto_play_lock_offset = writer.write_integer_index();
         writer.write_float(self.mass);
+        // TODO: Assert flags for flags that conflict.
         writer.write_integer(self.contents.bits());
         writer.write_array_size(self.include_models.len())?;
         self.include_model_offset = writer.write_integer_index();
@@ -384,24 +384,24 @@ impl WriteToWriter for ModelHeader {
 
 #[derive(Debug, Default)]
 #[allow(dead_code)]
-pub enum ModelHeaderIdentifier {
+pub enum ModelFileHeaderIdentifier {
     #[default]
     Studio,
     Animation,
 }
 
-impl ModelHeaderIdentifier {
+impl ModelFileHeaderIdentifier {
     pub fn to_integer(&self) -> i32 {
         match self {
-            ModelHeaderIdentifier::Studio => (84 << 24) + (83 << 16) + (68 << 8) + 73,
-            ModelHeaderIdentifier::Animation => (71 << 24) + (65 << 16) + (68 << 8) + 73,
+            ModelFileHeaderIdentifier::Studio => (84 << 24) + (83 << 16) + (68 << 8) + 73,
+            ModelFileHeaderIdentifier::Animation => (71 << 24) + (65 << 16) + (68 << 8) + 73,
         }
     }
 }
 
 bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct ModelHeaderFlags: i32 {
+    pub struct ModelFileHeaderFlags: i32 {
         const AUTOMATIC_GENERATED_HITBOXES       = 0x00000001;
         const FORCE_OPAQUE                       = 0x00000004;
         const FORCE_TRANSLUCENT                  = 0x00000008;
@@ -419,7 +419,7 @@ bitflags! {
     }
 
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct ModelHeaderContents: i32 {
+    pub struct ModelFileHeaderContents: i32 {
         const SOLID   = 0x00000001;
         const GRATE   = 0x00000008;
         const MONSTER = 0x02000000;
@@ -428,7 +428,7 @@ bitflags! {
 }
 
 #[derive(Debug, Default)]
-pub struct SecondModelHeader {
+pub struct ModelFileSecondHeader {
     pub write_base: usize,
     pub source_bone_transforms: Vec<()>,
     pub source_bone_transform_offset: usize,
@@ -441,7 +441,7 @@ pub struct SecondModelHeader {
     pub bone_flex_driver_offset: usize,
 }
 
-impl WriteToWriter for SecondModelHeader {
+impl WriteToWriter for ModelFileSecondHeader {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_array_size(self.source_bone_transforms.len())?;
@@ -458,7 +458,7 @@ impl WriteToWriter for SecondModelHeader {
     }
 }
 
-impl SecondModelHeader {
+impl ModelFileSecondHeader {
     fn write_source_bone_transforms(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         writer.write_to_integer_offset(self.source_bone_transform_offset, writer.data.len())?;
         // TODO: Write Source Bone Transforms
@@ -477,7 +477,7 @@ impl SecondModelHeader {
 }
 
 #[derive(Debug)]
-pub struct ModelBone {
+pub struct ModelFileBone {
     pub write_base: usize,
     pub name: String,
     pub parent: i32,
@@ -489,15 +489,15 @@ pub struct ModelBone {
     pub animation_rotation_scale: Vector3,
     pub pose: (Matrix, Vector3),
     pub alignment: Quaternion,
-    pub flags: ModelBoneFlags,
-    pub procedural_type: Option<ProceduralType>,
+    pub flags: ModelFileBoneFlags,
+    pub procedural_type: Option<ModelFileBoneProceduralType>,
     pub procedural_offset: usize,
     pub physics_index: i32,
     pub surface_properties: String,
-    pub contents: ModelHeaderContents,
+    pub contents: ModelFileHeaderContents,
 }
 
-impl Default for ModelBone {
+impl Default for ModelFileBone {
     fn default() -> Self {
         Self {
             write_base: Default::default(),
@@ -516,12 +516,12 @@ impl Default for ModelBone {
             procedural_offset: Default::default(),
             physics_index: Default::default(),
             surface_properties: String::from("default"),
-            contents: ModelHeaderContents::SOLID,
+            contents: ModelFileHeaderContents::SOLID,
         }
     }
 }
 
-impl WriteToWriter for ModelBone {
+impl WriteToWriter for ModelFileBone {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_string_to_table(self.write_base, &self.name);
@@ -561,7 +561,7 @@ impl WriteToWriter for ModelBone {
 
 bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct ModelBoneFlags: i32 {
+    pub struct ModelFileBoneFlags: i32 {
         const ALWAYS_PROCEDURAL        = 0x00000004;
         const SCREEN_ALIGN_SPHERE      = 0x00000008;
         const SCREEN_ALIGN_CYLINDER    = 0x00000010;
@@ -594,7 +594,7 @@ bitflags! {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub enum ProceduralType {
+pub enum ModelFileBoneProceduralType {
     // TODO: Add Structure Values To Enum Options.
     AxisInterpolation,
     QuaternionInterpolation,
@@ -603,7 +603,7 @@ pub enum ProceduralType {
     Jiggle,
 }
 
-impl ProceduralType {
+impl ModelFileBoneProceduralType {
     fn to_integer(&self) -> i32 {
         match self {
             Self::AxisInterpolation => 1,
@@ -616,14 +616,14 @@ impl ProceduralType {
 }
 
 #[derive(Debug)]
-pub struct ModelHitboxSet {
+pub struct ModelFileHitboxSet {
     pub write_base: usize,
     pub name: String,
-    pub hitboxes: Vec<ModelHitBox>,
+    pub hitboxes: Vec<ModelFileHitBox>,
     pub hitbox_offset: usize,
 }
 
-impl Default for ModelHitboxSet {
+impl Default for ModelFileHitboxSet {
     fn default() -> Self {
         Self {
             write_base: Default::default(),
@@ -634,7 +634,7 @@ impl Default for ModelHitboxSet {
     }
 }
 
-impl WriteToWriter for ModelHitboxSet {
+impl WriteToWriter for ModelFileHitboxSet {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_string_to_table(self.write_base, &self.name);
@@ -645,7 +645,7 @@ impl WriteToWriter for ModelHitboxSet {
     }
 }
 
-impl ModelHitboxSet {
+impl ModelFileHitboxSet {
     fn write_hitboxes(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         writer.write_to_integer_offset(self.hitbox_offset, writer.data.len() - self.write_base)?;
 
@@ -658,7 +658,7 @@ impl ModelHitboxSet {
 }
 
 #[derive(Debug, Default)]
-pub struct ModelHitBox {
+pub struct ModelFileHitBox {
     pub write_base: usize,
     pub bone: i32,
     pub group: i32,
@@ -666,7 +666,7 @@ pub struct ModelHitBox {
     pub name: Option<String>,
 }
 
-impl WriteToWriter for ModelHitBox {
+impl WriteToWriter for ModelFileHitBox {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_integer(self.bone);
@@ -684,17 +684,17 @@ impl WriteToWriter for ModelHitBox {
 }
 
 #[derive(Debug, Default)]
-pub struct ModelAnimationDescription {
+pub struct ModelFileAnimationDescription {
     pub write_base: usize,
     pub name: String,
     pub fps: f32,
-    pub flags: AnimationDescriptionFlags,
+    pub flags: ModelFileAnimationDescriptionFlags,
     pub frame_count: i32,
     pub movements: Vec<()>,
     pub movement_offset: usize,
     pub animation_block: i32,
     pub frames_per_section: i32,
-    pub animation_sections: Vec<ModelAnimationSection>,
+    pub animation_sections: Vec<ModelFileAnimationSection>,
     pub animation_offset: usize,
     pub inverse_kinematic_rules: Vec<()>,
     pub inverse_kinematic_rule_offset: usize,
@@ -706,7 +706,7 @@ pub struct ModelAnimationDescription {
     pub zero_frame_offset: usize,
 }
 
-impl WriteToWriter for ModelAnimationDescription {
+impl WriteToWriter for ModelFileAnimationDescription {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_negative_offset(writer.data.len())?;
@@ -735,7 +735,7 @@ impl WriteToWriter for ModelAnimationDescription {
     }
 }
 
-impl ModelAnimationDescription {
+impl ModelFileAnimationDescription {
     fn write_sections(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         if self.animation_sections.len() == 1 {
             return Ok(());
@@ -768,20 +768,22 @@ impl ModelAnimationDescription {
 
 bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct AnimationDescriptionFlags: i32 {
-        // TODO: Add Animation Description Flags
+    pub struct ModelFileAnimationDescriptionFlags: i32 {
+        const LOOPING  = 0x0001;
+        const DELTA    = 0x0004;
+        const ALL_ZERO = 0x0020;
     }
 }
 
 #[derive(Debug, Default)]
-pub struct ModelAnimationSection {
+pub struct ModelFileAnimationSection {
     pub write_base: usize,
     pub animation_block: i32,
     pub animation_index: usize,
-    pub animation_data: Vec<ModelAnimation>,
+    pub animation_data: Vec<ModelFileAnimation>,
 }
 
-impl WriteToWriter for ModelAnimationSection {
+impl WriteToWriter for ModelFileAnimationSection {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_integer(self.animation_block);
@@ -791,14 +793,14 @@ impl WriteToWriter for ModelAnimationSection {
     }
 }
 
-impl ModelAnimationSection {
+impl ModelFileAnimationSection {
     fn write_animation(&mut self, writer: &mut FileWriter, single: bool) -> Result<(), FileWriteError> {
         if !single {
             writer.write_to_integer_offset(self.animation_index, writer.data.len() - self.write_base)?;
         }
 
         if self.animation_data.is_empty() {
-            let mut animation = ModelAnimation {
+            let mut animation = ModelFileAnimation {
                 bone: 255,
                 ..Default::default()
             };
@@ -819,7 +821,7 @@ impl ModelAnimationSection {
 
 bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    struct ModelAnimationFlags: u8 {
+    struct ModelFileAnimationFlags: u8 {
         const RAW_POSITION = 0x01;
         const ANIMATED_POSITION = 0x04;
         const ANIMATED_ROTATION = 0x08;
@@ -829,39 +831,39 @@ bitflags! {
 }
 
 #[derive(Debug, Default)]
-pub struct ModelAnimation {
+pub struct ModelFileAnimation {
     pub write_base: usize,
     pub delta: bool,
     pub bone: u8,
-    pub rotation: Option<ModelAnimationData<Angles>>,
-    pub position: Option<ModelAnimationData<Vector3>>,
+    pub rotation: Option<ModelFileAnimationData<Angles>>,
+    pub position: Option<ModelFileAnimationData<Vector3>>,
     pub next_offset: usize,
 }
 
-impl WriteToWriter for ModelAnimation {
+impl WriteToWriter for ModelFileAnimation {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
 
         writer.write_unsigned_byte(self.bone);
 
-        let mut flags = ModelAnimationFlags::empty();
+        let mut flags = ModelFileAnimationFlags::empty();
 
         if self.delta {
-            flags |= ModelAnimationFlags::DELTA;
+            flags |= ModelFileAnimationFlags::DELTA;
         }
 
         match &self.rotation {
             Some(data) => match data {
-                ModelAnimationData::Single(_) => flags |= ModelAnimationFlags::RAW_ROTATION,
-                ModelAnimationData::Array(_) => flags |= ModelAnimationFlags::ANIMATED_ROTATION,
+                ModelFileAnimationData::Single(_) => flags |= ModelFileAnimationFlags::RAW_ROTATION,
+                ModelFileAnimationData::Array(_) => flags |= ModelFileAnimationFlags::ANIMATED_ROTATION,
             },
             None => {}
         }
 
         match &self.position {
             Some(data) => match data {
-                ModelAnimationData::Single(_) => flags |= ModelAnimationFlags::RAW_POSITION,
-                ModelAnimationData::Array(_) => flags |= ModelAnimationFlags::ANIMATED_POSITION,
+                ModelFileAnimationData::Single(_) => flags |= ModelFileAnimationFlags::RAW_POSITION,
+                ModelFileAnimationData::Array(_) => flags |= ModelFileAnimationFlags::ANIMATED_POSITION,
             },
             None => {}
         }
@@ -871,10 +873,10 @@ impl WriteToWriter for ModelAnimation {
 
         match &mut self.rotation {
             Some(data) => match data {
-                ModelAnimationData::Single(value) => {
+                ModelFileAnimationData::Single(value) => {
                     writer.write_quaternion64(value.to_quaternion());
                 }
-                ModelAnimationData::Array(value) => {
+                ModelFileAnimationData::Array(value) => {
                     value.write(writer)?;
                 }
             },
@@ -883,10 +885,10 @@ impl WriteToWriter for ModelAnimation {
 
         match &mut self.position {
             Some(data) => match data {
-                ModelAnimationData::Single(value) => {
+                ModelFileAnimationData::Single(value) => {
                     writer.write_vector48(*value);
                 }
-                ModelAnimationData::Array(value) => {
+                ModelFileAnimationData::Array(value) => {
                     value.write(writer)?;
                 }
             },
@@ -899,19 +901,19 @@ impl WriteToWriter for ModelAnimation {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub enum ModelAnimationData<T> {
+pub enum ModelFileAnimationData<T> {
     Single(T),
-    Array(ModelAnimationValue),
+    Array(ModelFileAnimationValue),
 }
 
 #[derive(Debug, Default)]
-pub struct ModelAnimationValue {
+pub struct ModelFileAnimationValue {
     pub write_base: usize,
     pub offsets: [usize; 3],
-    pub values: [Option<Vec<ModelAnimationEncoding>>; 3],
+    pub values: [Option<Vec<ModelFileAnimationEncoding>>; 3],
 }
 
-impl WriteToWriter for ModelAnimationValue {
+impl WriteToWriter for ModelFileAnimationValue {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
 
@@ -925,11 +927,11 @@ impl WriteToWriter for ModelAnimationValue {
 
                 for value in values {
                     match value {
-                        ModelAnimationEncoding::Header(header) => {
+                        ModelFileAnimationEncoding::Header(header) => {
                             writer.write_unsigned_byte(header.valid);
                             writer.write_unsigned_byte(header.total);
                         }
-                        ModelAnimationEncoding::Value(value) => {
+                        ModelFileAnimationEncoding::Value(value) => {
                             writer.write_short(*value);
                         }
                     }
@@ -943,23 +945,23 @@ impl WriteToWriter for ModelAnimationValue {
 
 #[derive(Debug)]
 #[allow(dead_code)]
-pub enum ModelAnimationEncoding {
-    Header(ModelAnimationEncodingHeader),
+pub enum ModelFileAnimationEncoding {
+    Header(ModelFileAnimationEncodingHeader),
     Value(i16),
 }
 
 #[derive(Debug, Default)]
-pub struct ModelAnimationEncodingHeader {
+pub struct ModelFileAnimationEncodingHeader {
     pub valid: u8,
     pub total: u8,
 }
 
 #[derive(Debug)]
-pub struct ModelSequenceDescription {
+pub struct ModelFileSequenceDescription {
     pub write_base: usize,
     pub name: String,
     pub activity_name: String,
-    pub flags: SequenceDescriptionFlags,
+    pub flags: ModelFileSequenceDescriptionFlags,
     pub activity: i32,
     pub activity_weight: i32,
     pub events: Vec<()>,
@@ -991,7 +993,7 @@ pub struct ModelSequenceDescription {
     pub activity_modifier_offset: usize,
 }
 
-impl Default for ModelSequenceDescription {
+impl Default for ModelFileSequenceDescription {
     fn default() -> Self {
         Self {
             write_base: Default::default(),
@@ -1031,7 +1033,7 @@ impl Default for ModelSequenceDescription {
     }
 }
 
-impl WriteToWriter for ModelSequenceDescription {
+impl WriteToWriter for ModelFileSequenceDescription {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
         writer.write_negative_offset(writer.data.len())?;
@@ -1080,7 +1082,7 @@ impl WriteToWriter for ModelSequenceDescription {
     }
 }
 
-impl ModelSequenceDescription {
+impl ModelFileSequenceDescription {
     fn write_bone_weights(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         writer.write_to_integer_offset(self.weight_list_offset, writer.data.len() - self.write_base)?;
 
@@ -1104,21 +1106,31 @@ impl ModelSequenceDescription {
 
 bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-    pub struct SequenceDescriptionFlags: i32 {
-        // TODO: Add Sequence Description Flags
+    pub struct ModelFileSequenceDescriptionFlags: i32 {
+        const LOOPING    = 0x0001;
+        const SNAP       = 0x0002;
+        const DELTA      = 0x0004;
+        const AUTO_PLAY  = 0x0008;
+        const POST       = 0x0010;
+        const CYCLE_POSE = 0x0080;
+        const REALTIME   = 0x0100;
+        const LOCAL      = 0x0200;
+        const ACTIVITY   = 0x1000;
+        const EVENT      = 0x2000;
+        const WORLD      = 0x4000;
     }
 }
 
 #[derive(Debug, Default)]
-pub struct ModelBodyPart {
+pub struct ModelFileBodyPart {
     pub write_base: usize,
     pub name: String,
-    pub models: Vec<ModelModel>,
+    pub models: Vec<ModelFileModel>,
     pub model_offset: usize,
     pub base: i32,
 }
 
-impl WriteToWriter for ModelBodyPart {
+impl WriteToWriter for ModelFileBodyPart {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
 
@@ -1131,7 +1143,7 @@ impl WriteToWriter for ModelBodyPart {
     }
 }
 
-impl ModelBodyPart {
+impl ModelFileBodyPart {
     fn write_models(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         writer.write_to_integer_offset(self.model_offset, writer.data.len() - self.write_base)?;
 
@@ -1158,10 +1170,10 @@ impl ModelBodyPart {
 }
 
 #[derive(Debug, Default)]
-pub struct ModelModel {
+pub struct ModelFileModel {
     pub write_base: usize,
     pub name: String,
-    pub meshes: Vec<ModelMesh>,
+    pub meshes: Vec<ModelFileMesh>,
     pub mesh_offset: usize,
     pub vertex_count: i32,
     pub vertex_offset: i32,
@@ -1170,7 +1182,7 @@ pub struct ModelModel {
     pub eyeball_offset: usize,
 }
 
-impl WriteToWriter for ModelModel {
+impl WriteToWriter for ModelFileModel {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
 
@@ -1194,10 +1206,10 @@ impl WriteToWriter for ModelModel {
     }
 }
 
-impl ModelModel {}
+impl ModelFileModel {}
 
 #[derive(Debug, Default)]
-pub struct ModelMesh {
+pub struct ModelFileMesh {
     pub write_base: usize,
     pub material: i32,
     pub model_index: usize,
@@ -1211,7 +1223,7 @@ pub struct ModelMesh {
     pub vertex_lod_count: [i32; 8],
 }
 
-impl WriteToWriter for ModelMesh {
+impl WriteToWriter for ModelFileMesh {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
 
@@ -1233,21 +1245,21 @@ impl WriteToWriter for ModelMesh {
     }
 }
 
-impl ModelMesh {}
+impl ModelFileMesh {}
 
 #[derive(Debug, Default)]
-pub struct ModelMaterial {
+pub struct ModelFileMaterial {
     pub write_base: usize,
     pub name: String,
 }
 
-impl WriteToWriter for ModelMaterial {
+impl WriteToWriter for ModelFileMaterial {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         self.write_base = writer.data.len();
 
         writer.write_string_to_table(self.write_base, &self.name);
-        writer.write_integer(0); // TODO: Should this be written? Don't think the engine uses it.
-        writer.write_integer(0); // TODO: Should this be written? Don't think the engine uses it.
+        writer.write_integer(0);
+        writer.write_integer(0);
         writer.write_integer(0);
         writer.write_integer(0);
         writer.write_integer(0);

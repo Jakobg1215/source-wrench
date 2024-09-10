@@ -3,8 +3,8 @@ use std::{collections::HashMap, fs::write, mem::size_of};
 use half::f16;
 use mesh::{MeshFileMaterialReplacementListHeader, MeshFileModelHeader, MeshFileStripFlags, MeshFileStripGroupHeaderFlags};
 use model::{
-    ModelAnimationDescription, ModelAnimationSection, ModelBodyPart, ModelBone, ModelBoneFlags, ModelHeader, ModelHitBox, ModelHitboxSet, ModelMaterial,
-    ModelMesh, ModelModel, ModelSequenceDescription, SecondModelHeader,
+    ModelFileAnimationDescription, ModelFileAnimationSection, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitBox,
+    ModelFileHitboxSet, ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
 };
 use thiserror::Error as ThisError;
 
@@ -241,10 +241,10 @@ pub trait WriteToWriter {
 
 pub fn write_files(name: String, processed_data: ProcessedData, export_path: String) -> Result<(), FileWriteError> {
     let mut mdl_writer = FileWriter::default();
-    let mut mdl_header = ModelHeader {
+    let mut mdl_header = ModelFileHeader {
         version: 48,
         checksum: 69420,
-        second_header: SecondModelHeader { name, ..Default::default() },
+        second_header: ModelFileSecondHeader { name, ..Default::default() },
         ..Default::default()
     };
 
@@ -263,7 +263,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             )
         }
 
-        let bone = ModelBone {
+        let bone = ModelFileBone {
             name: processed_bone.name,
             parent: match processed_bone.parent {
                 Some(index) => index as i32,
@@ -275,7 +275,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             animation_position_scale: processed_bone.animation_position_scale,
             animation_rotation_scale: processed_bone.animation_rotation_scale,
             pose: invert(processed_bone.pose.0, processed_bone.pose.1),
-            flags: ModelBoneFlags::USED_BY_VERTEX_AT_LOD0,
+            flags: ModelFileBoneFlags::USED_BY_VERTEX_AT_LOD0,
             ..Default::default()
         };
         mdl_header.bones.push(bone);
@@ -283,9 +283,9 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
     mdl_header.sorted_bone_table_by_name = processed_data.bone_data.sorted_bones_by_name.iter().map(|bone| *bone as u8).collect();
 
-    let hitbox_set = ModelHitboxSet {
+    let hitbox_set = ModelFileHitboxSet {
         name: "default".to_string(),
-        hitboxes: vec![ModelHitBox {
+        hitboxes: vec![ModelFileHitBox {
             bounding_box: BoundingBox {
                 minimum: Vector3 { x: -10.0, y: -10.0, z: 0.0 },
                 maximum: Vector3 { x: 10.0, y: 10.0, z: 20.0 },
@@ -298,10 +298,11 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     mdl_header.hitbox_sets.push(hitbox_set);
 
     for processed_animation in processed_data.animation_data {
-        let animation_description = ModelAnimationDescription {
+        let animation_description = ModelFileAnimationDescription {
             name: processed_animation.name,
+            fps: 30.0,
             frame_count: processed_animation.frame_count as i32,
-            animation_sections: vec![ModelAnimationSection::default()],
+            animation_sections: vec![ModelFileAnimationSection::default()],
             ..Default::default()
         };
 
@@ -309,8 +310,10 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     }
 
     for processed_sequence in processed_data.sequence_data {
-        let sequence_description = ModelSequenceDescription {
+        let sequence_description = ModelFileSequenceDescription {
             name: processed_sequence.name,
+            fade_in_time: 0.2,
+            fade_out_time: 0.2,
             animations: processed_sequence.animations.iter().map(|index| *index as i16).collect(),
             blend_size: [processed_sequence.animations.len() as i32; 2], // TODO: Change this to support multiple blend sizes.
             weight_list: vec![1.0; mdl_header.bones.len()],
@@ -343,7 +346,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     let mut mesh_id = 0;
     let mut previous_base: Option<(i32, usize)> = None;
     for processed_body_part in processed_data.model_data.body_parts {
-        let mut body_part = ModelBodyPart {
+        let mut body_part = ModelFileBodyPart {
             name: processed_body_part.name,
             base: match previous_base {
                 Some(base) => base.0 * base.1 as i32,
@@ -357,7 +360,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         let mut mesh_body_part_header = MeshFileBodyPartHeader::default();
 
         for processed_part in processed_body_part.parts {
-            let mut model = ModelModel {
+            let mut model = ModelFileModel {
                 name: processed_part.name,
                 vertex_count: processed_part.meshes.iter().map(|mesh| mesh.vertex_data.len()).sum::<usize>() as i32,
                 vertex_offset: (vvd_header.vertices.len() * 48) as i32,
@@ -370,7 +373,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
             let mut vertex_count = 0;
             for processed_mesh in processed_part.meshes {
-                let body_mesh = ModelMesh {
+                let body_mesh = ModelFileMesh {
                     material: processed_mesh.material as i32,
                     vertex_count: processed_mesh.vertex_data.len() as i32,
                     vertex_offset: vertex_count as i32,
@@ -465,7 +468,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     vvd_header.lod_vertex_count = [vvd_header.vertices.len() as i32; MAX_LOD_COUNT];
 
     for processed_material in processed_data.model_data.materials {
-        let material = ModelMaterial {
+        let material = ModelFileMaterial {
             name: processed_material,
             ..Default::default()
         };
