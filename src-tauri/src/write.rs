@@ -195,7 +195,7 @@ impl FileWriter {
             return Err(FileWriteError::OffsetToLarge);
         }
 
-        self.write_integer(offset as i32);
+        self.write_integer(-(offset as i32));
         Ok(())
     }
 
