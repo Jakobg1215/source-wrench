@@ -61,13 +61,25 @@ pub struct ProcessedAnimatedBoneData {
 #[derive(Debug)]
 pub enum ProcessedAnimationPosition {
     Raw(Vector3),
-    Compressed, // TODO: Implement compression
+    Compressed(ProcessedAnimationEncoding),
 }
 
 #[derive(Debug)]
 pub enum ProcessedAnimationRotation {
     Raw(Quaternion),
-    Compressed, // TODO: Implement compression
+    Compressed(ProcessedAnimationEncoding),
+}
+
+#[derive(Debug)]
+pub enum ProcessedAnimationEncoding {
+    Header(ProcessedAnimationEncodingHeader),
+    Value(i16),
+}
+
+#[derive(Debug, Default)]
+pub struct ProcessedAnimationEncodingHeader {
+    pub valid: u8,
+    pub total: u8,
 }
 
 #[derive(Debug, Default)]

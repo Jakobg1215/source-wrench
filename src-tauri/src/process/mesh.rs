@@ -53,12 +53,7 @@ pub fn process_mesh_data(
 
         for imputed_model in &imputed_body_part.models {
             if imputed_model.is_blank {
-                let processed_model = ProcessedModel {
-                    name: String::from("blank"),
-                    ..Default::default()
-                };
-
-                processed_body_part.parts.push(processed_model);
+                processed_body_part.parts.push(ProcessedModel::default());
                 continue;
             }
 
@@ -86,6 +81,12 @@ pub fn process_mesh_data(
                 &mut processed_model_data.materials,
                 bone_table.remapped_bones.get(&imputed_model.file_source).unwrap(),
             )?;
+
+            if triangle_lists.is_empty() {
+                log("Model Had No Parts! Defaulting To Blank!", LogLevel::Warn);
+                processed_body_part.parts.push(ProcessedModel::default());
+                continue;
+            }
 
             for list in triangle_lists.values_mut() {
                 calculate_vertex_tangents(list);
@@ -457,10 +458,9 @@ fn optimize_indices_order(list: &mut TriangleList) {
         cache_new[cache_write] = point3;
         cache_write += 1;
 
-        for cache_index in 0..cache_count {
-            let index = cache[cache_index];
-            cache_new[cache_write] = index;
-            cache_write += ((index != point1) as usize) & ((index != point2) as usize) & ((index != point3) as usize);
+        for index in cache.iter().take(cache_count) {
+            cache_new[cache_write] = *index;
+            cache_write += ((*index != point1) as usize) & ((*index != point2) as usize) & ((*index != point3) as usize);
         }
 
         std::mem::swap(&mut cache, &mut cache_new);
@@ -486,20 +486,18 @@ fn optimize_indices_order(list: &mut TriangleList) {
         let mut best_triangle = 0;
         let mut best_score = 0.0;
 
-        for cache_index in 0..cache_write {
-            let cached_index = cache[cache_index];
-
-            if adjacency.counts[cached_index] == 0 {
+        for (index, cached_index) in cache.iter().enumerate().take(cache_write) {
+            if adjacency.counts[*cached_index] == 0 {
                 continue;
             }
 
-            let cache_position = if cache_index >= VERTEX_CACHE_SIZE { None } else { Some(cache_index) };
-            let score = calculate_vertex_scores(cache_position, adjacency.counts[cached_index]);
-            let score_difference = score - vertex_scores[cached_index];
+            let cache_position = if index >= VERTEX_CACHE_SIZE { None } else { Some(index) };
+            let score = calculate_vertex_scores(cache_position, adjacency.counts[*cached_index]);
+            let score_difference = score - vertex_scores[*cached_index];
 
-            vertex_scores[cached_index] = score;
+            vertex_scores[*cached_index] = score;
 
-            for triangle_index in &adjacency.data[adjacency.offsets[cached_index]..adjacency.offsets[cached_index] + adjacency.counts[cached_index]] {
+            for triangle_index in &adjacency.data[adjacency.offsets[*cached_index]..adjacency.offsets[*cached_index] + adjacency.counts[*cached_index]] {
                 let triangle_score = triangle_scores[*triangle_index] + score_difference;
 
                 best_triangle = if best_score < triangle_score { *triangle_index } else { best_triangle };

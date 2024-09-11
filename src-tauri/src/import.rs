@@ -6,7 +6,6 @@ use std::{
 };
 
 use serde::Serialize;
-use smd::ParseSMDError;
 use thiserror::Error as ThisError;
 
 use crate::utilities::{
@@ -14,7 +13,11 @@ use crate::utilities::{
     mathematics::{Quaternion, Vector2, Vector3},
 };
 
+mod obj;
 mod smd;
+
+use obj::ParseOBJError;
+use smd::ParseSMDError;
 
 #[derive(Debug, Default, Serialize)]
 pub struct ImportFileData {
@@ -103,8 +106,10 @@ pub enum ParseError {
     FileDoesNotHaveExtension,
     #[error("File Format Is Not Supported")]
     UnsupportedFileFormat,
-    #[error("Failed To Parse SMD File")]
+    #[error("Failed To Parse SMD File due to {0}")]
     FailedSMDFileParse(#[from] ParseSMDError),
+    #[error("Failed To Parse OBJ File due to {0}")]
+    FailedOBJFileParse(#[from] ParseOBJError),
 }
 
 #[derive(Debug, Default)]
@@ -135,6 +140,7 @@ impl FileManager {
         let imported_file = match file_extension.to_str().expect("Failed To Convert File Extension To String!") {
             "smd" => smd::load_smd(file_path)?,
             "vta" => todo!("Support VTA Files!"),
+            "obj" => obj::load_obj(file_path)?,
             _ => return Err(ParseError::UnsupportedFileFormat),
         };
 
