@@ -129,10 +129,13 @@ const App: Component = () => {
                         </div>
                     </Show>
                 </section>
-                <Logging />
                 <BodyPartMenu bodyPartEntries={bodyPartEntries} setBodyPartEntries={setBodyPartEntries} />
                 <AnimationMenu animationEntries={animationEntries} setAnimationEntries={setAnimationEntries} />
                 <SequenceMenu sequenceEntries={sequenceEntries} setSequenceEntries={setSequenceEntries} />
+
+                <div class="w-screen">
+                    <Logging />
+                </div>
             </main>
         </>
     );
