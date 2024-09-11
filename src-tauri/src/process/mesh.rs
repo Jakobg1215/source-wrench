@@ -27,13 +27,13 @@ struct TriangleList {
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingMeshError {
-    #[error("Model File Source Not Loaded!")]
+    #[error("Model File Source Not Loaded")]
     FileSourceNotLoaded,
     #[error("Part Not Found: {0}")]
     PartNotFound(String),
-    #[error("Face Was Incomplete!")]
+    #[error("Face Was Incomplete")]
     IncompleteFace,
-    #[error("Vertex Weights Were Not Found!")]
+    #[error("Vertex Weights Were Not Found")]
     VertexHasNoWeights,
 }
 
@@ -69,7 +69,6 @@ pub fn process_mesh_data(
             let imported_file = match import.get_file(&imputed_model.file_source) {
                 Some(file) => file,
                 None => {
-                    log("File {} Was Not Loaded!", LogLevel::Error);
                     return Err(ProcessingMeshError::FileSourceNotLoaded);
                 }
             };
@@ -300,7 +299,7 @@ fn create_bone_links(processed_vertex: &mut ProcessedVertex, vertex: &ImportVert
     }
 
     if processed_vertex.bone_count == 0 {
-        log("Vertex Has No Weight Links!", LogLevel::Error);
+        // This is technically a failure of the compiler if the imports are not added a bone.
         return Err(ProcessingMeshError::VertexHasNoWeights);
     }
 
@@ -311,7 +310,6 @@ fn normalize_bone_links(arr: &mut [f64; 3], count: usize) -> Result<(), Processi
     let sum = arr.iter().take(count).sum::<f64>();
 
     if sum < f64::EPSILON {
-        log("Vertex Weight Total To 0!", LogLevel::Error);
         return Err(ProcessingMeshError::VertexHasNoWeights);
     }
 

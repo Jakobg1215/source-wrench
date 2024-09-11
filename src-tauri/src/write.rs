@@ -28,11 +28,11 @@ pub const MAX_LOD_COUNT: usize = 8;
 
 #[derive(Debug, ThisError)]
 pub enum FileWriteError {
-    #[error("Array provided is too large to write to file.")]
+    #[error("Array Provided Is Too Large To Write To File")]
     ArraySizeToLarge,
-    #[error("Keyvalues provided are too large to write to file.")]
+    #[error("Keyvalues Provided Are Too Large To Write To File")]
     KeyvaluesToLarge,
-    #[error("Offset provided is too large to write to file.")]
+    #[error("Offset Provided Is Too Large To Write To File")]
     OffsetToLarge,
 }
 
@@ -190,7 +190,7 @@ impl FileWriter {
     }
 
     pub fn write_negative_offset(&mut self, offset: usize) -> Result<(), FileWriteError> {
-        if offset > i32::MAX as usize {
+        if offset > i32::MIN.unsigned_abs() as usize {
             return Err(FileWriteError::OffsetToLarge);
         }
 
