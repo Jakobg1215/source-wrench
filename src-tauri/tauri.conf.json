@@ -4,7 +4,9 @@
             {
                 "label": "main",
                 "center": true,
-                "title": "Source Wrench"
+                "title": "Source Wrench",
+                "height": 650,
+                "width": 1000
             }
         ],
         "security": {
