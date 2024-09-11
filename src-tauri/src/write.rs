@@ -1,11 +1,6 @@
 use std::{collections::HashMap, fs::write, mem::size_of};
 
 use half::f16;
-use mesh::{MeshFileMaterialReplacementListHeader, MeshFileModelHeader, MeshFileStripFlags, MeshFileStripGroupHeaderFlags};
-use model::{
-    ModelFileAnimationDescription, ModelFileAnimationSection, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitBox,
-    ModelFileHitboxSet, ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
-};
 use thiserror::Error as ThisError;
 
 use crate::{
@@ -13,17 +8,21 @@ use crate::{
     utilities::mathematics::{clamp, Angles, BoundingBox, Matrix, Quaternion, Vector2, Vector3, Vector4},
 };
 
-use self::{
-    mesh::{
-        MeshFileBodyPartHeader, MeshFileBoneStateChangeHeader, MeshFileHeader, MeshFileMeshHeader, MeshFileModelLODHeader, MeshFileStripGroupHeader,
-        MeshFileStripHeader, MeshFileVertexHeader,
-    },
-    vertex::{VertexFileHeader, VertexFileVertex},
-};
-
 mod mesh;
 mod model;
 mod vertex;
+
+use mesh::{
+    MeshFileBodyPartHeader, MeshFileBoneStateChangeHeader, MeshFileHeader, MeshFileMaterialReplacementListHeader, MeshFileMeshHeader, MeshFileModelHeader,
+    MeshFileModelLODHeader, MeshFileStripFlags, MeshFileStripGroupHeader, MeshFileStripGroupHeaderFlags, MeshFileStripHeader, MeshFileVertexHeader,
+};
+
+use model::{
+    ModelFileAnimationDescription, ModelFileAnimationSection, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitBox,
+    ModelFileHitboxSet, ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
+};
+
+use vertex::{VertexFileHeader, VertexFileVertex};
 
 pub const MAX_LOD_COUNT: usize = 8;
 

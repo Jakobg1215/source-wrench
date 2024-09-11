@@ -1,18 +1,19 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::Arc;
+
+use tauri::Manager;
+
 pub mod import;
 pub mod input;
 pub mod process;
 pub mod utilities;
 pub mod write;
 
-use std::sync::Arc;
-
 use import::{FileManager, ImportFileData};
 use input::ImputedCompilationData;
 use process::process;
-use tauri::Manager;
 use utilities::logging::{log, LogLevel, LOGGER};
 use write::write_files;
 

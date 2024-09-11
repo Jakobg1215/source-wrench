@@ -8,7 +8,6 @@ use thiserror::Error as ThisError;
 use crate::{
     import::{FileManager, ImportLink, ImportPart, ImportVertex},
     input::ImputedCompilationData,
-    process::VERTEX_CACHE_SIZE,
     utilities::{
         logging::{log, LogLevel},
         mathematics::{Vector3, Vector4},
@@ -17,7 +16,7 @@ use crate::{
 
 use super::{
     bones::BoneTable, ProcessedBodyPart, ProcessedHardwareBone, ProcessedMesh, ProcessedMeshVertex, ProcessedModel, ProcessedModelData, ProcessedStrip,
-    ProcessedStripGroup, ProcessedVertex, FLOAT_TOLERANCE,
+    ProcessedStripGroup, ProcessedVertex, FLOAT_TOLERANCE, VERTEX_CACHE_SIZE,
 };
 
 #[derive(Debug, Default)]

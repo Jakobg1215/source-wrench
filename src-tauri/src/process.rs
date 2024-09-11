@@ -1,14 +1,10 @@
-use animation::{process_animations, process_sequences};
-use bones::process_bone_table;
 use indexmap::IndexSet;
-use mesh::{process_mesh_data, ProcessingMeshError};
 use tauri::State;
 use thiserror::Error as ThisError;
 
 use crate::{
     import::FileManager,
     input::ImputedCompilationData,
-    process::bones::create_bone_table,
     utilities::{
         logging::{log, LogLevel},
         mathematics::{Angles, Matrix, Quaternion, Vector2, Vector3, Vector4},
@@ -18,6 +14,10 @@ use crate::{
 mod animation;
 mod bones;
 mod mesh;
+
+use animation::{process_animations, process_sequences};
+use bones::{create_bone_table, process_bone_table};
+use mesh::{process_mesh_data, ProcessingMeshError};
 
 #[derive(Debug, Default)]
 pub struct ProcessedData {
