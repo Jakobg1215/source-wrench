@@ -852,47 +852,43 @@ impl WriteToWriter for ModelFileAnimation {
             flags |= ModelFileAnimationFlags::DELTA;
         }
 
-        match &self.rotation {
-            Some(data) => match data {
+        if let Some(data) = &self.rotation {
+            match data {
                 ModelFileAnimationData::Single(_) => flags |= ModelFileAnimationFlags::RAW_ROTATION,
                 ModelFileAnimationData::Array(_) => flags |= ModelFileAnimationFlags::ANIMATED_ROTATION,
-            },
-            None => {}
+            }
         }
 
-        match &self.position {
-            Some(data) => match data {
+        if let Some(data) = &self.position {
+            match data {
                 ModelFileAnimationData::Single(_) => flags |= ModelFileAnimationFlags::RAW_POSITION,
                 ModelFileAnimationData::Array(_) => flags |= ModelFileAnimationFlags::ANIMATED_POSITION,
-            },
-            None => {}
+            }
         }
 
         writer.write_unsigned_byte(flags.bits());
         self.next_offset = writer.write_short_index();
 
-        match &mut self.rotation {
-            Some(data) => match data {
+        if let Some(data) = &mut self.rotation {
+            match data {
                 ModelFileAnimationData::Single(value) => {
                     writer.write_quaternion64(value.to_quaternion());
                 }
                 ModelFileAnimationData::Array(value) => {
                     value.write(writer)?;
                 }
-            },
-            None => {}
+            }
         }
 
-        match &mut self.position {
-            Some(data) => match data {
+        if let Some(data) = &mut self.position {
+            match data {
                 ModelFileAnimationData::Single(value) => {
                     writer.write_vector48(*value);
                 }
                 ModelFileAnimationData::Array(value) => {
                     value.write(writer)?;
                 }
-            },
-            None => {}
+            }
         }
 
         Ok(())
