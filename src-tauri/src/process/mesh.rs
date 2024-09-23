@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    bones::BoneTable, ProcessedBodyPart, ProcessedHardwareBone, ProcessedMesh, ProcessedMeshVertex, ProcessedModel, ProcessedModelData, ProcessedStrip,
-    ProcessedStripGroup, ProcessedVertex, FLOAT_TOLERANCE, VERTEX_CACHE_SIZE,
+    ProcessedBodyPart, ProcessedBoneData, ProcessedHardwareBone, ProcessedMesh, ProcessedMeshVertex, ProcessedModel, ProcessedModelData, ProcessedStrip,
+    ProcessedStripGroup, ProcessedVertex, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE,
 };
 
 #[derive(Debug, Default)]
@@ -40,7 +40,7 @@ pub enum ProcessingMeshError {
 pub fn process_mesh_data(
     input: &ImputedCompilationData,
     import: &State<FileManager>,
-    bone_table: &BoneTable,
+    bone_table: &ProcessedBoneData,
 ) -> Result<ProcessedModelData, ProcessingMeshError> {
     let mut processed_model_data = ProcessedModelData::default();
 
@@ -110,7 +110,7 @@ pub fn process_mesh_data(
                 for triangle in list.triangles {
                     triangle_count += 1;
                     let new_vertex_count = triangle.iter().filter(|&&value| mapped_indices.contains_key(&value)).count();
-                    if processed_strip_group.vertices.len() + new_vertex_count > (u16::MAX - 3) as usize {
+                    if processed_strip_group.vertices.len() + new_vertex_count > u16::MAX as usize {
                         processed_strip_group.strips.push(processed_strip);
                         processed_mesh.strip_groups.push(processed_strip_group);
                         processed_model.meshes.push(processed_mesh);
@@ -124,6 +124,33 @@ pub fn process_mesh_data(
                         };
                         processed_strip_group = ProcessedStripGroup::default();
                         processed_strip = ProcessedStrip::default();
+                    }
+
+                    let new_hardware_bone_count = triangle
+                        .iter()
+                        .map(|&vertex_index| list.vertices[vertex_index])
+                        .collect::<Vec<_>>()
+                        .iter()
+                        .map(|vertex| {
+                            vertex
+                                .bones
+                                .iter()
+                                .take(vertex.bone_count)
+                                .filter(|&bone| hardware_bones.contains(bone))
+                                .count()
+                        })
+                        .sum::<usize>();
+
+                    if hardware_bones.len() + new_hardware_bone_count > MAX_HARDWARE_BONES_PER_STRIP {
+                        let new_processed_strip = ProcessedStrip {
+                            indices_offset: processed_strip.indices_offset + processed_strip.indices_count,
+                            vertex_offset: processed_strip.vertex_offset + processed_strip.vertex_count,
+                            ..Default::default()
+                        };
+
+                        hardware_bones.clear();
+                        processed_strip_group.strips.push(processed_strip);
+                        processed_strip = new_processed_strip;
                     }
 
                     for index in triangle {
@@ -140,18 +167,6 @@ pub fn process_mesh_data(
                             ..Default::default()
                         };
 
-                        // FIXME: This doesn't work, but it should work or it won't load.
-                        /* if hardware_bones.len() + vertex_data.bone_count > MAX_HARDWARE_BONES_PER_STRIP {
-                            let new_strip = ProcessedStrip {
-                                indices_offset: processed_strip.indices_count - 1,
-                                vertex_offset: processed_strip.vertex_count,
-                                ..Default::default()
-                            };
-                            processed_strip_group.strips.push(processed_strip);
-                            hardware_bones.clear();
-                            processed_strip = new_strip;
-                        } */
-
                         processed_strip.bone_count = if vertex_data.bone_count > processed_strip.bone_count {
                             vertex_data.bone_count
                         } else {
@@ -161,11 +176,12 @@ pub fn process_mesh_data(
                         for bone_index in 0..vertex_data.bone_count {
                             let bone = vertex_data.bones[bone_index];
 
-                            let hardware_bone_index = hardware_bones.insert_full(bone);
-                            processed_mesh_vertex.bones[bone_index] = hardware_bone_index.0;
-                            if hardware_bone_index.1 {
+                            let (hardware_bone_index, new_hardware_bone) = hardware_bones.insert_full(bone);
+
+                            processed_mesh_vertex.bones[bone_index] = hardware_bone_index;
+                            if new_hardware_bone {
                                 let processed_hardware_bone = ProcessedHardwareBone {
-                                    hardware_bone: processed_strip.hardware_bones.len(),
+                                    hardware_bone: hardware_bone_index,
                                     bone_table_bone: bone,
                                 };
                                 processed_strip.hardware_bones.push(processed_hardware_bone);
@@ -203,7 +219,7 @@ fn create_triangle_lists(
     part_names: &[Option<String>],
     parts: &[ImportPart],
     material_table: &mut IndexSet<String>,
-    mapped_bone: &HashMap<usize, usize>,
+    mapped_bone: &[usize],
 ) -> Result<IndexMap<usize, TriangleList>, ProcessingMeshError> {
     let mut triangle_lists = IndexMap::new();
     let mut processed_vertices_trees = IndexMap::new();
@@ -243,6 +259,8 @@ fn create_triangle_lists(
                             ..Default::default()
                         };
 
+                        // TODO: StudioMDL will move the vertices with the define bones to fix up the bind pose, this should be done here.
+
                         create_bone_links(&mut processed_vertex, import_vertex, mapped_bone)?;
 
                         let neighbors = processed_vertices_tree
@@ -277,12 +295,12 @@ fn triangulate_face(face: &[usize], _vertices: &[ImportVertex]) -> Vec<[usize; 3
     todo!("Triangulate Face Here")
 }
 
-fn create_bone_links(processed_vertex: &mut ProcessedVertex, vertex: &ImportVertex, mapped_bone: &HashMap<usize, usize>) -> Result<(), ProcessingMeshError> {
+fn create_bone_links(processed_vertex: &mut ProcessedVertex, vertex: &ImportVertex, mapped_bone: &[usize]) -> Result<(), ProcessingMeshError> {
     let remapped_weights = vertex
         .links
         .iter()
         .map(|link| ImportLink {
-            bone: *mapped_bone.get(&link.bone).expect("Mapped Bone Not Found!"),
+            bone: mapped_bone[link.bone],
             weight: link.weight,
         })
         .collect::<Vec<_>>();
@@ -294,7 +312,7 @@ fn create_bone_links(processed_vertex: &mut ProcessedVertex, vertex: &ImportVert
         }
 
         processed_vertex.weights[processed_vertex.bone_count] = weight.weight;
-        processed_vertex.bones[processed_vertex.bone_count] = *mapped_bone.get(&weight.bone).expect("Mapped Bone Not Found!");
+        processed_vertex.bones[processed_vertex.bone_count] = weight.bone;
         processed_vertex.bone_count += 1;
     }
 

@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use bones::{process_bones, ProcessingBoneError};
 use indexmap::IndexSet;
 use tauri::State;
 use thiserror::Error as ThisError;
@@ -7,7 +10,7 @@ use crate::{
     input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{Angles, Matrix, Quaternion, Vector2, Vector3, Vector4},
+        mathematics::{Angles, Matrix4, Quaternion, Vector2, Vector3, Vector4},
     },
 };
 
@@ -16,7 +19,6 @@ mod bones;
 mod mesh;
 
 use animation::{process_animations, process_sequences};
-use bones::{create_bone_table, process_bone_table};
 use mesh::{process_mesh_data, ProcessingMeshError};
 
 #[derive(Debug, Default)]
@@ -30,6 +32,7 @@ pub struct ProcessedData {
 #[derive(Debug, Default)]
 pub struct ProcessedBoneData {
     pub processed_bones: Vec<ProcessedBone>,
+    pub remapped_bones: HashMap<String, Vec<usize>>,
     pub sorted_bones_by_name: Vec<usize>,
 }
 
@@ -39,7 +42,7 @@ pub struct ProcessedBone {
     pub parent: Option<usize>,
     pub position: Vector3,
     pub rotation: Angles,
-    pub pose: (Matrix, Vector3),
+    pub pose: Matrix4,
     pub animation_position_scale: Vector3,
     pub animation_rotation_scale: Vector3,
 }
@@ -157,10 +160,10 @@ pub struct ProcessedHardwareBone {
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingDataError {
-    #[error("Bone Had Different Hierarchy Than Pose")]
-    BoneHierarchyError,
     #[error("Model Has Too Many Bone")]
     TooManyBones,
+    #[error("Model Has No Bones")]
+    NoBones,
     #[error("Model Has Too Many Animations")]
     TooManyAnimations,
     #[error("Model Has Too Many Sequences")]
@@ -173,6 +176,8 @@ pub enum ProcessingDataError {
     TooManyMaterials,
     #[error("Model Has Too Many Body Parts")]
     TooManyBodyParts,
+    #[error("Failed To Process Bone Data")]
+    ProcessingBoneError(#[from] ProcessingBoneError),
     #[error("Failed To Process Mesh Data")]
     ProcessingMeshError(#[from] ProcessingMeshError),
 }
@@ -181,18 +186,23 @@ pub const MAX_HARDWARE_BONES_PER_STRIP: usize = 53;
 pub const VERTEX_CACHE_SIZE: usize = 16;
 
 /// The tolerance for floating point numbers until they are considered equal.
-// TODO: Make this an imputed value.
 const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
 
 pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>) -> Result<ProcessedData, ProcessingDataError> {
-    log("Creating Bone Table", LogLevel::Debug);
-    let mut bone_table = create_bone_table(file_manager)?;
-    log(format!("Model uses {} source bones", bone_table.bones.len()), LogLevel::Verbose);
+    log("Processing Bones", LogLevel::Debug);
+    let mut processed_bone_data = process_bones(input, file_manager)?;
+    log(format!("Model uses {} bones", processed_bone_data.processed_bones.len()), LogLevel::Verbose);
 
-    // TODO: Mark bones as collapsed if they are not used.
+    if processed_bone_data.processed_bones.is_empty() {
+        return Err(ProcessingDataError::NoBones);
+    }
+
+    if processed_bone_data.processed_bones.len() > (i8::MAX as usize) + 1 {
+        return Err(ProcessingDataError::TooManyBones);
+    }
 
     log("Processing Animations", LogLevel::Debug);
-    let processed_animations = process_animations(input, file_manager, &mut bone_table)?;
+    let processed_animations = process_animations(input, file_manager, &mut processed_bone_data)?;
     log(format!("Model has {} animations", processed_animations.len()), LogLevel::Verbose);
 
     if processed_animations.len() > i16::MAX as usize {
@@ -212,7 +222,7 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
     }
 
     log("Processing Mesh Data", LogLevel::Debug);
-    let processed_mesh = process_mesh_data(input, file_manager, &bone_table)?;
+    let processed_mesh = process_mesh_data(input, file_manager, &processed_bone_data)?;
     log(format!("Model has {} materials", processed_mesh.materials.len()), LogLevel::Verbose);
     log(format!("Model has {} body parts", processed_mesh.body_parts.len()), LogLevel::Verbose);
 
@@ -224,17 +234,10 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
         return Err(ProcessingDataError::TooManyMaterials);
     }
 
-    let processed_bone_data = process_bone_table(&bone_table);
-    if processed_bone_data.processed_bones.len() > i8::MAX as usize {
-        return Err(ProcessingDataError::TooManyBones);
-    }
-
-    let processed_data = ProcessedData {
+    Ok(ProcessedData {
         bone_data: processed_bone_data,
         animation_data: processed_animations,
         sequence_data: processed_sequences,
         model_data: processed_mesh,
-    };
-
-    Ok(processed_data)
+    })
 }

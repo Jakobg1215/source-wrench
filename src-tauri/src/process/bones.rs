@@ -1,126 +1,101 @@
-use std::collections::HashMap;
+use std::sync::Arc;
 
-use indexmap::IndexMap;
 use tauri::State;
+use thiserror::Error as ThisError;
 
 use crate::{
-    import::FileManager,
-    utilities::mathematics::{Quaternion, Vector3},
+    import::{FileManager, ImportFileData},
+    input::ImputedCompilationData,
+    utilities::mathematics::Matrix4,
 };
 
-use super::{ProcessedBone, ProcessedBoneData, ProcessingDataError};
+use super::{ProcessedBone, ProcessedBoneData};
 
-#[derive(Debug, Default)]
-pub struct BoneTable {
-    pub bones: IndexMap<String, GlobalBone>,
-    pub remapped_bones: HashMap<String, HashMap<usize, usize>>,
-}
+#[derive(Debug, ThisError)]
+pub enum ProcessingBoneError {}
 
-#[derive(Debug, Default)]
-pub struct GlobalBone {
-    pub parent: Option<usize>,
-    pub collapsible: bool,
-    pub position: Vector3,
-    pub orientation: Quaternion,
-    pub position_scale: Vector3,
-    pub rotation_scale: Vector3,
-}
+pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>) -> Result<ProcessedBoneData, ProcessingBoneError> {
+    let mut bone_table = ProcessedBoneData::default();
 
-pub fn create_bone_table(import: &State<FileManager>) -> Result<BoneTable, ProcessingDataError> {
-    let mut bone_table = BoneTable::default();
+    for (imported_file, imported_data) in import.files.lock().unwrap().iter() {
+        let mut remapped_bones = Vec::with_capacity(imported_data.skeleton.len());
 
-    for (file_name, file_data) in import.files.lock().unwrap().iter() {
-        let mut remapped_bones = HashMap::new();
-
-        for (bone_index, import_bone) in file_data.skeleton.iter().enumerate() {
-            if let Some(mapped_index) = bone_table.bones.get_index_of(&import_bone.name) {
-                if let Some(parent_mapped_index) = import_bone.parent {
-                    if !remapped_bones.contains_key(&parent_mapped_index) {
-                        return Err(ProcessingDataError::BoneHierarchyError);
-                    }
-                }
-                remapped_bones.insert(bone_index, mapped_index);
+        for (import_bone_index, import_bone) in imported_data.skeleton.iter().enumerate() {
+            if let Some(global_bone_index) = find_global_bone_index(&bone_table, &import_bone.name) {
+                remapped_bones.push(global_bone_index);
                 continue;
             }
 
-            // Check if the parent is in the table.
-            if let Some(parent_index) = import_bone.parent {
-                if !remapped_bones.contains_key(&parent_index) {
-                    return Err(ProcessingDataError::BoneHierarchyError);
-                }
+            if bone_should_be_collapsed(input, imported_data, import_bone_index) {
+                remapped_bones.push(match import_bone.parent {
+                    Some(parent_index) => remapped_bones[parent_index],
+                    None => 0,
+                });
+                continue;
             }
 
-            let new_bone = GlobalBone {
+            let processed_parent = import_bone.parent.map(|parent_index| remapped_bones[parent_index]);
+
+            let pose_bone = match processed_parent {
+                Some(parent_index) => {
+                    let parent_matrix = &bone_table.processed_bones[parent_index].pose;
+                    *parent_matrix * Matrix4::new(import_bone.position, import_bone.orientation.to_matrix())
+                }
+                None => Matrix4::new(import_bone.position, import_bone.orientation.to_matrix()),
+            };
+
+            let processed_bone = ProcessedBone {
+                name: import_bone.name.clone(),
+                parent: processed_parent,
                 position: import_bone.position,
-                orientation: import_bone.orientation,
-                parent: import_bone.parent.and_then(|parent_index| remapped_bones.get(&parent_index).copied()),
+                rotation: import_bone.orientation.to_angles(),
+                pose: pose_bone,
                 ..Default::default()
             };
 
-            bone_table.bones.insert(import_bone.name.clone(), new_bone);
-            remapped_bones.insert(bone_index, bone_table.bones.len() - 1);
+            remapped_bones.push(bone_table.processed_bones.len());
+            bone_table.processed_bones.push(processed_bone);
         }
 
-        bone_table.remapped_bones.insert(file_name.clone(), remapped_bones);
+        bone_table.remapped_bones.insert(imported_file.clone(), remapped_bones);
     }
 
     Ok(bone_table)
 }
 
-pub fn process_bone_table(bone_table: &BoneTable) -> ProcessedBoneData {
-    let mut processed_bones = ProcessedBoneData::default();
+fn find_global_bone_index(bone_table: &ProcessedBoneData, bone_name: &str) -> Option<usize> {
+    bone_table.processed_bones.iter().position(|processed_bone| processed_bone.name == bone_name)
+}
 
-    for (bone_name, bone_data) in &bone_table.bones {
-        // TODO: Remove collapsed bones.
+fn bone_should_be_collapsed(_input: &ImputedCompilationData, imported_data: &Arc<ImportFileData>, bone_index: usize) -> bool {
+    for import_animation in &imported_data.animations {
+        debug_assert!(!import_animation.channels.is_empty(), "Import Animation Channels Are Empty!");
+        if import_animation.frame_count == 1 {
+            continue;
+        }
 
-        let pose = match bone_data.parent {
-            Some(index) => {
-                let parent = &processed_bones.processed_bones[index];
-
-                let raw_rotation = parent.pose.0.concatenate(bone_data.orientation.to_matrix());
-                // TODO: This should be moved to the mathematics library.
-                let raw_position = Vector3::new(
-                    parent.pose.0[0][0] * bone_data.position.x
-                        + parent.pose.0[0][1] * bone_data.position.y
-                        + parent.pose.0[0][2] * bone_data.position.z
-                        + parent.pose.1.x,
-                    parent.pose.0[1][0] * bone_data.position.x
-                        + parent.pose.0[1][1] * bone_data.position.y
-                        + parent.pose.0[1][2] * bone_data.position.z
-                        + parent.pose.1.y,
-                    parent.pose.0[2][0] * bone_data.position.x
-                        + parent.pose.0[2][1] * bone_data.position.y
-                        + parent.pose.0[2][2] * bone_data.position.z
-                        + parent.pose.1.z,
-                );
-
-                (raw_rotation, raw_position)
+        for import_channel in &import_animation.channels {
+            if import_channel.bone != bone_index {
+                continue;
             }
-            None => (bone_data.orientation.to_matrix(), bone_data.position),
-        };
 
-        let processed_bone = ProcessedBone {
-            name: bone_name.clone(),
-            parent: bone_data.parent,
-            position: bone_data.position,
-            rotation: bone_data.orientation.to_angles(),
-            pose,
-            animation_position_scale: bone_data.position_scale,
-            animation_rotation_scale: bone_data.rotation_scale,
-        };
+            if import_channel.position.len() <= 1 && import_channel.orientation.len() <= 1 {
+                continue;
+            }
 
-        processed_bones.processed_bones.push(processed_bone);
+            return false;
+        }
     }
 
-    let mut processed_bone_names = processed_bones
-        .processed_bones
-        .iter()
-        .enumerate()
-        .map(|(index, bone)| (index, bone.name.clone()))
-        .collect::<Vec<(usize, String)>>();
-    processed_bone_names.sort_by(|(_, a), (_, b)| a.to_lowercase().cmp(&b.to_lowercase()));
+    for import_part in &imported_data.parts {
+        for import_vertex in &import_part.vertices {
+            for import_link in &import_vertex.links {
+                if import_link.bone == bone_index {
+                    return false;
+                }
+            }
+        }
+    }
 
-    processed_bones.sorted_bones_by_name = processed_bone_names.iter().map(|(index, _)| *index).collect();
-
-    processed_bones
+    true
 }

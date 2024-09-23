@@ -10,14 +10,14 @@ use crate::{
 };
 
 use super::{
-    bones::BoneTable, ProcessedAnimatedBoneData, ProcessedAnimation, ProcessedAnimationPosition, ProcessedAnimationRotation, ProcessedSequence,
+    ProcessedAnimatedBoneData, ProcessedAnimation, ProcessedAnimationPosition, ProcessedAnimationRotation, ProcessedBoneData, ProcessedSequence,
     ProcessingDataError, FLOAT_TOLERANCE,
 };
 
 pub fn process_animations(
     input: &ImputedCompilationData,
     import: &State<FileManager>,
-    bone_table: &mut BoneTable,
+    bone_table: &mut ProcessedBoneData,
 ) -> Result<Vec<ProcessedAnimation>, ProcessingDataError> {
     let mut processed_animations = Vec::new();
 
@@ -49,21 +49,21 @@ pub fn process_animations(
             ..Default::default()
         };
 
-        for (_, bone_data) in &mut bone_table.bones {
+        for bone_data in &mut bone_table.processed_bones {
             // TODO: Make this get the best scale values for best quality.
-            bone_data.position_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
-            bone_data.rotation_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
+            bone_data.animation_position_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
+            bone_data.animation_rotation_scale = Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0);
         }
 
         let mapped_bone = bone_table.remapped_bones.get(&input_animation.file_source).expect("Source File Not Remapped!");
 
         for channel in &imported_animation.channels {
             let mut processed_bone_data = ProcessedAnimatedBoneData {
-                bone: *mapped_bone.get(&channel.bone).expect("Mapped Bone Not Found!"),
+                bone: mapped_bone[channel.bone],
                 ..Default::default()
             };
 
-            let (_, bone_data) = bone_table.bones.get_index(processed_bone_data.bone).expect("Bone Not Found!");
+            let bone_data = &bone_table.processed_bones[processed_bone_data.bone];
 
             if imported_animation.frame_count == 1 {
                 let position_frame = channel.position.first().expect("No Position First Frame!");
@@ -73,9 +73,9 @@ pub fn process_animations(
                 }
 
                 let rotation_frame = channel.orientation.first().expect("No Rotation First Frame!");
-                if (rotation_frame.value.to_angles() - bone_data.orientation.to_angles()).sum() > FLOAT_TOLERANCE {
+                if (rotation_frame.value.to_angles() - bone_data.rotation).sum() > FLOAT_TOLERANCE {
                     processed_bone_data.rotation = Some(ProcessedAnimationRotation::Raw(
-                        (rotation_frame.value.to_angles() - bone_data.orientation.to_angles()).to_quaternion(),
+                        (rotation_frame.value.to_angles() - bone_data.rotation).to_quaternion(),
                     ));
                 }
 

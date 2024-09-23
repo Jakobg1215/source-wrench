@@ -1,4 +1,4 @@
-use crate::utilities::mathematics::{Angles, BoundingBox, Matrix, Quaternion, Vector3};
+use crate::utilities::mathematics::{Angles, BoundingBox, Matrix4, Quaternion, Vector3};
 
 use bitflags::bitflags;
 
@@ -487,7 +487,7 @@ pub struct ModelFileBone {
     pub rotation: Angles,
     pub animation_position_scale: Vector3,
     pub animation_rotation_scale: Vector3,
-    pub pose: (Matrix, Vector3),
+    pub pose: Matrix4,
     pub alignment: Quaternion,
     pub flags: ModelFileBoneFlags,
     pub procedural_type: Option<ModelFileBoneProceduralType>,
@@ -533,18 +533,18 @@ impl WriteToWriter for ModelFileBone {
         writer.write_vector3(self.animation_position_scale);
         writer.write_vector3(self.animation_rotation_scale);
         writer.write_float_array(&[
-            self.pose.0.entries[0][0] as f32,
-            self.pose.0.entries[0][1] as f32,
-            self.pose.0.entries[0][2] as f32,
-            self.pose.1.x as f32,
-            self.pose.0.entries[1][0] as f32,
-            self.pose.0.entries[1][1] as f32,
-            self.pose.0.entries[1][2] as f32,
-            self.pose.1.y as f32,
-            self.pose.0.entries[2][0] as f32,
-            self.pose.0.entries[2][1] as f32,
-            self.pose.0.entries[2][2] as f32,
-            self.pose.1.z as f32,
+            self.pose.entries[0][0] as f32,
+            self.pose.entries[0][1] as f32,
+            self.pose.entries[0][2] as f32,
+            self.pose.entries[0][3] as f32,
+            self.pose.entries[1][0] as f32,
+            self.pose.entries[1][1] as f32,
+            self.pose.entries[1][2] as f32,
+            self.pose.entries[1][3] as f32,
+            self.pose.entries[2][0] as f32,
+            self.pose.entries[2][1] as f32,
+            self.pose.entries[2][2] as f32,
+            self.pose.entries[2][3] as f32,
         ]);
         writer.write_quaternion(self.alignment);
         writer.write_integer(self.flags.bits());
