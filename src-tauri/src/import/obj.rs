@@ -156,7 +156,6 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
                     };
 
                     if vertex_index > vertex_data.len() {
-                        dbg!("Bogus Index", vertex_index, vertex_data.len());
                         return Err(ParseOBJError::BogusIndex(current_line_count));
                     }
 
@@ -169,7 +168,6 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
                     };
 
                     if texture_coordinate_index > texture_coordinate_data.len() {
-                        dbg!("Bogus Index", texture_coordinate_index, texture_coordinate_data.len());
                         return Err(ParseOBJError::BogusIndex(current_line_count));
                     }
 
@@ -182,7 +180,6 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
                     };
 
                     if normal_index > normal_data.len() {
-                        dbg!("Bogus Index", normal_index, normal_data.len());
                         return Err(ParseOBJError::BogusIndex(current_line_count));
                     }
 
