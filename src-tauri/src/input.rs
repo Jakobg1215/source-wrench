@@ -20,7 +20,7 @@ pub struct ImputedModel {
     pub name: String,
     pub is_blank: bool,
     pub file_source: String,
-    pub part_names: Vec<Option<String>>,
+    pub part_names: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

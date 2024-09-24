@@ -20,7 +20,7 @@ type ImputedCompilationData = {
             name: string;
             is_blank: boolean;
             file_source: string;
-            part_names: (string | null)[];
+            part_names: string[];
         }[];
     }[];
     animations: {
@@ -51,7 +51,7 @@ const App: Component = () => {
                     name: model.data.name,
                     is_blank: model.data.blank,
                     file_source: model.data.file_source,
-                    part_names: model.data.part_names,
+                    part_names: model.data.part_names.filter((part) => part !== null),
                 })),
             })),
             animations: animationEntries.map((animation) => ({

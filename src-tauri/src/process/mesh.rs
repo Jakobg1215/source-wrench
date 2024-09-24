@@ -216,7 +216,7 @@ pub fn process_mesh_data(
 }
 
 fn create_triangle_lists(
-    part_names: &[Option<String>],
+    part_names: &[String],
     parts: &[ImportPart],
     material_table: &mut IndexSet<String>,
     mapped_bone: &[usize],
@@ -224,12 +224,7 @@ fn create_triangle_lists(
     let mut triangle_lists = IndexMap::new();
     let mut processed_vertices_trees = IndexMap::new();
 
-    for part_name in part_names {
-        let imputed_part_name = match part_name {
-            Some(name) => name,
-            None => continue,
-        };
-
+    for imputed_part_name in part_names {
         let import_part = match parts.iter().find(|part| part.name == *imputed_part_name) {
             Some(part) => part,
             None => return Err(ProcessingMeshError::PartNotFound(imputed_part_name.clone())),
