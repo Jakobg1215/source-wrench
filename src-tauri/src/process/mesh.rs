@@ -224,6 +224,7 @@ fn create_triangle_lists(
     let mut triangle_lists = IndexMap::new();
     let mut processed_vertices_trees = IndexMap::new();
 
+    let mut logged_weight_culled = 0;
     for imputed_part_name in part_names {
         let import_part = match parts.iter().find(|part| part.name == *imputed_part_name) {
             Some(part) => part,
@@ -256,7 +257,7 @@ fn create_triangle_lists(
 
                         // TODO: StudioMDL will move the vertices with the define bones to fix up the bind pose, this should be done here.
 
-                        create_bone_links(&mut processed_vertex, import_vertex, mapped_bone)?;
+                        create_bone_links(&mut processed_vertex, import_vertex, mapped_bone, &mut logged_weight_culled)?;
 
                         let neighbors = processed_vertices_tree
                             .within(&processed_vertex.position.as_slice(), FLOAT_TOLERANCE, &squared_euclidean)
@@ -278,6 +279,13 @@ fn create_triangle_lists(
                 }
             }
         }
+
+        if logged_weight_culled > 0 {
+            log(
+                format!("{} vertex weights were culled on {}!", logged_weight_culled, imputed_part_name),
+                LogLevel::Warn,
+            );
+        }
     }
 
     Ok(triangle_lists)
@@ -290,7 +298,12 @@ fn triangulate_face(face: &[usize], _vertices: &[ImportVertex]) -> Vec<[usize; 3
     todo!("Triangulate Face Here")
 }
 
-fn create_bone_links(processed_vertex: &mut ProcessedVertex, vertex: &ImportVertex, mapped_bone: &[usize]) -> Result<(), ProcessingMeshError> {
+fn create_bone_links(
+    processed_vertex: &mut ProcessedVertex,
+    vertex: &ImportVertex,
+    mapped_bone: &[usize],
+    logged_weight_culled: &mut usize,
+) -> Result<(), ProcessingMeshError> {
     let remapped_weights = vertex
         .links
         .iter()
@@ -302,7 +315,7 @@ fn create_bone_links(processed_vertex: &mut ProcessedVertex, vertex: &ImportVert
 
     for weight in remapped_weights {
         if processed_vertex.bone_count == 3 {
-            log("Vertex had more that 3 weight links! Culling links to 3!", LogLevel::Warn);
+            *logged_weight_culled += 1;
             break;
         }
 
