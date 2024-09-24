@@ -32,7 +32,9 @@ impl Display for LogLevel {
 
 pub fn log<T: Into<String>>(message: T, level: LogLevel) {
     let log_message = message.into();
-    println!("[{}] {}", level, log_message);
+    if tauri::dev() {
+        println!("[{}] {}", level, log_message);
+    }
     if let Some(window) = LOGGER.get() {
         let _ = window.emit("source-wrench-log", LogEvent::new(level, log_message));
     }
