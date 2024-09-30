@@ -60,6 +60,16 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
         bone_table.remapped_bones.insert(imported_file.clone(), remapped_bones);
     }
 
+    let mut processed_bone_names = bone_table
+        .processed_bones
+        .iter()
+        .enumerate()
+        .map(|(index, bone)| (index, bone.name.clone()))
+        .collect::<Vec<(usize, String)>>();
+    processed_bone_names.sort_by(|(_, a), (_, b)| a.to_lowercase().cmp(&b.to_lowercase()));
+
+    bone_table.sorted_bones_by_name = processed_bone_names.iter().map(|(index, _)| *index).collect();
+
     Ok(bone_table)
 }
 
