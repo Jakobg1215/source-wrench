@@ -18,7 +18,7 @@ mod animation;
 mod bones;
 mod mesh;
 
-use animation::{process_animations, process_sequences};
+use animation::{process_animations, process_sequences, ProcessingAnimationError};
 use mesh::{process_mesh_data, ProcessingMeshError};
 
 #[derive(Debug, Default)]
@@ -168,17 +168,17 @@ pub enum ProcessingDataError {
     TooManyAnimations,
     #[error("Model Has Too Many Sequences")]
     TooManySequences,
-    #[error("Sequence Could Not Find Animation")]
-    SequenceAnimationNotFound,
     #[error("Model Has No Sequences")]
     NoSequences,
     #[error("Model Has Too Many Materials")]
     TooManyMaterials,
     #[error("Model Has Too Many Body Parts")]
     TooManyBodyParts,
-    #[error("Failed To Process Bone Data")]
+    #[error("Failed To Process Bone Data: {0}")]
     ProcessingBoneError(#[from] ProcessingBoneError),
-    #[error("Failed To Process Mesh Data")]
+    #[error("Failed To Process Animation Data: {0}")]
+    ProcessingAnimationError(#[from] ProcessingAnimationError),
+    #[error("Failed To Process Mesh Data: {0}")]
     ProcessingMeshError(#[from] ProcessingMeshError),
 }
 

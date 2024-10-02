@@ -1,4 +1,5 @@
 use tauri::State;
+use thiserror::Error as ThisError;
 
 use crate::{
     import::FileManager,
@@ -11,14 +12,20 @@ use crate::{
 
 use super::{
     ProcessedAnimatedBoneData, ProcessedAnimation, ProcessedAnimationPosition, ProcessedAnimationRotation, ProcessedBoneData, ProcessedSequence,
-    ProcessingDataError, FLOAT_TOLERANCE,
+    FLOAT_TOLERANCE,
 };
+
+#[derive(Debug, ThisError)]
+pub enum ProcessingAnimationError {
+    #[error("Sequence Could Not Find Animation")]
+    SequenceAnimationNotFound,
+}
 
 pub fn process_animations(
     input: &ImputedCompilationData,
     import: &State<FileManager>,
     bone_table: &mut ProcessedBoneData,
-) -> Result<Vec<ProcessedAnimation>, ProcessingDataError> {
+) -> Result<Vec<ProcessedAnimation>, ProcessingAnimationError> {
     let mut processed_animations = Vec::new();
 
     for input_animation in &input.animations {
@@ -94,7 +101,7 @@ pub fn process_animations(
     Ok(processed_animations)
 }
 
-pub fn process_sequences(input: &ImputedCompilationData, animations: &[ProcessedAnimation]) -> Result<Vec<ProcessedSequence>, ProcessingDataError> {
+pub fn process_sequences(input: &ImputedCompilationData, animations: &[ProcessedAnimation]) -> Result<Vec<ProcessedSequence>, ProcessingAnimationError> {
     let mut processed_sequences = Vec::new();
 
     for sequence in &input.sequences {
@@ -108,7 +115,7 @@ pub fn process_sequences(input: &ImputedCompilationData, animations: &[Processed
 
             match animation_index {
                 Some(index) => processed_sequence.animations.push(index),
-                None => return Err(ProcessingDataError::SequenceAnimationNotFound),
+                None => return Err(ProcessingAnimationError::SequenceAnimationNotFound),
             };
         }
 
