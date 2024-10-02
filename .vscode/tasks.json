@@ -7,13 +7,13 @@
             "label": "ui:dev",
             "type": "shell",
             "isBackground": true,
-            "command": "npm",
+            "command": "bun",
             "args": ["run", "dev"]
         },
         {
             "label": "ui:build",
             "type": "shell",
-            "command": "npm",
+            "command": "bun",
             "args": ["run", "build"]
         }
     ]
