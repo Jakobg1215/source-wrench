@@ -4,7 +4,7 @@ use std::{
 };
 
 use serde::Serialize;
-use tauri::{Manager, WebviewWindow};
+use tauri::{Emitter, WebviewWindow};
 
 #[derive(Clone, Serialize)]
 pub enum LogLevel {
@@ -32,7 +32,7 @@ impl Display for LogLevel {
 
 pub fn log<T: Into<String>>(message: T, level: LogLevel) {
     let log_message = message.into();
-    if tauri::dev() {
+    if tauri::is_dev() {
         println!("[{}] {}", level, log_message);
     }
     if let Some(window) = LOGGER.get() {

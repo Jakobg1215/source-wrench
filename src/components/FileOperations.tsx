@@ -39,16 +39,16 @@ const loadModelFile = async (previousPath: string): Promise<LoadedFile | null> =
         return null;
     }
 
-    manageLoadedModelFiles(previousPath, selectedFile.path);
+    manageLoadedModelFiles(previousPath, selectedFile);
 
-    const loadedFiles: LoadedFileData | null = await invoke('load_file', { path: selectedFile.path });
+    const loadedFiles: LoadedFileData | null = await invoke('load_file', { path: selectedFile });
 
     if (loadedFiles === null) {
         return null;
     }
 
     return {
-        path: selectedFile.path,
+        path: selectedFile,
         ...loadedFiles,
     };
 };

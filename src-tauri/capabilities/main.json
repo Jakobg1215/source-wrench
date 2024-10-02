@@ -3,5 +3,5 @@
     "identifier": "main-capability",
     "description": "Capability for the main window",
     "windows": ["main"],
-    "permissions": ["dialog:allow-open", "path:allow-resolve-directory", "event:allow-listen", "webview:allow-internal-toggle-devtools"]
+    "permissions": ["dialog:allow-open", "core:path:allow-resolve-directory", "core:event:allow-listen", "core:webview:allow-internal-toggle-devtools"]
 }
