@@ -18,7 +18,7 @@ use utilities::logging::{log, LogLevel, LOGGER};
 use write::write_files;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-#[tauri::command]
+#[tauri::command(async)]
 fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileManager>) {
     if data.model_name.is_empty() {
         log("Model name is empty!", LogLevel::Error);

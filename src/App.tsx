@@ -37,11 +37,14 @@ type ImputedCompilationData = {
 const App: Component = () => {
     const [modelExportPath, setModelExportPath] = createSignal('');
     const [modelName, setModelName] = createSignal('');
+    const [modelCompiling, setModelCompiling] = createSignal(false);
     const [bodyPartEntries, setBodyPartEntries] = createStore<BodyPartEntryProperties[]>([]);
     const [animationEntries, setAnimationEntries] = createStore<AnimationEntryProperties[]>([]);
     const [sequenceEntries, setSequenceEntries] = createStore<SequenceEntryProperties[]>([]);
 
     const compileModel = async () => {
+        setModelCompiling(true);
+
         const data: ImputedCompilationData = {
             model_name: modelName(),
             export_path: modelExportPath(),
@@ -65,7 +68,9 @@ const App: Component = () => {
             })),
         };
 
-        invoke('compile_model', { data });
+        await invoke('compile_model', { data });
+
+        setModelCompiling(false);
     };
 
     return (
@@ -121,7 +126,9 @@ const App: Component = () => {
                             <input name="ModelName" type="text" onChange={(event) => setModelName(event.target.value)} />
                         </label>
                         <br />
-                        <button onclick={() => compileModel()}>Compile Model</button>
+                        <button disabled={modelCompiling()} onclick={async () => await compileModel()}>
+                            Compile Model
+                        </button>
                     </Show>
                 </section>
                 <Logging />
