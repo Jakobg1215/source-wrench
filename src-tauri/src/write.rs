@@ -321,6 +321,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         version: 7,
         vertex_cache_size: VERTEX_CACHE_SIZE as i32,
         max_bones_per_strip: MAX_HARDWARE_BONES_PER_STRIP as u16,
+        max_bones_per_triangle: 9,
         max_bones_per_vertex: 3,
         checksum: 69420,
         ..Default::default()
