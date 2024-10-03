@@ -30,7 +30,7 @@ fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileMa
     let processed_data = match process(&data, &file_manager) {
         Ok(data) => data,
         Err(error) => {
-            log(format!("Fail to compile due to: {}!", error), LogLevel::Error);
+            log(format!("Fail To Compile Model: {}!", error), LogLevel::Error);
             return;
         }
     };
@@ -40,7 +40,7 @@ fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileMa
     match write_files(data.model_name, processed_data, data.export_path) {
         Ok(_) => {}
         Err(error) => {
-            log(format!("Fail to write files due to: {}!", error), LogLevel::Error);
+            log(format!("Fail To Write Files: {}!", error), LogLevel::Error);
             return;
         }
     }
@@ -53,7 +53,7 @@ fn load_file(path: String, file_manager: tauri::State<FileManager>) -> Option<Ar
     match file_manager.load_file(path) {
         Ok(file) => Some(file),
         Err(error) => {
-            log(format!("Fail to load file due to: {}!", error), LogLevel::Error);
+            log(format!("Fail To Load File: {}!", error), LogLevel::Error);
             None
         }
     }

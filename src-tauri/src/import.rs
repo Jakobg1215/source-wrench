@@ -106,9 +106,9 @@ pub enum ParseError {
     FileDoesNotHaveExtension,
     #[error("File Format Is Not Supported")]
     UnsupportedFileFormat,
-    #[error("Failed To Parse SMD File Due To {0}")]
+    #[error("Failed To Parse SMD File: {0}")]
     FailedSMDFileParse(#[from] ParseSMDError),
-    #[error("Failed To Parse OBJ File Due To {0}")]
+    #[error("Failed To Parse OBJ File: {0}")]
     FailedOBJFileParse(#[from] ParseOBJError),
 }
 
