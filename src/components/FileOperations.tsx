@@ -39,13 +39,13 @@ const loadModelFile = async (previousPath: string): Promise<LoadedFile | null> =
         return null;
     }
 
-    manageLoadedModelFiles(previousPath, selectedFile);
-
     const loadedFiles: LoadedFileData | null = await invoke('load_file', { path: selectedFile });
 
     if (loadedFiles === null) {
         return null;
     }
+
+    await manageLoadedModelFiles(previousPath, selectedFile);
 
     return {
         path: selectedFile,
@@ -53,7 +53,7 @@ const loadModelFile = async (previousPath: string): Promise<LoadedFile | null> =
     };
 };
 
-const manageLoadedModelFiles = (previousPath: string, path: string) => {
+const manageLoadedModelFiles = async (previousPath: string, path: string) => {
     if (previousPath === path) {
         return;
     }
@@ -71,11 +71,35 @@ const manageLoadedModelFiles = (previousPath: string, path: string) => {
 
     if (currentCount <= 0) {
         loadedModelFiles.delete(previousPath);
-        invoke('unload_file', { path: previousPath });
+        await invoke('unload_file', { path: previousPath });
         return;
     }
 
     loadedModelFiles.set(previousPath, currentCount);
 };
 
-export { loadModelFile };
+const unloadModelFile = async (path: string) => {
+    if (path === '') {
+        return;
+    }
+
+    const filePathCount = loadedModelFiles.get(path) ?? 1;
+    const newCount = filePathCount - 1;
+    if (newCount === 0) {
+        loadedModelFiles.delete(path);
+        await invoke('unload_file', { path });
+        return;
+    }
+
+    loadedModelFiles.set(path, newCount);
+};
+
+addEventListener('beforeunload', async () => {
+    for (const [path] of loadedModelFiles) {
+        await invoke('unload_file', { path });
+    }
+
+    loadedModelFiles.clear();
+});
+
+export { loadModelFile, unloadModelFile };

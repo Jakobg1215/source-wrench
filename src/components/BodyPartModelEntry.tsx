@@ -1,6 +1,6 @@
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { type SetStoreFunction } from 'solid-js/store';
-import { loadModelFile } from './FileOperations';
+import { loadModelFile, unloadModelFile } from './FileOperations';
 
 type BodyPartModelEntryProperties = {
     readonly identifier: number;
@@ -21,6 +21,7 @@ const BodyPartModelEntry: Component<BodyPartModelEntryProperties> = (properties)
     const [selectedFile, setSelectedFile] = createSignal('');
 
     const removeBodyPartModel = () => {
+        unloadModelFile(selectedFile());
         properties.setBodyPartModels((bodyPartModel) => bodyPartModel.filter((model) => model.identifier !== properties.identifier));
     };
 

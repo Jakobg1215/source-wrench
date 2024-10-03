@@ -1,6 +1,6 @@
 import { createSignal, For, Show, type Component } from 'solid-js';
 import { type SetStoreFunction } from 'solid-js/store';
-import { loadModelFile } from './FileOperations';
+import { loadModelFile, unloadModelFile } from './FileOperations';
 
 type AnimationEntryProperties = {
     readonly identifier: number;
@@ -19,6 +19,7 @@ const AnimationEntry: Component<AnimationEntryProperties> = (properties) => {
     const [availableAnimations, setAvailableAnimations] = createSignal<string[]>([]);
 
     const removeAnimation = () => {
+        unloadModelFile(selectedFile());
         properties.setAnimationEntries((animations) => animations.filter((animation) => animation.identifier !== properties.identifier));
     };
 
