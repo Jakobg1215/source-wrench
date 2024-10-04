@@ -701,7 +701,7 @@ pub struct ModelFileAnimationDescription {
     pub local_hierarchy: Vec<()>,
     pub local_hierarchy_offset: usize,
     pub sections_offset: usize,
-    pub zero_frame_frame_count: i16,
+    pub zero_frame_span_count: i16,
     pub zero_frames: Vec<()>,
     pub zero_frame_offset: usize,
 }
@@ -726,8 +726,8 @@ impl WriteToWriter for ModelFileAnimationDescription {
         self.local_hierarchy_offset = writer.write_integer_index();
         self.sections_offset = writer.write_integer_index();
         writer.write_integer(self.frames_per_section);
-        writer.write_short(self.zero_frame_frame_count);
-        writer.write_short(self.zero_frames.len() as i16); // FIXME: This should be checked.
+        writer.write_short(self.zero_frame_span_count);
+        writer.write_array_size_short(self.zero_frames.len())?;
         self.zero_frame_offset = writer.write_integer_index();
         writer.write_integer(0);
 
@@ -1045,7 +1045,7 @@ impl WriteToWriter for ModelFileSequenceDescription {
         writer.write_array_size(self.animations.len())?;
         self.animation_offset = writer.write_integer_index();
         writer.write_integer(0);
-        writer.write_integer_array(&self.blend_size); // FIXME: This should be checked.
+        writer.write_integer_array(&self.blend_size);
         writer.write_integer_array(&self.parameters);
         writer.write_float_array(&self.parameters_start);
         writer.write_float_array(&self.parameters_end);
@@ -1068,7 +1068,10 @@ impl WriteToWriter for ModelFileSequenceDescription {
         writer.write_array_size(self.inversive_kinematics_locks.len())?;
         self.inversive_kinematics_lock_offset = writer.write_integer_index();
         writer.write_string_to_table(self.write_base, &self.keyvalues);
-        writer.write_integer(self.keyvalues.len() as i32); // FIXME: This should be checked.
+        if (self.keyvalues.len()) > i32::MAX as usize {
+            return Err(FileWriteError::KeyvaluesToLarge);
+        }
+        writer.write_integer(self.keyvalues.len() as i32);
         writer.write_integer(self.pose_cycle);
         writer.write_array_size(self.activity_modifiers.len())?;
         self.activity_modifier_offset = writer.write_integer_index();

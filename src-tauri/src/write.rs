@@ -221,6 +221,15 @@ impl FileWriter {
         Ok(())
     }
 
+    pub fn write_array_size_short(&mut self, size: usize) -> Result<(), FileWriteError> {
+        if size > i16::MAX as usize {
+            return Err(FileWriteError::ArraySizeToLarge);
+        }
+
+        self.write_short(size as i16);
+        Ok(())
+    }
+
     pub fn align(&mut self, alignment: usize) {
         let remainder = self.data.len() % alignment;
 
