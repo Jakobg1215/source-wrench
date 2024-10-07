@@ -1,6 +1,6 @@
 use std::{
     f64::consts::{FRAC_PI_2, PI},
-    ops::{Add, Sub},
+    ops::{Add, Index, Sub},
 };
 
 use super::Matrix3;
@@ -85,6 +85,19 @@ impl Angles {
             if y > PI { y - 2.0 * PI } else { y },
             if z > PI { z - 2.0 * PI } else { z },
         )
+    }
+}
+
+impl Index<usize> for Angles {
+    type Output = f64;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.roll,
+            1 => &self.pitch,
+            2 => &self.yaw,
+            _ => panic!("Index out of bounds"),
+        }
     }
 }
 

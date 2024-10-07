@@ -10,7 +10,7 @@ use thiserror::Error as ThisError;
 
 use crate::utilities::{
     logging::{log, LogLevel},
-    mathematics::{Quaternion, Vector2, Vector3},
+    mathematics::{Angles, Quaternion, Vector2, Vector3},
 };
 
 mod obj;
@@ -49,7 +49,7 @@ pub struct ImportAnimation {
 pub struct ImportChannel {
     pub bone: usize,
     pub position: Vec<ImportKeyFrame<Vector3>>,
-    pub orientation: Vec<ImportKeyFrame<Quaternion>>,
+    pub rotation: Vec<ImportKeyFrame<Angles>>,
 }
 
 #[derive(Debug, Default)]

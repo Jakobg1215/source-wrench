@@ -45,7 +45,7 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
             frame_count: 1,
             channels: vec![ImportChannel {
                 position: vec![ImportKeyFrame::default()],
-                orientation: vec![ImportKeyFrame::default()],
+                rotation: vec![ImportKeyFrame::default()],
                 ..Default::default()
             }],
         }],

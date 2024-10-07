@@ -33,5 +33,5 @@ pub struct ImputedAnimation {
 #[derive(Debug, Deserialize)]
 pub struct ImputedSequence {
     pub name: String,
-    pub animations: Vec<String>,
+    pub animations: Vec<Vec<String>>,
 }

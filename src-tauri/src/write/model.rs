@@ -891,12 +891,19 @@ impl WriteToWriter for ModelFileAnimation {
             }
         }
 
+        if let Some(ModelFileAnimationData::Array(data)) = &mut self.rotation {
+            data.write_data(writer)?;
+        }
+
+        if let Some(ModelFileAnimationData::Array(data)) = &mut self.position {
+            data.write_data(writer)?;
+        }
+
         Ok(())
     }
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ModelFileAnimationData<T> {
     Single(T),
     Array(ModelFileAnimationValue),
@@ -917,6 +924,12 @@ impl WriteToWriter for ModelFileAnimationValue {
             self.offsets[axis] = writer.write_short_index();
         }
 
+        Ok(())
+    }
+}
+
+impl ModelFileAnimationValue {
+    fn write_data(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         for axis in 0..3 {
             if let Some(values) = &self.values[axis] {
                 writer.write_to_short_offset(self.offsets[axis], writer.data.len() - self.write_base)?;
@@ -940,7 +953,6 @@ impl WriteToWriter for ModelFileAnimationValue {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ModelFileAnimationEncoding {
     Header(ModelFileAnimationEncodingHeader),
     Value(i16),

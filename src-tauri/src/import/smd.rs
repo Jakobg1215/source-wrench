@@ -559,11 +559,8 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
             let position = ImportKeyFrame { frame, value: bone.position };
             channel.position.push(position);
 
-            let orientation = ImportKeyFrame {
-                frame,
-                value: bone.rotation.to_quaternion(),
-            };
-            channel.orientation.push(orientation);
+            let orientation = ImportKeyFrame { frame, value: bone.rotation };
+            channel.rotation.push(orientation);
         }
     }
 
