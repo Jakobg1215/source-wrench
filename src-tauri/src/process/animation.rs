@@ -118,14 +118,35 @@ pub fn process_animations(
 
     let mut compressed_animations = Vec::new();
 
-    let mut animation_scales = Vec::with_capacity(bone_table.processed_bones.len());
-    for _ in &processed_animations {
-        // TODO: Calculate the best scale value for the compressed animation.
-        for _ in 0..bone_table.processed_bones.len() {
-            animation_scales.push((
-                Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0),
-                Vector3::new(1.0 / 32.0, 1.0 / 32.0, 1.0 / 32.0),
-            ));
+    let mut animation_scales = vec![(Vector3::new(f64::MIN, f64::MIN, f64::MIN), Vector3::new(f64::MIN, f64::MIN, f64::MIN)); bone_table.processed_bones.len()];
+    for animation in &processed_animations {
+        for (bone, channel) in &animation.animation_data {
+            for frame in 0..animation.frame_count {
+                let bone_data = &bone_table.processed_bones[*bone];
+
+                for axis in 0..3 {
+                    // TODO: If the animation is delta then it should not be subtracted from the bone data.
+                    let value = channel.position[frame][axis] - bone_data.position[axis];
+                    if value > animation_scales[*bone].0[axis] {
+                        animation_scales[*bone].0[axis] = value.abs();
+                    }
+                }
+
+                for axis in 0..3 {
+                    // TODO: If the animation is delta then it should not be subtracted from the bone data.
+                    let value = channel.rotation[frame][axis] - bone_data.rotation[axis];
+                    if value > animation_scales[*bone].0[axis] {
+                        animation_scales[*bone].0[axis] = value.abs();
+                    }
+                }
+            }
+        }
+    }
+
+    for (position, rotation) in &mut animation_scales {
+        for axis in 0..3 {
+            position[axis] /= (i16::MAX as f64) + 1.0;
+            rotation[axis] /= (i16::MAX as f64) + 1.0;
         }
     }
 
@@ -142,7 +163,7 @@ pub fn process_animations(
         }
 
         let frames_per_sections = 30; // TODO: Make this configurable.
-        let animation_section_split_threshold = 1200; // TODO: Make this configurable.
+        let animation_section_split_threshold = 120; // TODO: Make this configurable.
 
         let section_count = if processed_animation.frame_count >= animation_section_split_threshold {
             (processed_animation.frame_count / frames_per_sections) + 2
