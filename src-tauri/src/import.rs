@@ -49,7 +49,7 @@ pub struct ImportAnimation {
 pub struct ImportChannel {
     pub bone: usize,
     pub position: Vec<ImportKeyFrame<Vector3>>,
-    pub orientation: Vec<ImportKeyFrame<Quaternion>>,
+    pub rotation: Vec<ImportKeyFrame<Quaternion>>,
 }
 
 #[derive(Debug, Default)]

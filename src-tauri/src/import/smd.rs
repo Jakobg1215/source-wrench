@@ -563,7 +563,7 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
                 frame,
                 value: bone.rotation.to_quaternion(),
             };
-            channel.orientation.push(orientation);
+            channel.rotation.push(orientation);
         }
     }
 

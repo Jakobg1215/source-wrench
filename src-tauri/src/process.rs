@@ -10,7 +10,7 @@ use crate::{
     input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{Angles, Matrix4, Quaternion, Vector2, Vector3, Vector4},
+        mathematics::{Angles, Matrix4, Vector2, Vector3, Vector4},
     },
 };
 
@@ -24,7 +24,7 @@ use mesh::{process_mesh_data, ProcessingMeshError};
 #[derive(Debug, Default)]
 pub struct ProcessedData {
     pub bone_data: ProcessedBoneData,
-    pub animation_data: Vec<ProcessedAnimation>,
+    pub animation_data: ProcessedAnimationData,
     pub sequence_data: Vec<ProcessedSequence>,
     pub model_data: ProcessedModelData,
 }
@@ -32,8 +32,16 @@ pub struct ProcessedData {
 #[derive(Debug, Default)]
 pub struct ProcessedBoneData {
     pub processed_bones: Vec<ProcessedBone>,
-    pub remapped_bones: HashMap<String, Vec<usize>>,
+    pub remapped_bones: HashMap<String, Vec<ProcessedRemappedBone>>,
     pub sorted_bones_by_name: Vec<usize>,
+}
+
+#[derive(Debug, Default)]
+pub struct ProcessedRemappedBone {
+    /// The index to the global bone.
+    pub bone_index: usize,
+    /// If the bone was collapsed.
+    pub was_collapsed: bool,
 }
 
 #[derive(Debug, Default)]
@@ -43,52 +51,32 @@ pub struct ProcessedBone {
     pub position: Vector3,
     pub rotation: Angles,
     pub pose: Matrix4,
-    pub animation_position_scale: Vector3,
-    pub animation_rotation_scale: Vector3,
+}
+
+#[derive(Debug, Default)]
+pub struct ProcessedAnimationData {
+    pub processed_animations: Vec<ProcessedAnimation>,
+    pub animation_scales: Vec<(Vector3, Vector3)>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedAnimation {
     pub name: String,
     pub frame_count: usize,
-    pub bones: Vec<ProcessedAnimatedBoneData>,
+    pub sections: Vec<Vec<ProcessedAnimatedBoneData>>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedAnimatedBoneData {
-    pub bone: usize,
-    pub position: Option<ProcessedAnimationPosition>,
-    pub rotation: Option<ProcessedAnimationRotation>,
-}
-
-#[derive(Debug)]
-pub enum ProcessedAnimationPosition {
-    Raw(Vector3),
-    Compressed(ProcessedAnimationEncoding),
-}
-
-#[derive(Debug)]
-pub enum ProcessedAnimationRotation {
-    Raw(Quaternion),
-    Compressed(ProcessedAnimationEncoding),
-}
-
-#[derive(Debug)]
-pub enum ProcessedAnimationEncoding {
-    Header(ProcessedAnimationEncodingHeader),
-    Value(i16),
-}
-
-#[derive(Debug, Default)]
-pub struct ProcessedAnimationEncodingHeader {
-    pub valid: u8,
-    pub total: u8,
+    pub bone: u8,
+    pub position: Vec<Vector3>,
+    pub rotation: Vec<Angles>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedSequence {
     pub name: String,
-    pub animations: Vec<usize>,
+    pub animations: Vec<Vec<i16>>,
 }
 
 #[derive(Debug, Default)]
@@ -164,8 +152,6 @@ pub enum ProcessingDataError {
     TooManyBones,
     #[error("Model Has No Bones")]
     NoBones,
-    #[error("Model Has Too Many Animations")]
-    TooManyAnimations,
     #[error("Model Has Too Many Sequences")]
     TooManySequences,
     #[error("Model Has No Sequences")]
@@ -186,11 +172,15 @@ pub const MAX_HARDWARE_BONES_PER_STRIP: usize = 53;
 pub const VERTEX_CACHE_SIZE: usize = 16;
 
 /// The tolerance for floating point numbers until they are considered equal.
-const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
+pub const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
 
 pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>) -> Result<ProcessedData, ProcessingDataError> {
+    if input.sequences.is_empty() {
+        return Err(ProcessingDataError::NoSequences);
+    }
+
     log("Processing Bones", LogLevel::Debug);
-    let mut processed_bone_data = process_bones(input, file_manager)?;
+    let processed_bone_data = process_bones(input, file_manager)?;
     log(format!("Model uses {} bones", processed_bone_data.processed_bones.len()), LogLevel::Verbose);
 
     if processed_bone_data.processed_bones.is_empty() {
@@ -202,20 +192,15 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
     }
 
     log("Processing Animations", LogLevel::Debug);
-    let processed_animations = process_animations(input, file_manager, &mut processed_bone_data)?;
-    log(format!("Model has {} animations", processed_animations.len()), LogLevel::Verbose);
-
-    if processed_animations.len() > i16::MAX as usize {
-        return Err(ProcessingDataError::TooManyAnimations);
-    }
+    let processed_animation_data = process_animations(input, file_manager, &processed_bone_data)?;
+    log(
+        format!("Model has {} animations", processed_animation_data.processed_animations.len()),
+        LogLevel::Verbose,
+    );
 
     log("Processing Sequences", LogLevel::Debug);
-    let processed_sequences = process_sequences(input, &processed_animations)?;
+    let processed_sequences = process_sequences(input, &processed_animation_data.processed_animations)?;
     log(format!("Model has {} sequences", processed_sequences.len()), LogLevel::Verbose);
-
-    if processed_sequences.is_empty() {
-        return Err(ProcessingDataError::NoSequences);
-    }
 
     if processed_sequences.len() > i32::MAX as usize {
         return Err(ProcessingDataError::TooManySequences);
@@ -236,7 +221,7 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
 
     Ok(ProcessedData {
         bone_data: processed_bone_data,
-        animation_data: processed_animations,
+        animation_data: processed_animation_data,
         sequence_data: processed_sequences,
         model_data: processed_mesh,
     })

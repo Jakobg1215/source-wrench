@@ -1,4 +1,4 @@
-use std::{collections::HashMap, usize};
+use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use kdtree::{distance::squared_euclidean, KdTree};
@@ -15,8 +15,8 @@ use crate::{
 };
 
 use super::{
-    ProcessedBodyPart, ProcessedBoneData, ProcessedHardwareBone, ProcessedMesh, ProcessedMeshVertex, ProcessedModel, ProcessedModelData, ProcessedStrip,
-    ProcessedStripGroup, ProcessedVertex, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE,
+    ProcessedBodyPart, ProcessedBoneData, ProcessedHardwareBone, ProcessedMesh, ProcessedMeshVertex, ProcessedModel, ProcessedModelData, ProcessedRemappedBone,
+    ProcessedStrip, ProcessedStripGroup, ProcessedVertex, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE,
 };
 
 #[derive(Debug, Default)]
@@ -219,7 +219,7 @@ fn create_triangle_lists(
     part_names: &[String],
     parts: &[ImportPart],
     material_table: &mut IndexSet<String>,
-    mapped_bone: &[usize],
+    mapped_bone: &[ProcessedRemappedBone],
 ) -> Result<IndexMap<usize, TriangleList>, ProcessingMeshError> {
     let mut triangle_lists = IndexMap::new();
     let mut processed_vertices_trees = IndexMap::new();
@@ -301,14 +301,14 @@ fn triangulate_face(face: &[usize], _vertices: &[ImportVertex]) -> Vec<[usize; 3
 fn create_bone_links(
     processed_vertex: &mut ProcessedVertex,
     vertex: &ImportVertex,
-    mapped_bone: &[usize],
+    mapped_bone: &[ProcessedRemappedBone],
     logged_weight_culled: &mut usize,
 ) -> Result<(), ProcessingMeshError> {
     let remapped_weights = vertex
         .links
         .iter()
         .map(|link| ImportLink {
-            bone: mapped_bone[link.bone],
+            bone: mapped_bone[link.bone].bone_index,
             weight: link.weight,
         })
         .collect::<Vec<_>>();

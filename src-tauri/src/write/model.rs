@@ -434,6 +434,7 @@ pub struct ModelFileSecondHeader {
     pub source_bone_transform_offset: usize,
     pub illumination_position_attachment_index: i32,
     pub max_eye_deflection: f32,
+    #[allow(dead_code)]
     pub linear_bones: Option<()>,
     pub linear_bone_index: usize,
     pub name: String,
@@ -693,7 +694,6 @@ pub struct ModelFileAnimationDescription {
     pub movements: Vec<()>,
     pub movement_offset: usize,
     pub animation_block: i32,
-    pub frames_per_section: i32,
     pub animation_sections: Vec<ModelFileAnimationSection>,
     pub animation_offset: usize,
     pub inverse_kinematic_rules: Vec<()>,
@@ -701,6 +701,7 @@ pub struct ModelFileAnimationDescription {
     pub local_hierarchy: Vec<()>,
     pub local_hierarchy_offset: usize,
     pub sections_offset: usize,
+    pub frames_per_section: i32,
     pub zero_frame_span_count: i16,
     pub zero_frames: Vec<()>,
     pub zero_frame_offset: usize,
@@ -711,8 +712,10 @@ impl WriteToWriter for ModelFileAnimationDescription {
         self.write_base = writer.data.len();
         writer.write_negative_offset(writer.data.len())?;
         writer.write_string_to_table(self.write_base, &self.name);
+        debug_assert!(self.fps > 0.0, "FPS is less than or equal to zero!");
         writer.write_float(self.fps);
         writer.write_integer(self.flags.bits());
+        debug_assert!(self.frame_count > 0, "Frame count is less than or equal to zero!");
         writer.write_integer(self.frame_count);
         writer.write_array_size(self.movements.len())?;
         self.movement_offset = writer.write_integer_index();
@@ -724,7 +727,15 @@ impl WriteToWriter for ModelFileAnimationDescription {
         writer.write_integer(0); // TODO: Write Rules To Animation Block When Implemented.
         writer.write_array_size(self.local_hierarchy.len())?;
         self.local_hierarchy_offset = writer.write_integer_index();
+        debug_assert!(!self.animation_sections.is_empty(), "No animation sections!");
         self.sections_offset = writer.write_integer_index();
+        debug_assert!(self.frames_per_section >= 0, "Frames per section is less than zero!");
+        if self.frames_per_section > 0 {
+            debug_assert!(
+                self.animation_sections.len() > 1,
+                "Frames per section is greater than zero when there is no sections!"
+            );
+        }
         writer.write_integer(self.frames_per_section);
         writer.write_short(self.zero_frame_span_count);
         writer.write_array_size_short(self.zero_frames.len())?;
@@ -751,15 +762,16 @@ impl ModelFileAnimationDescription {
     }
 
     fn write_animations(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
+        writer.write_to_integer_offset(self.animation_offset, writer.data.len() - self.write_base)?;
+
         if self.animation_sections.len() == 1 {
-            writer.write_to_integer_offset(self.animation_offset, writer.data.len() - self.write_base)?;
             let section = &mut self.animation_sections[0];
-            section.write_animation(writer, true)?;
+            section.write_animation(writer, true, self.write_base)?;
             return Ok(());
         }
 
         for section in &mut self.animation_sections {
-            section.write_animation(writer, false)?;
+            section.write_animation(writer, false, self.write_base)?;
         }
 
         Ok(())
@@ -794,9 +806,9 @@ impl WriteToWriter for ModelFileAnimationSection {
 }
 
 impl ModelFileAnimationSection {
-    fn write_animation(&mut self, writer: &mut FileWriter, single: bool) -> Result<(), FileWriteError> {
+    fn write_animation(&mut self, writer: &mut FileWriter, single: bool, animation_description_index: usize) -> Result<(), FileWriteError> {
         if !single {
-            writer.write_to_integer_offset(self.animation_index, writer.data.len() - self.write_base)?;
+            writer.write_to_integer_offset(self.animation_index, writer.data.len() - animation_description_index)?;
         }
 
         if self.animation_data.is_empty() {
@@ -815,6 +827,7 @@ impl ModelFileAnimationSection {
 
         writer.write_to_short_offset(self.animation_data.last().unwrap().next_offset, 0)?;
 
+        writer.write_integer(0); // This is for crowbar as studioMDL does write this as well.
         Ok(())
     }
 }
@@ -891,12 +904,19 @@ impl WriteToWriter for ModelFileAnimation {
             }
         }
 
+        if let Some(ModelFileAnimationData::Array(data)) = &mut self.rotation {
+            data.write_data(writer)?;
+        }
+
+        if let Some(ModelFileAnimationData::Array(data)) = &mut self.position {
+            data.write_data(writer)?;
+        }
+
         Ok(())
     }
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ModelFileAnimationData<T> {
     Single(T),
     Array(ModelFileAnimationValue),
@@ -917,6 +937,12 @@ impl WriteToWriter for ModelFileAnimationValue {
             self.offsets[axis] = writer.write_short_index();
         }
 
+        Ok(())
+    }
+}
+
+impl ModelFileAnimationValue {
+    fn write_data(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
         for axis in 0..3 {
             if let Some(values) = &self.values[axis] {
                 writer.write_to_short_offset(self.offsets[axis], writer.data.len() - self.write_base)?;
@@ -940,7 +966,6 @@ impl WriteToWriter for ModelFileAnimationValue {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum ModelFileAnimationEncoding {
     Header(ModelFileAnimationEncodingHeader),
     Value(i16),
@@ -979,6 +1004,7 @@ pub struct ModelFileSequenceDescription {
     pub auto_layer_offset: usize,
     pub weight_list: Vec<f32>,
     pub weight_list_offset: usize,
+    #[allow(dead_code)]
     pub pose_keys: Vec<f32>, // TODO: What the fuck are these for? Is the name correct for this? Seems fine if they don't exist but don't trust that.
     pub pose_key_index: usize,
     pub inversive_kinematics_locks: Vec<()>,

@@ -4,7 +4,7 @@ use half::f16;
 use thiserror::Error as ThisError;
 
 use crate::{
-    process::{ProcessedData, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE},
+    process::{ProcessedAnimationData, ProcessedData, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE},
     utilities::mathematics::{clamp, Angles, BoundingBox, Quaternion, Vector2, Vector3, Vector4},
 };
 
@@ -18,7 +18,8 @@ use mesh::{
 };
 
 use model::{
-    ModelFileAnimationDescription, ModelFileAnimationSection, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitBox,
+    ModelFileAnimation, ModelFileAnimationData, ModelFileAnimationDescription, ModelFileAnimationEncoding, ModelFileAnimationEncodingHeader,
+    ModelFileAnimationSection, ModelFileAnimationValue, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitBox,
     ModelFileHitboxSet, ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
 };
 
@@ -81,7 +82,7 @@ impl FileWriter {
         }
     }
 
-    pub fn write_long(&mut self, value: i64) {
+    pub fn write_unsigned_long(&mut self, value: u64) {
         self.data.extend(value.to_le_bytes());
     }
 
@@ -199,11 +200,11 @@ impl FileWriter {
     }
 
     pub fn write_quaternion64(&mut self, value: Quaternion) {
-        let x = clamp((value.x * 1048576.0) as i64 + 1048576, 0, 2097151);
-        let y = clamp((value.y * 1048576.0) as i64 + 1048576, 0, 2097151);
-        let z = clamp((value.z * 1048576.0) as i64 + 1048576, 0, 2097151);
-        let w = (value.w < 0.0) as i64;
-        self.write_long((x << 43) | (y << 22) | (z << 1) | w);
+        let x = clamp((value.x * 1048576.0) as u64 + 1048576, 0, 2097151);
+        let y = clamp((value.y * 1048576.0) as u64 + 1048576, 0, 2097151);
+        let z = clamp((value.z * 1048576.0) as u64 + 1048576, 0, 2097151);
+        let w = (value.w < 0.0) as u64;
+        self.write_unsigned_long((w << 63) | (z << 42) | (y << 21) | x);
     }
 
     pub fn write_vector48(&mut self, value: Vector3) {
@@ -256,7 +257,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         ..Default::default()
     };
 
-    for processed_bone in processed_data.bone_data.processed_bones {
+    for (bone_index, processed_bone) in processed_data.bone_data.processed_bones.into_iter().enumerate() {
         let bone = ModelFileBone {
             name: processed_bone.name,
             parent: match processed_bone.parent {
@@ -266,8 +267,8 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             position: processed_bone.position,
             rotation: processed_bone.rotation,
             quaternion: processed_bone.rotation.to_quaternion(),
-            animation_position_scale: processed_bone.animation_position_scale,
-            animation_rotation_scale: processed_bone.animation_rotation_scale,
+            animation_position_scale: processed_data.animation_data.animation_scales[bone_index].0,
+            animation_rotation_scale: processed_data.animation_data.animation_scales[bone_index].1,
             pose: processed_bone.pose.transpose(),
             flags: ModelFileBoneFlags::USED_BY_VERTEX_AT_LOD0,
             ..Default::default()
@@ -291,25 +292,15 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
     mdl_header.hitbox_sets.push(hitbox_set);
 
-    for processed_animation in processed_data.animation_data {
-        let animation_description = ModelFileAnimationDescription {
-            name: processed_animation.name,
-            fps: 30.0,
-            frame_count: processed_animation.frame_count as i32,
-            animation_sections: vec![ModelFileAnimationSection::default()],
-            ..Default::default()
-        };
-
-        mdl_header.local_animation_descriptions.push(animation_description);
-    }
+    write_animations(processed_data.animation_data, &mut mdl_header);
 
     for processed_sequence in processed_data.sequence_data {
         let sequence_description = ModelFileSequenceDescription {
             name: processed_sequence.name,
             fade_in_time: 0.2,
             fade_out_time: 0.2,
-            animations: processed_sequence.animations.iter().map(|index| *index as i16).collect(),
-            blend_size: [processed_sequence.animations.len() as i32; 2], // TODO: Change this to support multiple blend sizes.
+            blend_size: [processed_sequence.animations.len() as i32, processed_sequence.animations[0].len() as i32],
+            animations: processed_sequence.animations.into_iter().flatten().collect(),
             weight_list: vec![1.0; mdl_header.bones.len()],
             ..Default::default()
         };
@@ -482,4 +473,217 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     let _ = write(format!("{}/{}.{}", export_path, mdl_header.second_header.name, "dx90.vtx"), vtx_writer.data);
 
     Ok(())
+}
+
+fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHeader) {
+    for processed_animation in animations.processed_animations {
+        let mut animation_description = ModelFileAnimationDescription {
+            name: processed_animation.name,
+            fps: 30.0,
+            frame_count: processed_animation.frame_count as i32,
+            // TODO: frames_per_section should use the imported frame count.
+            frames_per_section: if processed_animation.sections.len() > 1 { 30 } else { 0 },
+            animation_sections: Vec::with_capacity(processed_animation.sections.len()),
+            ..Default::default()
+        };
+
+        for section in processed_animation.sections {
+            let mut animation_section = ModelFileAnimationSection {
+                animation_data: Vec::with_capacity(section.len()),
+                ..Default::default()
+            };
+
+            for animation_bone_data in section {
+                let scale = animations.animation_scales[animation_bone_data.bone as usize].0;
+                let mut scaled_position_axis = [
+                    Vec::with_capacity(animation_bone_data.position.len()),
+                    Vec::with_capacity(animation_bone_data.position.len()),
+                    Vec::with_capacity(animation_bone_data.position.len()),
+                ];
+                for position in &animation_bone_data.position {
+                    for axis in 0..3 {
+                        scaled_position_axis[axis].push(if position[axis].abs() > FLOAT_TOLERANCE {
+                            (position[axis] / scale[axis]) as i16
+                        } else {
+                            0
+                        });
+                    }
+                }
+
+                let scale = animations.animation_scales[animation_bone_data.bone as usize].1;
+                let mut scaled_rotation_axis = [
+                    Vec::with_capacity(animation_bone_data.rotation.len()),
+                    Vec::with_capacity(animation_bone_data.rotation.len()),
+                    Vec::with_capacity(animation_bone_data.rotation.len()),
+                ];
+                for rotation in &animation_bone_data.rotation {
+                    for axis in 0..3 {
+                        scaled_rotation_axis[axis].push(if rotation[axis].abs() > FLOAT_TOLERANCE {
+                            (rotation[axis] / scale[axis]) as i16
+                        } else {
+                            0
+                        });
+                    }
+                }
+
+                fn encode_run_length(values: &[i16]) -> Vec<ModelFileAnimationEncoding> {
+                    let mut encoding = Vec::new();
+
+                    let mut current_total = 0;
+                    let mut current_valid = Vec::new();
+
+                    for value in values {
+                        // Check if the current header is full.
+                        if current_total == u8::MAX {
+                            encoding.push(ModelFileAnimationEncoding::Header(ModelFileAnimationEncodingHeader {
+                                total: current_total,
+                                valid: current_valid.len() as u8,
+                            }));
+                            encoding.extend(current_valid.into_iter().map(ModelFileAnimationEncoding::Value));
+                            current_total = 0;
+                            current_valid = Vec::new();
+                        }
+
+                        // Check if the current header is empty.
+                        if current_valid.is_empty() {
+                            current_total += 1;
+                            current_valid.push(*value);
+                            continue;
+                        }
+
+                        // Check if the previous value is the same as the current value.
+                        if current_valid[current_valid.len() - 1] == *value {
+                            current_total += 1;
+                            continue;
+                        }
+
+                        // If the current value is not the same as the previous value and the values length is not equal to the total.
+                        if current_valid.len() as u8 != current_total {
+                            encoding.push(ModelFileAnimationEncoding::Header(ModelFileAnimationEncodingHeader {
+                                total: current_total,
+                                valid: current_valid.len() as u8,
+                            }));
+                            encoding.extend(current_valid.into_iter().map(ModelFileAnimationEncoding::Value));
+
+                            current_total = 1;
+                            current_valid = vec![*value];
+                            continue;
+                        }
+
+                        current_total += 1;
+                        current_valid.push(*value);
+                    }
+
+                    encoding.push(ModelFileAnimationEncoding::Header(ModelFileAnimationEncodingHeader {
+                        total: current_total,
+                        valid: current_valid.len() as u8,
+                    }));
+                    encoding.extend(current_valid.into_iter().map(ModelFileAnimationEncoding::Value));
+
+                    encoding
+                }
+
+                let encoded_position_axis = [
+                    encode_run_length(&scaled_position_axis[0]),
+                    encode_run_length(&scaled_position_axis[1]),
+                    encode_run_length(&scaled_position_axis[2]),
+                ];
+
+                let mut position = None;
+
+                // Handle single frame
+                if encoded_position_axis[0].len() == 2 && encoded_position_axis[1].len() == 2 && encoded_position_axis[2].len() == 2 {
+                    match (&encoded_position_axis[0][1], &encoded_position_axis[1][1], &encoded_position_axis[2][1]) {
+                        (ModelFileAnimationEncoding::Value(x), ModelFileAnimationEncoding::Value(y), ModelFileAnimationEncoding::Value(z)) => {
+                            if *x != 0 || *y != 0 || *z != 0 {
+                                position = Some(ModelFileAnimationData::Single(animation_bone_data.position[0]));
+                            }
+                        }
+                        _ => {
+                            unreachable!("All the values should be ModelFileAnimationEncoding::Value");
+                        }
+                    }
+                }
+
+                // Handle multiple frame
+                if encoded_position_axis[0].len() > 2 || encoded_position_axis[1].len() > 2 || encoded_position_axis[2].len() > 2 {
+                    let mut animation_axis = ModelFileAnimationValue::default();
+
+                    let [x_encoded, y_encoded, z_encoded] = encoded_position_axis;
+
+                    if x_encoded.len() > 2 {
+                        animation_axis.values[0] = Some(x_encoded);
+                    }
+
+                    if y_encoded.len() > 2 {
+                        animation_axis.values[1] = Some(y_encoded);
+                    }
+
+                    if z_encoded.len() > 2 {
+                        animation_axis.values[2] = Some(z_encoded);
+                    }
+
+                    position = Some(ModelFileAnimationData::Array(animation_axis));
+                }
+
+                let encoded_rotation_axis = [
+                    encode_run_length(&scaled_rotation_axis[0]),
+                    encode_run_length(&scaled_rotation_axis[1]),
+                    encode_run_length(&scaled_rotation_axis[2]),
+                ];
+
+                let mut rotation = None;
+
+                // Handle single frame
+                if encoded_rotation_axis[0].len() == 2 && encoded_rotation_axis[1].len() == 2 && encoded_rotation_axis[2].len() == 2 {
+                    match (&encoded_rotation_axis[0][1], &encoded_rotation_axis[1][1], &encoded_rotation_axis[2][1]) {
+                        (ModelFileAnimationEncoding::Value(x), ModelFileAnimationEncoding::Value(y), ModelFileAnimationEncoding::Value(z)) => {
+                            if *x != 0 || *y != 0 || *z != 0 {
+                                rotation = Some(ModelFileAnimationData::Single(animation_bone_data.rotation[0]));
+                            }
+                        }
+                        _ => {
+                            unreachable!("All the values should be ModelFileAnimationEncoding::Value");
+                        }
+                    }
+                }
+
+                // Handle multiple frame
+                if encoded_rotation_axis[0].len() > 2 || encoded_rotation_axis[1].len() > 2 || encoded_rotation_axis[2].len() > 2 {
+                    let mut animation_axis = ModelFileAnimationValue::default();
+
+                    let [x_encoded, y_encoded, z_encoded] = encoded_rotation_axis;
+
+                    if x_encoded.len() > 2 {
+                        animation_axis.values[0] = Some(x_encoded);
+                    }
+
+                    if y_encoded.len() > 2 {
+                        animation_axis.values[1] = Some(y_encoded);
+                    }
+
+                    if z_encoded.len() > 2 {
+                        animation_axis.values[2] = Some(z_encoded);
+                    }
+
+                    rotation = Some(ModelFileAnimationData::Array(animation_axis));
+                }
+
+                if position.is_none() && rotation.is_none() {
+                    continue;
+                }
+
+                animation_section.animation_data.push(ModelFileAnimation {
+                    bone: animation_bone_data.bone,
+                    position,
+                    rotation,
+                    ..Default::default()
+                });
+            }
+
+            animation_description.animation_sections.push(animation_section);
+        }
+
+        header.local_animation_descriptions.push(animation_description);
+    }
 }

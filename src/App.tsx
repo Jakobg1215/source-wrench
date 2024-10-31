@@ -30,7 +30,7 @@ type ImputedCompilationData = {
     }[];
     sequences: {
         name: string;
-        animations: string[];
+        animations: string[][];
     }[];
 };
 
@@ -64,7 +64,7 @@ const App: Component = () => {
             })),
             sequences: sequenceEntries.map((sequence) => ({
                 name: sequence.data.name,
-                animations: sequence.data.animations.flat(1),
+                animations: sequence.data.animations,
             })),
         };
 

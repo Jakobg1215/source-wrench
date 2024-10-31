@@ -1,6 +1,6 @@
 use std::{
     f64::consts::{FRAC_PI_2, PI},
-    ops::{Add, Sub},
+    ops::{Add, Index, Sub},
 };
 
 use super::Matrix3;
@@ -81,10 +81,49 @@ impl Angles {
         let z = self.yaw % (2.0 * PI);
 
         Self::new(
-            if x > PI { x - 2.0 * PI } else { x },
-            if y > PI { y - 2.0 * PI } else { y },
-            if z > PI { z - 2.0 * PI } else { z },
+            if x > PI {
+                x - 2.0 * PI
+            } else if x < -PI {
+                x + 2.0 * PI
+            } else {
+                x
+            },
+            if y > PI {
+                y - 2.0 * PI
+            } else if y < -PI {
+                y + 2.0 * PI
+            } else {
+                y
+            },
+            if z > PI {
+                z - 2.0 * PI
+            } else if z < -PI {
+                z + 2.0 * PI
+            } else {
+                z
+            },
         )
+    }
+
+    pub fn clean(&self) -> Self {
+        Self {
+            roll: if self.roll.abs() < f64::EPSILON { 0.0 } else { self.roll },
+            pitch: if self.pitch.abs() < f64::EPSILON { 0.0 } else { self.pitch },
+            yaw: if self.yaw.abs() < f64::EPSILON { 0.0 } else { self.yaw },
+        }
+    }
+}
+
+impl Index<usize> for Angles {
+    type Output = f64;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match index {
+            0 => &self.roll,
+            1 => &self.pitch,
+            2 => &self.yaw,
+            _ => panic!("Index out of bounds"),
+        }
     }
 }
 
@@ -100,7 +139,7 @@ impl Sub for Angles {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Self::new(self.roll - rhs.roll, self.pitch - rhs.pitch, self.yaw - rhs.yaw)
+        Self::new(self.roll - rhs.roll, self.pitch - rhs.pitch, self.yaw - rhs.yaw).normalize()
     }
 }
 
