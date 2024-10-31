@@ -1,10 +1,10 @@
 use std::{
-    collections::hash_map::Entry,
     fs::File,
     io::{BufRead, BufReader, Error},
     path::Path,
 };
 
+use indexmap::map::Entry;
 use thiserror::Error as ThisError;
 
 use crate::utilities::{

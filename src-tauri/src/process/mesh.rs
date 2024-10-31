@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use indexmap::{IndexMap, IndexSet};
 use kdtree::{distance::squared_euclidean, KdTree};
 use tauri::State;
@@ -105,7 +103,7 @@ pub fn process_mesh_data(
                 let mut processed_strip_group = ProcessedStripGroup::default();
                 let mut processed_strip = ProcessedStrip::default();
 
-                let mut mapped_indices = HashMap::new();
+                let mut mapped_indices = IndexMap::new();
                 let mut hardware_bones = IndexSet::new();
                 for triangle in list.triangles {
                     triangle_count += 1;

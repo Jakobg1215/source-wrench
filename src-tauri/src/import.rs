@@ -1,10 +1,10 @@
 use std::{
-    collections::HashMap,
     io::Error,
     path::Path,
     sync::{Arc, Mutex},
 };
 
+use indexmap::IndexMap;
 use serde::Serialize;
 use thiserror::Error as ThisError;
 
@@ -64,7 +64,7 @@ pub struct ImportPart {
     #[serde(skip_serializing)]
     pub vertices: Vec<ImportVertex>,
     #[serde(skip_serializing)]
-    pub polygons: HashMap<String, Vec<Vec<usize>>>,
+    pub polygons: IndexMap<String, Vec<Vec<usize>>>,
     #[serde(skip_serializing)]
     pub flexes: Vec<ImportFlex>,
 }
@@ -114,7 +114,7 @@ pub enum ParseError {
 
 #[derive(Debug, Default)]
 pub struct FileManager {
-    pub files: Mutex<HashMap<String, Arc<ImportFileData>>>,
+    pub files: Mutex<IndexMap<String, Arc<ImportFileData>>>,
 }
 
 impl FileManager {
@@ -153,7 +153,7 @@ impl FileManager {
     pub fn unload_file(&self, path: String) {
         let mut files = self.files.lock().unwrap();
 
-        files.remove(&path);
+        files.swap_remove(&path);
     }
 
     pub fn get_file(&self, path: &str) -> Option<Arc<ImportFileData>> {

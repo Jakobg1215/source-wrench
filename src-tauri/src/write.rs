@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fs::write, mem::size_of};
+use std::{fs::write, mem::size_of};
 
 use half::f16;
+use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::{
@@ -40,7 +41,7 @@ pub enum FileWriteError {
 #[derive(Debug, Default)]
 pub struct FileWriter {
     pub data: Vec<u8>,
-    string_table: HashMap<String, Vec<(usize, usize)>>,
+    string_table: IndexMap<String, Vec<(usize, usize)>>,
 }
 
 impl FileWriter {
@@ -137,7 +138,7 @@ impl FileWriter {
     }
 
     pub fn write_string_table(&mut self) -> Result<(), FileWriteError> {
-        let mut entries = self.string_table.drain().collect::<Vec<_>>();
+        let mut entries = self.string_table.drain(..).collect::<Vec<_>>();
 
         entries.sort_by(|(to, _), (from, _)| to.cmp(from));
 

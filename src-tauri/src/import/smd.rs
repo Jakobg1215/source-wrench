@@ -1,10 +1,10 @@
 use std::{
-    collections::{hash_map::Entry, HashMap},
     fs::File,
     io::{BufRead, BufReader, Error},
     path::Path,
 };
 
+use indexmap::{map::Entry, IndexMap};
 use thiserror::Error as ThisError;
 
 use crate::utilities::mathematics::{Angles, Vector2, Vector3};
@@ -46,7 +46,7 @@ struct SMDData {
     nodes: Vec<Node>,
     frames: Vec<Vec<Bone>>,
     vertices: Vec<Vertex>,
-    materials: HashMap<String, Vec<Vec<usize>>>,
+    materials: IndexMap<String, Vec<Vec<usize>>>,
 }
 
 impl SMDData {
@@ -513,7 +513,7 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
         return Err(ParseSMDError::MissingBoneBind);
     }
 
-    let mut mapped_nodes = HashMap::new();
+    let mut mapped_nodes = IndexMap::new();
 
     for (id, node) in smd_data.nodes.into_iter().enumerate() {
         let bind_frame = &smd_data.frames[0];

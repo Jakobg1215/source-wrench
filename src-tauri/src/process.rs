@@ -1,7 +1,4 @@
-use std::collections::HashMap;
-
-use bones::{process_bones, ProcessingBoneError};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use tauri::State;
 use thiserror::Error as ThisError;
 
@@ -19,6 +16,7 @@ mod bones;
 mod mesh;
 
 use animation::{process_animations, process_sequences, ProcessingAnimationError};
+use bones::{process_bones, ProcessingBoneError};
 use mesh::{process_mesh_data, ProcessingMeshError};
 
 #[derive(Debug, Default)]
@@ -32,7 +30,7 @@ pub struct ProcessedData {
 #[derive(Debug, Default)]
 pub struct ProcessedBoneData {
     pub processed_bones: Vec<ProcessedBone>,
-    pub remapped_bones: HashMap<String, Vec<ProcessedRemappedBone>>,
+    pub remapped_bones: IndexMap<String, Vec<ProcessedRemappedBone>>,
     pub sorted_bones_by_name: Vec<usize>,
 }
 
