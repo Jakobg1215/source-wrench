@@ -72,14 +72,14 @@ pub fn process_animations(
 
         for channel in &imported_animation.channels {
             let mapped_bone = &remapped_bones[channel.bone];
-            if animation_channels.contains_key(&mapped_bone.bone_index) {
+            if animation_channels.contains_key(&mapped_bone.index) {
                 continue;
             }
 
-            let bone = &bone_table.processed_bones[mapped_bone.bone_index];
+            let bone = &bone_table.processed_bones[mapped_bone.index];
 
             animation_channels.insert(
-                mapped_bone.bone_index,
+                mapped_bone.index,
                 ChannelData {
                     position: bake_channel_keyframes(&channel.position, imported_animation.frame_count, bone.position),
                     rotation: bake_channel_keyframes(&channel.rotation, imported_animation.frame_count, bone.rotation.to_quaternion()),

@@ -306,7 +306,7 @@ fn create_bone_links(
         .links
         .iter()
         .map(|link| ImportLink {
-            bone: mapped_bone[link.bone].bone_index,
+            bone: mapped_bone[link.bone].index,
             weight: link.weight,
         })
         .collect::<Vec<_>>();

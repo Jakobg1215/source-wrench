@@ -258,9 +258,9 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         ..Default::default()
     };
 
-    for (bone_index, processed_bone) in processed_data.bone_data.processed_bones.into_iter().enumerate() {
+    for (bone_index, (bone_name, processed_bone)) in processed_data.bone_data.processed_bones.into_iter().enumerate() {
         let bone = ModelFileBone {
-            name: processed_bone.name,
+            name: bone_name,
             parent: match processed_bone.parent {
                 Some(index) => index as i32,
                 None => -1,
@@ -271,13 +271,13 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
             animation_position_scale: processed_data.animation_data.animation_scales[bone_index].0,
             animation_rotation_scale: processed_data.animation_data.animation_scales[bone_index].1,
             pose: processed_bone.pose.transpose(),
-            flags: ModelFileBoneFlags::USED_BY_VERTEX_AT_LOD0,
+            flags: ModelFileBoneFlags::from_bits_truncate(processed_bone.flags.bits()),
             ..Default::default()
         };
         mdl_header.bones.push(bone);
     }
 
-    mdl_header.sorted_bone_table_by_name = processed_data.bone_data.sorted_bones_by_name.iter().map(|bone| *bone as u8).collect();
+    mdl_header.sorted_bone_table_by_name = processed_data.bone_data.sorted_bones_by_name;
 
     let hitbox_set = ModelFileHitboxSet {
         name: "default".to_string(),

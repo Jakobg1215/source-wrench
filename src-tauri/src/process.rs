@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use indexmap::{IndexMap, IndexSet};
 use tauri::State;
 use thiserror::Error as ThisError;
@@ -29,26 +30,30 @@ pub struct ProcessedData {
 
 #[derive(Debug, Default)]
 pub struct ProcessedBoneData {
-    pub processed_bones: Vec<ProcessedBone>,
+    pub processed_bones: IndexMap<String, ProcessedBone>,
     pub remapped_bones: IndexMap<String, Vec<ProcessedRemappedBone>>,
-    pub sorted_bones_by_name: Vec<usize>,
+    pub sorted_bones_by_name: Vec<u8>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedRemappedBone {
-    /// The index to the global bone.
-    pub bone_index: usize,
-    /// If the bone was collapsed.
-    pub was_collapsed: bool,
+    pub index: usize,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedBone {
-    pub name: String,
     pub parent: Option<usize>,
     pub position: Vector3,
     pub rotation: Angles,
+    pub flags: ProcessedBoneFlags,
     pub pose: Matrix4,
+}
+
+bitflags! {
+    #[derive(Debug, Default)]
+    pub struct ProcessedBoneFlags: i32 {
+        const USED_BY_VERTEX = 0x00000400;
+    }
 }
 
 #[derive(Debug, Default)]
@@ -146,8 +151,6 @@ pub struct ProcessedHardwareBone {
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingDataError {
-    #[error("Model Has Too Many Bone")]
-    TooManyBones,
     #[error("Model Has No Bones")]
     NoBones,
     #[error("Model Has Too Many Sequences")]
@@ -183,10 +186,6 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
 
     if processed_bone_data.processed_bones.is_empty() {
         return Err(ProcessingDataError::NoBones);
-    }
-
-    if processed_bone_data.processed_bones.len() > (i8::MAX as usize) + 1 {
-        return Err(ProcessingDataError::TooManyBones);
     }
 
     log("Processing Animations", LogLevel::Debug);
