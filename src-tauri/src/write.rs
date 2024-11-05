@@ -488,11 +488,13 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
             ..Default::default()
         };
 
-        for section in processed_animation.sections {
+        for mut section in processed_animation.sections {
             let mut animation_section = ModelFileAnimationSection {
                 animation_data: Vec::with_capacity(section.len()),
                 ..Default::default()
             };
+
+            section.sort_by(|to, from| to.bone.cmp(&from.bone));
 
             for animation_bone_data in section {
                 let scale = animations.animation_scales[animation_bone_data.bone as usize].0;
