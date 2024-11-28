@@ -5,8 +5,8 @@ use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::{
-    process::{ProcessedAnimationData, ProcessedData, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE},
-    utilities::mathematics::{clamp, Angles, BoundingBox, Quaternion, Vector2, Vector3, Vector4},
+    process::{ProcessedAnimationData, ProcessedBodyPart, ProcessedData, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE},
+    utilities::mathematics::{clamp, Angles, Quaternion, Vector2, Vector3, Vector4},
 };
 
 mod mesh;
@@ -20,8 +20,8 @@ use mesh::{
 
 use model::{
     ModelFileAnimation, ModelFileAnimationData, ModelFileAnimationDescription, ModelFileAnimationEncoding, ModelFileAnimationEncodingHeader,
-    ModelFileAnimationSection, ModelFileAnimationValue, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitBox,
-    ModelFileHitboxSet, ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
+    ModelFileAnimationSection, ModelFileAnimationValue, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitboxSet,
+    ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
 };
 
 use vertex::{VertexFileHeader, VertexFileVertex};
@@ -250,10 +250,11 @@ pub trait WriteToWriter {
 }
 
 pub fn write_files(name: String, processed_data: ProcessedData, export_path: String) -> Result<(), FileWriteError> {
-    let mut mdl_writer = FileWriter::default();
     let mut mdl_header = ModelFileHeader {
         version: 48,
         checksum: 69420,
+        bounding_box: processed_data.model_data.bounding_box, // TODO: If the model has no mesh use sequence bounding box.
+        illumination_position: processed_data.model_data.bounding_box.center(), // TODO: If input, use the input value.
         second_header: ModelFileSecondHeader { name, ..Default::default() },
         ..Default::default()
     };
@@ -279,19 +280,10 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
     mdl_header.sorted_bone_table_by_name = processed_data.bone_data.sorted_bones_by_name;
 
-    let hitbox_set = ModelFileHitboxSet {
-        name: "default".to_string(),
-        hitboxes: vec![ModelFileHitBox {
-            bounding_box: BoundingBox {
-                minimum: Vector3 { x: -10.0, y: -10.0, z: 0.0 },
-                maximum: Vector3 { x: 10.0, y: 10.0, z: 20.0 },
-            },
-            ..Default::default()
-        }],
+    mdl_header.hitbox_sets.push(ModelFileHitboxSet {
+        name: String::from("default"),
         ..Default::default()
-    };
-
-    mdl_header.hitbox_sets.push(hitbox_set);
+    });
 
     write_animations(processed_data.animation_data, &mut mdl_header);
 
@@ -309,15 +301,12 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
         mdl_header.local_sequence_descriptions.push(sequence_description);
     }
 
-    let mut vvd_writer = FileWriter::default();
     let mut vvd_header = VertexFileHeader {
         version: 4,
         checksum: 69420,
         lod_count: 1,
         ..Default::default()
     };
-
-    let mut vtx_writer = FileWriter::default();
     let mut vtx_header = MeshFileHeader {
         version: 7,
         vertex_cache_size: VERTEX_CACHE_SIZE as i32,
@@ -330,129 +319,7 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
     mdl_header.material_paths.push(String::from("\\"));
 
-    let mut mesh_id = 0;
-    let mut previous_base: Option<(i32, usize)> = None;
-    for processed_body_part in processed_data.model_data.body_parts {
-        let mut body_part = ModelFileBodyPart {
-            name: processed_body_part.name,
-            base: match previous_base {
-                Some(base) => base.0 * base.1 as i32,
-                None => 1,
-            },
-            ..Default::default()
-        };
-
-        previous_base = Some((body_part.base, processed_body_part.parts.len()));
-
-        let mut mesh_body_part_header = MeshFileBodyPartHeader::default();
-
-        for processed_part in processed_body_part.parts {
-            let mut model = ModelFileModel {
-                name: processed_part.name,
-                vertex_count: processed_part.meshes.iter().map(|mesh| mesh.vertex_data.len()).sum::<usize>() as i32,
-                vertex_offset: (vvd_header.vertices.len() * 48) as i32,
-                tangent_offset: (vvd_header.tangents.len() * 16) as i32,
-                ..Default::default()
-            };
-
-            let mut mesh_model_header = MeshFileModelHeader::default();
-            let mut mesh_model_lod_header = MeshFileModelLODHeader::default();
-
-            let mut vertex_count = 0;
-            for processed_mesh in processed_part.meshes {
-                let body_mesh = ModelFileMesh {
-                    material: processed_mesh.material as i32,
-                    vertex_count: processed_mesh.vertex_data.len() as i32,
-                    vertex_offset: vertex_count as i32,
-                    mesh_identifier: mesh_id,
-                    vertex_lod_count: [processed_mesh.vertex_data.len() as i32; 8],
-                    ..Default::default()
-                };
-
-                mesh_id += 1;
-                vertex_count += processed_mesh.vertex_data.len();
-                for vertex in processed_mesh.vertex_data {
-                    let mut uv_fix = vertex.texture_coordinate; // FIXME: This should be in the mesh processing stage.
-                    uv_fix.y = 1.0 - uv_fix.y;
-                    let vvd_vertex = VertexFileVertex {
-                        weights: [vertex.weights[0] as f32, vertex.weights[1] as f32, vertex.weights[2] as f32],
-                        bones: [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8],
-                        bone_count: vertex.bone_count as u8,
-                        position: vertex.position,
-                        normal: vertex.normal,
-                        texture_coordinate: uv_fix,
-                    };
-
-                    vvd_header.vertices.push(vvd_vertex);
-                    vvd_header.tangents.push(vertex.tangent);
-                }
-
-                let mut mesh_mesh_header = MeshFileMeshHeader::default();
-
-                for strip_group in processed_mesh.strip_groups {
-                    let mut mesh_strip_group_header = MeshFileStripGroupHeader {
-                        flags: MeshFileStripGroupHeaderFlags::IS_HARDWARE_SKINNED,
-                        indices: strip_group.indices,
-                        ..Default::default()
-                    };
-
-                    for vertex in strip_group.vertices {
-                        let mesh_vertex = MeshFileVertexHeader {
-                            bone_count: vertex.bone_count as u8,
-                            vertex_index: vertex.vertex_index as u16,
-                            bone_weight_bones: [vertex.bones[0] as u8, vertex.bones[1] as u8, vertex.bones[2] as u8],
-                        };
-
-                        mesh_strip_group_header.vertices.push(mesh_vertex);
-                    }
-
-                    for strip in strip_group.strips {
-                        let mut mesh_strip_header = MeshFileStripHeader {
-                            flags: MeshFileStripFlags::IS_TRIANGLE_LIST,
-                            indices_count: strip.indices_count as i32, // FIXME: Add check for these count.
-                            indices_offset: strip.indices_offset as i32,
-                            vertices_count: strip.vertex_count as i32,
-                            vertices_offset: strip.vertex_offset as i32,
-                            bone_count: strip.bone_count as i16,
-                            ..Default::default()
-                        };
-
-                        for bone_change in strip.hardware_bones {
-                            let mesh_bone_state_change = MeshFileBoneStateChangeHeader {
-                                hardware_id: bone_change.hardware_bone as i32,
-                                bone_table_index: bone_change.bone_table_bone as i32,
-                            };
-
-                            mesh_strip_header.bone_state_changes.push(mesh_bone_state_change);
-                        }
-
-                        debug_assert!(
-                            mesh_strip_header.bone_state_changes.len() <= MAX_HARDWARE_BONES_PER_STRIP,
-                            "Bone State Changes Exceeds {}! mesh_strip_header.bone_state_changes.len(): {}",
-                            MAX_HARDWARE_BONES_PER_STRIP,
-                            mesh_strip_header.bone_state_changes.len()
-                        );
-
-                        mesh_strip_group_header.strips.push(mesh_strip_header);
-                    }
-
-                    mesh_mesh_header.strip_groups.push(mesh_strip_group_header);
-                }
-
-                mesh_model_lod_header.meshes.push(mesh_mesh_header);
-                model.meshes.push(body_mesh);
-            }
-
-            body_part.models.push(model);
-            mesh_model_header.model_lods.push(mesh_model_lod_header);
-            mesh_body_part_header.models.push(mesh_model_header);
-        }
-
-        mdl_header.body_parts.push(body_part);
-        vtx_header.body_parts.push(mesh_body_part_header);
-    }
-    vtx_header.material_replacement_lists.push(MeshFileMaterialReplacementListHeader::default());
-    vvd_header.lod_vertex_count = [vvd_header.vertices.len() as i32; MAX_LOD_COUNT];
+    write_body_parts(processed_data.model_data.body_parts, &mut mdl_header, &mut vtx_header, &mut vvd_header);
 
     for processed_material in processed_data.model_data.materials {
         let material = ModelFileMaterial {
@@ -464,6 +331,9 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
 
     mdl_header.material_replacements.push((0..mdl_header.materials.len() as i16).collect());
 
+    let mut mdl_writer = FileWriter::default();
+    let mut vvd_writer = FileWriter::default();
+    let mut vtx_writer = FileWriter::default();
     mdl_header.write(&mut mdl_writer)?;
     vvd_header.write(&mut vvd_writer)?;
     vtx_header.write(&mut vtx_writer)?;
@@ -689,4 +559,134 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
 
         header.local_animation_descriptions.push(animation_description);
     }
+}
+
+fn write_body_parts(
+    processed_body_parts: Vec<ProcessedBodyPart>,
+    header: &mut ModelFileHeader,
+    mesh_header: &mut MeshFileHeader,
+    vertex_header: &mut VertexFileHeader,
+) {
+    let mut mesh_id = 0;
+    let mut previous_base = None;
+    for processed_body_part in processed_body_parts {
+        let mut model_body_part = ModelFileBodyPart {
+            name: processed_body_part.name,
+            models: Vec::with_capacity(processed_body_part.models.len()),
+            base: match previous_base {
+                Some((previous_base, previous_count)) => previous_base * previous_count as i32,
+                None => 1,
+            },
+            ..Default::default()
+        };
+        previous_base = Some((model_body_part.base, processed_body_part.models.len()));
+
+        let mut mesh_body_part_header = MeshFileBodyPartHeader::default();
+
+        for processed_model in processed_body_part.models {
+            let mut model_model = ModelFileModel {
+                name: processed_model.name,
+                meshes: Vec::with_capacity(processed_model.meshes.len()),
+                vertex_count: processed_model.meshes.iter().map(|mesh| mesh.vertex_data.len()).sum::<usize>() as i32,
+                vertex_offset: (vertex_header.vertices.len() * 48) as i32, // FIXME: Add a check for this.
+                tangent_offset: (vertex_header.tangents.len() * 16) as i32, // FIXME: Add a check for this.
+                ..Default::default()
+            };
+
+            let mut mesh_model_header = MeshFileModelHeader::default();
+            let mut mesh_model_lod_header = MeshFileModelLODHeader::default();
+
+            let mut vertex_count = 0;
+            for processed_mesh in processed_model.meshes {
+                let model_mesh = ModelFileMesh {
+                    material: processed_mesh.material,
+                    vertex_count: processed_mesh.vertex_data.len() as i32,
+                    vertex_offset: vertex_count as i32,
+                    mesh_identifier: mesh_id,
+                    vertex_lod_count: [processed_mesh.vertex_data.len() as i32; 8],
+                    ..Default::default()
+                };
+
+                mesh_id += 1;
+                vertex_count += processed_mesh.vertex_data.len();
+
+                for processed_vertex in processed_mesh.vertex_data {
+                    // let mut uv_fix = vertex.texture_coordinate; // FIXME: This should be in the mesh processing stage.
+                    // uv_fix.y = 1.0 - uv_fix.y;
+                    vertex_header.vertices.push(VertexFileVertex {
+                        weights: processed_vertex.weights,
+                        bones: processed_vertex.bones,
+                        bone_count: processed_vertex.bone_count,
+                        position: processed_vertex.position,
+                        normal: processed_vertex.normal,
+                        texture_coordinate: processed_vertex.texture_coordinate,
+                    });
+                    vertex_header.tangents.push(processed_vertex.tangent);
+                }
+
+                let mut mesh_mesh_header = MeshFileMeshHeader::default();
+
+                for processed_strip_group in processed_mesh.strip_groups {
+                    let mut mesh_strip_group_header = MeshFileStripGroupHeader {
+                        flags: MeshFileStripGroupHeaderFlags::IS_HARDWARE_SKINNED,
+                        indices: processed_strip_group.indices,
+                        ..Default::default()
+                    };
+
+                    for processed_mesh_vertex in processed_strip_group.vertices {
+                        mesh_strip_group_header.vertices.push(MeshFileVertexHeader {
+                            bone_count: processed_mesh_vertex.bone_count,
+                            vertex_index: processed_mesh_vertex.vertex_index,
+                            bone_weight_bones: processed_mesh_vertex.bones,
+                        });
+                    }
+
+                    for processed_strip in processed_strip_group.strips {
+                        let mut mesh_strip_header = MeshFileStripHeader {
+                            flags: MeshFileStripFlags::IS_TRIANGLE_LIST,
+                            indices_count: processed_strip.indices_count,
+                            indices_offset: processed_strip.indices_offset,
+                            vertices_count: processed_strip.vertex_count,
+                            vertices_offset: processed_strip.vertex_offset,
+                            bone_count: processed_strip.bone_count,
+                            ..Default::default()
+                        };
+
+                        for bone_change in processed_strip.hardware_bones {
+                            let mesh_bone_state_change = MeshFileBoneStateChangeHeader {
+                                hardware_id: bone_change.hardware_bone,
+                                bone_table_index: bone_change.bone_table_bone,
+                            };
+
+                            mesh_strip_header.bone_state_changes.push(mesh_bone_state_change);
+                        }
+
+                        debug_assert!(
+                            mesh_strip_header.bone_state_changes.len() <= MAX_HARDWARE_BONES_PER_STRIP,
+                            "Bone State Changes Exceeds {}! mesh_strip_header.bone_state_changes.len(): {}",
+                            MAX_HARDWARE_BONES_PER_STRIP,
+                            mesh_strip_header.bone_state_changes.len()
+                        );
+
+                        mesh_strip_group_header.strips.push(mesh_strip_header);
+                    }
+
+                    mesh_mesh_header.strip_groups.push(mesh_strip_group_header);
+                }
+
+                mesh_model_lod_header.meshes.push(mesh_mesh_header);
+                model_model.meshes.push(model_mesh);
+            }
+
+            model_body_part.models.push(model_model);
+            mesh_model_header.model_lods.push(mesh_model_lod_header);
+            mesh_body_part_header.models.push(mesh_model_header);
+        }
+
+        header.body_parts.push(model_body_part);
+        mesh_header.body_parts.push(mesh_body_part_header);
+    }
+
+    mesh_header.material_replacement_lists.push(MeshFileMaterialReplacementListHeader::default());
+    vertex_header.lod_vertex_count = [vertex_header.vertices.len() as i32; MAX_LOD_COUNT];
 }

@@ -8,7 +8,7 @@ use crate::{
     input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{Angles, Matrix4, Vector2, Vector3, Vector4},
+        mathematics::{Angles, BoundingBox, Matrix4, Vector2, Vector3, Vector4},
     },
 };
 
@@ -18,7 +18,7 @@ mod mesh;
 
 use animation::{process_animations, process_sequences, ProcessingAnimationError};
 use bones::{process_bones, ProcessingBoneError};
-use mesh::{process_mesh_data, ProcessingMeshError};
+use mesh::{process_meshes, ProcessingMeshError};
 
 #[derive(Debug, Default)]
 pub struct ProcessedData {
@@ -85,13 +85,14 @@ pub struct ProcessedSequence {
 #[derive(Debug, Default)]
 pub struct ProcessedModelData {
     pub body_parts: Vec<ProcessedBodyPart>,
+    pub bounding_box: BoundingBox,
     pub materials: IndexSet<String>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedBodyPart {
     pub name: String,
-    pub parts: Vec<ProcessedModel>,
+    pub models: Vec<ProcessedModel>,
 }
 
 #[derive(Debug, Default)]
@@ -102,16 +103,16 @@ pub struct ProcessedModel {
 
 #[derive(Debug, Default)]
 pub struct ProcessedMesh {
-    pub material: usize,
+    pub material: i32,
     pub vertex_data: Vec<ProcessedVertex>,
     pub strip_groups: Vec<ProcessedStripGroup>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct ProcessedVertex {
-    pub weights: [f64; 3],
-    pub bones: [usize; 3],
-    pub bone_count: usize,
+    pub weights: [f32; 3],
+    pub bones: [u8; 3],
+    pub bone_count: u8,
     pub position: Vector3,
     pub normal: Vector3,
     pub texture_coordinate: Vector2,
@@ -128,25 +129,25 @@ pub struct ProcessedStripGroup {
 
 #[derive(Debug, Default)]
 pub struct ProcessedMeshVertex {
-    pub bone_count: usize,
-    pub vertex_index: usize,
-    pub bones: [usize; 3],
+    pub bone_count: u8,
+    pub vertex_index: u16,
+    pub bones: [u8; 3],
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedStrip {
-    pub indices_count: usize,
-    pub indices_offset: usize,
-    pub vertex_count: usize,
-    pub vertex_offset: usize,
-    pub bone_count: usize,
+    pub indices_count: i32,
+    pub indices_offset: i32,
+    pub vertex_count: i32,
+    pub vertex_offset: i32,
+    pub bone_count: i16,
     pub hardware_bones: Vec<ProcessedHardwareBone>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedHardwareBone {
-    pub hardware_bone: usize,
-    pub bone_table_bone: usize,
+    pub hardware_bone: i32,
+    pub bone_table_bone: i32,
 }
 
 #[derive(Debug, ThisError)]
@@ -157,10 +158,6 @@ pub enum ProcessingDataError {
     TooManySequences,
     #[error("Model Has No Sequences")]
     NoSequences,
-    #[error("Model Has Too Many Materials")]
-    TooManyMaterials,
-    #[error("Model Has Too Many Body Parts")]
-    TooManyBodyParts,
     #[error("Failed To Process Bone Data: {0}")]
     ProcessingBoneError(#[from] ProcessingBoneError),
     #[error("Failed To Process Animation Data: {0}")]
@@ -204,17 +201,9 @@ pub fn process(input: &ImputedCompilationData, file_manager: &State<FileManager>
     }
 
     log("Processing Mesh Data", LogLevel::Debug);
-    let processed_mesh = process_mesh_data(input, file_manager, &processed_bone_data)?;
+    let processed_mesh = process_meshes(input, file_manager, &processed_bone_data)?;
     log(format!("Model has {} materials", processed_mesh.materials.len()), LogLevel::Verbose);
     log(format!("Model has {} body parts", processed_mesh.body_parts.len()), LogLevel::Verbose);
-
-    if processed_mesh.body_parts.len() > i32::MAX as usize {
-        return Err(ProcessingDataError::TooManyBodyParts);
-    }
-
-    if processed_mesh.materials.len() > i16::MAX as usize {
-        return Err(ProcessingDataError::TooManyMaterials);
-    }
 
     Ok(ProcessedData {
         bone_data: processed_bone_data,

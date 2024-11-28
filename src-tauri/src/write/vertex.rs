@@ -36,11 +36,6 @@ impl WriteToWriter for VertexFileHeader {
             "Vertex LOD Count Is Less Than 0!, self.lod_vertex_count: {:?}",
             self.lod_vertex_count
         );
-        debug_assert!(
-            self.lod_vertex_count.windows(2).all(|count| count[0] >= count[1]),
-            "LOD Vertex Count Is Non-Descending! self.lod_vertex_count: {:?}",
-            self.lod_vertex_count
-        );
         writer.write_integer_array(&self.lod_vertex_count);
         writer.write_array_size(self.fixups.len())?;
         self.fixup_offset = writer.write_integer_index();
