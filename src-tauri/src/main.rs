@@ -42,7 +42,7 @@ fn compile_model(data: ImputedCompilationData, file_manager: tauri::State<FileMa
 
     log("Writing Files!", LogLevel::Info);
 
-    match write_files(model_name, processed_data, data.export_path) {
+    match write_files(data.model_name, model_name, processed_data, data.export_path) {
         Ok(_) => {}
         Err(error) => {
             log(format!("Fail To Write Files: {}!", error), LogLevel::Error);

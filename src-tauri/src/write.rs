@@ -249,13 +249,16 @@ pub trait WriteToWriter {
     fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError>;
 }
 
-pub fn write_files(name: String, processed_data: ProcessedData, export_path: String) -> Result<(), FileWriteError> {
+pub fn write_files(file_name: String, model_name: String, processed_data: ProcessedData, export_path: String) -> Result<(), FileWriteError> {
     let mut mdl_header = ModelFileHeader {
         version: 48,
         checksum: 69420,
         bounding_box: processed_data.model_data.bounding_box, // TODO: If the model has no mesh use sequence bounding box.
         illumination_position: processed_data.model_data.bounding_box.center(), // TODO: If input, use the input value.
-        second_header: ModelFileSecondHeader { name, ..Default::default() },
+        second_header: ModelFileSecondHeader {
+            name: model_name,
+            ..Default::default()
+        },
         ..Default::default()
     };
 
@@ -339,9 +342,9 @@ pub fn write_files(name: String, processed_data: ProcessedData, export_path: Str
     vtx_header.write(&mut vtx_writer)?;
 
     // FIXME: This is a temporary solution to write the files.
-    let _ = write(format!("{}/{}.{}", export_path, mdl_header.second_header.name, "mdl"), mdl_writer.data);
-    let _ = write(format!("{}/{}.{}", export_path, mdl_header.second_header.name, "vvd"), vvd_writer.data);
-    let _ = write(format!("{}/{}.{}", export_path, mdl_header.second_header.name, "dx90.vtx"), vtx_writer.data);
+    let _ = write(format!("{}/{}.{}", export_path, file_name, "mdl"), mdl_writer.data);
+    let _ = write(format!("{}/{}.{}", export_path, file_name, "vvd"), vvd_writer.data);
+    let _ = write(format!("{}/{}.{}", export_path, file_name, "dx90.vtx"), vtx_writer.data);
 
     Ok(())
 }
