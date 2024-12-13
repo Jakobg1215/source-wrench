@@ -1,6 +1,6 @@
 use std::{
     io::Error,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -98,10 +98,10 @@ pub struct ImportFlexVertex {
 
 #[derive(Debug, ThisError)]
 pub enum ParseError {
-    #[error("File Does Not Exist")]
-    FileDoesNotExist,
     #[error("Failed To Open File")]
     FailedFileOpen(#[from] Error),
+    #[error("File Does Not Exist")]
+    FileDoesNotExist,
     #[error("File Does Not Have Extension")]
     FileDoesNotHaveExtension,
     #[error("File Format Is Not Supported")]
@@ -114,49 +114,51 @@ pub enum ParseError {
 
 #[derive(Debug, Default)]
 pub struct FileManager {
-    pub files: Mutex<IndexMap<String, Arc<ImportFileData>>>,
+    pub files: Mutex<IndexMap<PathBuf, Arc<ImportFileData>>>,
 }
 
 impl FileManager {
     pub fn load_file(&self, path: String) -> Result<Arc<ImportFileData>, ParseError> {
-        let file_path = Path::new(&path);
+        let file_path = PathBuf::from(path);
         let mut files = self.files.lock().unwrap();
 
-        if let Some(file) = files.get(&path) {
+        if let Some(file) = files.get(&file_path) {
             return Ok(Arc::clone(file));
         }
 
-        let exists = file_path.try_exists()?;
-
-        if !exists {
+        if !file_path.try_exists()? {
             return Err(ParseError::FileDoesNotExist);
         }
 
-        let file_extension = match file_path.extension() {
-            Some(extension) => extension,
-            None => return Err(ParseError::FileDoesNotHaveExtension),
-        };
+        let file_extension = file_path.extension().ok_or_else(|| ParseError::FileDoesNotHaveExtension)?;
 
-        let imported_file = match file_extension.to_str().expect("Failed To Convert File Extension To String!") {
-            "smd" => smd::load_smd(file_path)?,
-            "vta" => todo!("Support VTA Files!"),
-            "obj" => obj::load_obj(file_path)?,
+        let imported_file = match file_extension.to_string_lossy().to_lowercase().as_str() {
+            "smd" => smd::load_smd(&file_path)?,
+            "obj" => obj::load_obj(&file_path)?,
             _ => return Err(ParseError::UnsupportedFileFormat),
         };
 
-        log(format!("Loaded {:?} file: {}", file_extension.to_ascii_uppercase(), path), LogLevel::Verbose);
+        log(
+            format!(
+                "Loaded {} file: {}",
+                file_extension.to_string_lossy().to_uppercase(),
+                file_path.as_os_str().to_string_lossy()
+            ),
+            LogLevel::Verbose,
+        );
         let file = Arc::new(imported_file);
-        files.insert(path, Arc::clone(&file));
+        files.insert(file_path, Arc::clone(&file));
         Ok(file)
     }
 
     pub fn unload_file(&self, path: String) {
+        let file_path = PathBuf::from(path);
         let mut files = self.files.lock().unwrap();
-
-        files.swap_remove(&path);
+        files.swap_remove(&file_path);
     }
 
     pub fn get_file(&self, path: &str) -> Option<Arc<ImportFileData>> {
-        self.files.lock().unwrap().get(path).cloned()
+        let file_path = Path::new(path);
+        self.files.lock().unwrap().get(file_path).cloned()
     }
 }
