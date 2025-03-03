@@ -189,11 +189,7 @@ impl Mul<Matrix3> for Vector3 {
     type Output = Self;
 
     fn mul(self, rhs: Matrix3) -> Self {
-        Self {
-            x: self.x * rhs.entries[0][0] + self.y * rhs.entries[1][0] + self.z * rhs.entries[2][0],
-            y: self.x * rhs.entries[0][1] + self.y * rhs.entries[1][1] + self.z * rhs.entries[2][1],
-            z: self.x * rhs.entries[0][2] + self.y * rhs.entries[1][2] + self.z * rhs.entries[2][2],
-        }
+        rhs.rotate_vector(self)
     }
 }
 

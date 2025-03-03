@@ -119,8 +119,8 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
         let bone = &source_bone_table[bone_index];
 
         source_bone_table[bone_index].pose = match bone.parent {
-            Some(parent_index) => source_bone_table[parent_index].pose * Matrix4::new(bone.position, bone.rotation.to_matrix()),
-            None => Matrix4::new(bone.position, bone.rotation.to_matrix()),
+            Some(parent_index) => source_bone_table[parent_index].pose * Matrix4::new(bone.rotation, bone.position),
+            None => Matrix4::new(bone.rotation, bone.position),
         };
     }
 

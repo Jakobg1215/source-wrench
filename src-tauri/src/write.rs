@@ -274,7 +274,7 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
             quaternion: processed_bone.rotation.to_quaternion(),
             animation_position_scale: processed_data.animation_data.animation_scales[bone_index].0,
             animation_rotation_scale: processed_data.animation_data.animation_scales[bone_index].1,
-            pose: processed_bone.pose.transpose(),
+            pose: processed_bone.pose.inverse(),
             flags: ModelFileBoneFlags::from_bits_truncate(processed_bone.flags.bits()),
             ..Default::default()
         };

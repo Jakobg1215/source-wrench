@@ -533,19 +533,20 @@ impl WriteToWriter for ModelFileBone {
         writer.write_angles(self.rotation);
         writer.write_vector3(self.animation_position_scale);
         writer.write_vector3(self.animation_rotation_scale);
+        let pose_entries = self.pose.entries();
         writer.write_float_array(&[
-            self.pose.entries[0][0] as f32,
-            self.pose.entries[0][1] as f32,
-            self.pose.entries[0][2] as f32,
-            self.pose.entries[0][3] as f32,
-            self.pose.entries[1][0] as f32,
-            self.pose.entries[1][1] as f32,
-            self.pose.entries[1][2] as f32,
-            self.pose.entries[1][3] as f32,
-            self.pose.entries[2][0] as f32,
-            self.pose.entries[2][1] as f32,
-            self.pose.entries[2][2] as f32,
-            self.pose.entries[2][3] as f32,
+            pose_entries[0][0] as f32,
+            pose_entries[0][1] as f32,
+            pose_entries[0][2] as f32,
+            pose_entries[0][3] as f32,
+            pose_entries[1][0] as f32,
+            pose_entries[1][1] as f32,
+            pose_entries[1][2] as f32,
+            pose_entries[1][3] as f32,
+            pose_entries[2][0] as f32,
+            pose_entries[2][1] as f32,
+            pose_entries[2][2] as f32,
+            pose_entries[2][3] as f32,
         ]);
         writer.write_quaternion(self.alignment);
         writer.write_integer(self.flags.bits());

@@ -126,7 +126,7 @@ pub fn process_animations(
                 // TODO: If animation is delta then skip subtracting from bone
                 for frame in section_frame_start..=section_frame_end {
                     position.push(channel_data.position[frame] - bone.position);
-                    rotation.push(channel_data.rotation[frame].to_angles().clean() - bone.rotation);
+                    rotation.push(channel_data.rotation[frame].to_angles() - bone.rotation);
                 }
 
                 section_data.push(ProcessedAnimatedBoneData {

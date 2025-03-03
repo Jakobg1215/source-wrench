@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::Matrix3;
 
-/// Euler angles in radians. Roll, Pitch, Yaw
+/// Tait–Bryan angles in radians. Roll, Pitch, Yaw
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Angles {
     pub roll: f64,
@@ -19,9 +19,7 @@ impl Angles {
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self { roll: x, pitch: y, yaw: z }
     }
-}
 
-impl Angles {
     pub fn to_quaternion(&self) -> Quaternion {
         let half_cos_roll = (self.roll / 2.0).cos();
         let half_sin_roll = (self.roll / 2.0).sin();
@@ -46,35 +44,19 @@ impl Angles {
         let cos_yaw = self.yaw.cos();
         let sin_yaw = self.yaw.sin();
 
-        Matrix3 {
-            entries: [
-                [
-                    cos_yaw * cos_pitch,
-                    cos_yaw * sin_pitch * sin_roll - sin_yaw * cos_roll,
-                    cos_yaw * sin_pitch * cos_roll + sin_yaw * sin_roll,
-                ],
-                [
-                    sin_yaw * cos_pitch,
-                    sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll,
-                    sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll,
-                ],
-                [-sin_pitch, cos_pitch * sin_roll, cos_pitch * cos_roll],
+        Matrix3::new([
+            [
+                cos_yaw * cos_pitch,
+                cos_yaw * sin_pitch * sin_roll - sin_yaw * cos_roll,
+                cos_yaw * sin_pitch * cos_roll + sin_yaw * sin_roll,
             ],
-        }
-    }
-
-    pub fn to_degrees(&self) -> Self {
-        let degrees_conversion = 180.0 / PI;
-        Self::new(self.roll * degrees_conversion, self.pitch * degrees_conversion, self.yaw * degrees_conversion)
-    }
-
-    pub fn to_radians(&self) -> Self {
-        let radians_conversion = PI / 180.0;
-        Self::new(self.roll * radians_conversion, self.pitch * radians_conversion, self.yaw * radians_conversion)
-    }
-
-    pub fn sum(&self) -> f64 {
-        self.roll + self.pitch + self.yaw
+            [
+                sin_yaw * cos_pitch,
+                sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll,
+                sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll,
+            ],
+            [-sin_pitch, cos_pitch * sin_roll, cos_pitch * cos_roll],
+        ])
     }
 
     pub fn normalize(&self) -> Self {
@@ -106,14 +88,6 @@ impl Angles {
             },
         )
     }
-
-    pub fn clean(&self) -> Self {
-        Self {
-            roll: if self.roll.abs() < f64::EPSILON { 0.0 } else { self.roll },
-            pitch: if self.pitch.abs() < f64::EPSILON { 0.0 } else { self.pitch },
-            yaw: if self.yaw.abs() < f64::EPSILON { 0.0 } else { self.yaw },
-        }
-    }
 }
 
 impl Index<usize> for Angles {
@@ -126,6 +100,18 @@ impl Index<usize> for Angles {
             2 => &self.yaw,
             _ => panic!("Index out of bounds"),
         }
+    }
+}
+
+impl From<Quaternion> for Angles {
+    fn from(value: Quaternion) -> Self {
+        value.to_angles()
+    }
+}
+
+impl From<Matrix3> for Angles {
+    fn from(value: Matrix3) -> Self {
+        value.to_angles()
     }
 }
 
@@ -156,9 +142,9 @@ pub struct Quaternion {
 impl Default for Quaternion {
     fn default() -> Self {
         Self {
-            x: Default::default(),
-            y: Default::default(),
-            z: Default::default(),
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
             w: 1.0,
         }
     }
@@ -168,9 +154,7 @@ impl Quaternion {
     pub fn new(x: f64, y: f64, z: f64, w: f64) -> Self {
         Self { x, y, z, w }
     }
-}
 
-impl Quaternion {
     pub fn to_angles(&self) -> Angles {
         let sin_roll_cos_pitch = 2.0 * (self.w * self.x + self.y * self.z);
         let cos_roll_cos_pitch = 1.0 - 2.0 * (self.x * self.x + self.y * self.y);
@@ -191,28 +175,26 @@ impl Quaternion {
     }
 
     pub fn to_matrix(&self) -> Matrix3 {
-        Matrix3 {
-            entries: [
-                [
-                    1.0 - 2.0 * self.y * self.y - 2.0 * self.z * self.z,
-                    2.0 * self.x * self.y - 2.0 * self.w * self.z,
-                    2.0 * self.x * self.z + 2.0 * self.w * self.y,
-                ],
-                [
-                    2.0 * self.x * self.y + 2.0 * self.w * self.z,
-                    1.0 - 2.0 * self.x * self.x - 2.0 * self.z * self.z,
-                    2.0 * self.y * self.z - 2.0 * self.w * self.x,
-                ],
-                [
-                    2.0 * self.x * self.z - 2.0 * self.w * self.y,
-                    2.0 * self.y * self.z + 2.0 * self.w * self.x,
-                    1.0 - 2.0 * self.x * self.x - 2.0 * self.y * self.y,
-                ],
+        Matrix3::new([
+            [
+                1.0 - 2.0 * self.y * self.y - 2.0 * self.z * self.z,
+                2.0 * self.x * self.y - 2.0 * self.w * self.z,
+                2.0 * self.x * self.z + 2.0 * self.w * self.y,
             ],
-        }
+            [
+                2.0 * self.x * self.y + 2.0 * self.w * self.z,
+                1.0 - 2.0 * self.x * self.x - 2.0 * self.z * self.z,
+                2.0 * self.y * self.z - 2.0 * self.w * self.x,
+            ],
+            [
+                2.0 * self.x * self.z - 2.0 * self.w * self.y,
+                2.0 * self.y * self.z + 2.0 * self.w * self.x,
+                1.0 - 2.0 * self.x * self.x - 2.0 * self.y * self.y,
+            ],
+        ])
     }
 
-    pub fn magnitude(&self) -> f64 {
+    fn magnitude(&self) -> f64 {
         (self.x * self.x + self.y * self.y + self.z * self.z + self.w * self.w).sqrt()
     }
 
@@ -224,5 +206,17 @@ impl Quaternion {
         }
 
         Self::new(self.x / mag, self.y / mag, self.z / mag, self.w / mag)
+    }
+}
+
+impl From<Angles> for Quaternion {
+    fn from(value: Angles) -> Self {
+        value.to_quaternion()
+    }
+}
+
+impl From<Matrix3> for Quaternion {
+    fn from(value: Matrix3) -> Self {
+        value.to_quaternion()
     }
 }
