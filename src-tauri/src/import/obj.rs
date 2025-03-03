@@ -1,10 +1,11 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error},
+    num::NonZero,
     path::Path,
 };
 
-use indexmap::map::Entry;
+use indexmap::{map::Entry, IndexMap};
 use thiserror::Error as ThisError;
 
 use crate::utilities::{
@@ -12,7 +13,7 @@ use crate::utilities::{
     mathematics::{Vector2, Vector3},
 };
 
-use super::{ImportAnimation, ImportBone, ImportChannel, ImportFileData, ImportKeyFrame, ImportLink, ImportPart, ImportVertex};
+use super::{ImportAnimation, ImportBone, ImportFileData, ImportPart, ImportVertex};
 
 #[derive(Debug, ThisError)]
 pub enum ParseOBJError {
@@ -28,6 +29,8 @@ pub enum ParseOBJError {
     MissingArgument(&'static str, usize),
     #[error("Index Out Of Bounds On Line {0}")]
     BogusIndex(usize),
+    #[error("Duplicate Object Names")]
+    DuplicateObjects,
 }
 
 pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
@@ -36,25 +39,21 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
     let lines = file_buffer.lines().map_while(Result::ok);
 
     let mut file_data = ImportFileData {
-        skeleton: vec![ImportBone {
-            name: String::from("default"),
-            ..Default::default()
-        }],
-        animations: vec![ImportAnimation {
-            name: file_path.file_stem().unwrap().to_string_lossy().to_string(),
-            frame_count: 1,
-            channels: vec![ImportChannel {
-                position: vec![ImportKeyFrame::default()],
-                rotation: vec![ImportKeyFrame::default()],
-                ..Default::default()
-            }],
-        }],
+        skeleton: IndexMap::from([(String::from("default"), ImportBone::default())]),
+        animations: IndexMap::from([(
+            file_path.file_stem().unwrap().to_string_lossy().to_string(),
+            ImportAnimation {
+                frame_count: NonZero::new(1).unwrap(),
+                channels: IndexMap::new(),
+            },
+        )]),
         ..Default::default()
     };
 
     let mut vertex_data = Vec::new();
     let mut texture_coordinate_data = Vec::new();
     let mut normal_data = Vec::new();
+    let mut object_name = String::new();
     let mut object_data = ImportPart::default();
     let mut current_material = String::from("debug/debugempty");
     let mut warned_no_material = false;
@@ -188,7 +187,7 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
                         position: vertex_data[vertex_index - 1],
                         normal: normal_data[normal_index - 1],
                         texture_coordinate: texture_coordinate_data[texture_coordinate_index - 1],
-                        links: vec![ImportLink { bone: 0, weight: 1.0 }],
+                        links: IndexMap::from([(0, 1.0)]),
                     });
                 }
 
@@ -198,7 +197,11 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
 
                 if current_material == "debug/debugempty" && !warned_no_material {
                     log(
-                        format!("Object {} faces has no materials! Defaulting to {}!", &object_data.name, &current_material),
+                        format!(
+                            "Object {} faces has no materials! Defaulting to {}!",
+                            if object_name.is_empty() { "Object" } else { &object_name },
+                            &current_material
+                        ),
                         LogLevel::Warn,
                     );
                     warned_no_material = true;
@@ -217,22 +220,25 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
                 normal_data.clear();
             }
             Some("o") => {
-                if object_data.name.is_empty() {
-                    object_data.name = match line_arguments.next() {
+                if object_name.is_empty() {
+                    object_name = match line_arguments.next() {
                         Some(name) => name.to_string(),
                         None => return Err(ParseOBJError::MissingArgument("Object Name", current_line_count)),
                     };
                     continue;
                 }
 
-                file_data.parts.push(object_data);
-                object_data = ImportPart {
-                    name: match line_arguments.next() {
-                        Some(name) => name.to_string(),
-                        None => return Err(ParseOBJError::MissingArgument("Object Name", current_line_count)),
-                    },
-                    ..Default::default()
+                if file_data.parts.contains_key(&object_name) {
+                    return Err(ParseOBJError::DuplicateObjects);
+                }
+
+                file_data.parts.insert(object_name, object_data);
+                object_name = match line_arguments.next() {
+                    Some(name) => name.to_string(),
+                    None => return Err(ParseOBJError::MissingArgument("Object Name", current_line_count)),
                 };
+                object_data = ImportPart::default();
+
                 current_material = String::from("debug/debugempty");
                 warned_no_material = false;
             }
@@ -276,7 +282,13 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
         }
     }
 
-    file_data.parts.push(object_data);
+    if object_name.is_empty() && file_data.parts.contains_key("Object") {
+        return Err(ParseOBJError::DuplicateObjects);
+    }
+
+    file_data
+        .parts
+        .insert(if object_name.is_empty() { String::from("Object") } else { object_name }, object_data);
 
     Ok(file_data)
 }

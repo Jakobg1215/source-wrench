@@ -81,7 +81,7 @@ const BodyPartModelEntry: Component<BodyPartModelEntryProperties> = (properties)
 
                             changeBodyPartModelFileSource(loadedFile.path);
 
-                            const parts = loadedFile.parts.map((part) => part.name);
+                            const parts = Object.keys(loadedFile.parts);
                             setBodyPartModelParts(parts);
                             setAvailableParts(parts);
                             setSelectedFile(() => loadedFile.path);

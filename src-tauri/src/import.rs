@@ -1,5 +1,6 @@
 use std::{
     io::Error,
+    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -19,80 +20,85 @@ mod smd;
 use obj::ParseOBJError;
 use smd::ParseSMDError;
 
+/// The collection of all data from a source file.
 #[derive(Debug, Default, Serialize)]
 pub struct ImportFileData {
-    pub skeleton: Vec<ImportBone>,
-    pub animations: Vec<ImportAnimation>,
-    pub parts: Vec<ImportPart>,
+    /// All the bones in the source file, mapped to their name.
+    pub skeleton: IndexMap<String, ImportBone>,
+    /// All the animations in the source file, mapped to their name.
+    pub animations: IndexMap<String, ImportAnimation>,
+    /// All the mesh parts in the source file, mapped to their name.
+    pub parts: IndexMap<String, ImportPart>,
 }
 
+/// Data of a bone from a source file.
 #[derive(Debug, Default, Serialize)]
 pub struct ImportBone {
-    pub name: String,
+    /// The index to the source file skeleton the bone is parented to.
+    ///
+    /// Is [`None`] when bone is a root bone.
     pub parent: Option<usize>,
-    #[serde(skip_serializing)]
+    /// The position of the bone relative to the parent.
+    ///
+    /// If [`parent`][Self::parent] is [`None`] then position is absolute.
     pub position: Vector3,
-    #[serde(skip_serializing)]
+    /// The orientation of the bone relative to the parent.
+    ///
+    /// If [`parent`][Self::parent] is [`None`] then orientation is absolute.
     pub orientation: Quaternion,
 }
 
-#[derive(Debug, Default, Serialize)]
+/// Data of an animation from a source file.
+#[derive(Debug, Serialize)]
 pub struct ImportAnimation {
-    pub name: String,
-    #[serde(skip_serializing)]
-    pub frame_count: usize,
-    #[serde(skip_serializing)]
-    pub channels: Vec<ImportChannel>,
+    /// The amount of frames the animation stores.
+    pub frame_count: NonZeroUsize,
+    /// Bones that are animated in the animation.
+    pub channels: IndexMap<usize, ImportChannel>,
 }
 
-#[derive(Debug, Default)]
+/// Data of an animated bone from a source file.
+#[derive(Debug, Default, Serialize)]
 pub struct ImportChannel {
-    pub bone: usize,
-    pub position: Vec<ImportKeyFrame<Vector3>>,
-    pub rotation: Vec<ImportKeyFrame<Quaternion>>,
+    /// Positional keyed data of the channel, mapped to a frame.
+    pub position: IndexMap<usize, Vector3>,
+    /// Rotational keyed data of the channel, mapped to a frame.
+    pub rotation: IndexMap<usize, Quaternion>,
 }
 
-#[derive(Debug, Default)]
-pub struct ImportKeyFrame<T> {
-    pub frame: usize,
-    pub value: T,
-}
-
+/// Data of a mesh part from a source file.
 #[derive(Debug, Default, Serialize)]
 pub struct ImportPart {
-    pub name: String,
-    #[serde(skip_serializing)]
     pub vertices: Vec<ImportVertex>,
-    #[serde(skip_serializing)]
+    /// List of polygons the part has, mapped to the material name.
+    ///
+    /// A polygon is defined by an index list into [`vertices`][Self::vertices].
     pub polygons: IndexMap<String, Vec<Vec<usize>>>,
-    #[serde(skip_serializing)]
-    pub flexes: Vec<ImportFlex>,
+    /// List of flex data, mapped to their name.
+    ///
+    /// A flex stores a list of indexes that map into [`vertices`][Self::vertices] that are flexed.
+    pub flexes: IndexMap<String, IndexMap<usize, ImportFlexVertex>>,
 }
 
-#[derive(Debug, Default)]
+/// Data of a vertex from a source file.
+#[derive(Debug, Default, Serialize)]
 pub struct ImportVertex {
+    /// The position of the vertex, the position is absolute.
     pub position: Vector3,
+    /// The normal direction of the vertex.
     pub normal: Vector3,
+    /// The UV position of the vertex.
     pub texture_coordinate: Vector2,
-    pub links: Vec<ImportLink>,
+    /// List of weights the vertex has, mapped to a bone by an index into [`skeleton`][ImportFileData::skeleton].
+    pub links: IndexMap<usize, f64>,
 }
 
-#[derive(Debug, Default)]
-pub struct ImportLink {
-    pub bone: usize,
-    pub weight: f64,
-}
-
-#[derive(Debug, Default)]
-pub struct ImportFlex {
-    pub name: Option<String>,
-    pub vertices: Vec<ImportFlexVertex>,
-}
-
-#[derive(Debug, Default)]
+/// Data of a flexed vertex data from a source file.
+#[derive(Debug, Default, Serialize)]
 pub struct ImportFlexVertex {
-    pub index: usize,
+    /// The new position of the vertex for the flex key.
     pub position: Vector3,
+    /// The new normal direction of the vertex for the flex key.
     pub normal: Vector3,
 }
 
@@ -106,6 +112,7 @@ pub enum ParseError {
     FileDoesNotHaveExtension,
     #[error("File Format Is Not Supported")]
     UnsupportedFileFormat,
+    // When supporting another file format, put it under this comment.
     #[error("Failed To Parse SMD File: {0}")]
     FailedSMDFileParse(#[from] ParseSMDError),
     #[error("Failed To Parse OBJ File: {0}")]
@@ -137,6 +144,9 @@ impl FileManager {
             "obj" => obj::load_obj(&file_path)?,
             _ => return Err(ParseError::UnsupportedFileFormat),
         };
+
+        debug_assert!(!imported_file.parts.is_empty(), "File source must have 1 bone!");
+        debug_assert!(!imported_file.animations.is_empty(), "File source must have 1 animation!");
 
         log(
             format!(

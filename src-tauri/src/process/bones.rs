@@ -36,10 +36,10 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
 
             let mut remapped_bones = Vec::with_capacity(imported_file.skeleton.len());
 
-            for (import_bone_index, import_bone) in imported_file.skeleton.iter().enumerate() {
+            for (import_bone_index, (import_bone_name, import_bone)) in imported_file.skeleton.iter().enumerate() {
                 let bone_flags = create_bone_flags(import_bone_index, &imported_file.parts);
 
-                if let Some((global_bone_index, _, global_bone)) = source_bone_table.get_full_mut(&import_bone.name) {
+                if let Some((global_bone_index, _, global_bone)) = source_bone_table.get_full_mut(import_bone_name) {
                     global_bone.flags.insert(bone_flags);
                     remapped_bones.push(ProcessedRemappedBone { index: global_bone_index });
                     continue;
@@ -51,7 +51,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
                     index: source_bone_table.len(),
                 });
                 source_bone_table.insert(
-                    import_bone.name.clone(),
+                    import_bone_name.clone(),
                     ProcessedBone {
                         parent: processed_parent,
                         position: import_bone.position,
@@ -77,8 +77,8 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
 
         let mut remapped_bones = Vec::with_capacity(imported_file.skeleton.len());
 
-        for import_bone in &imported_file.skeleton {
-            if let Some(global_bone_index) = source_bone_table.get_index_of(&import_bone.name) {
+        for (import_bone_name, import_bone) in &imported_file.skeleton {
+            if let Some(global_bone_index) = source_bone_table.get_index_of(import_bone_name) {
                 remapped_bones.push(ProcessedRemappedBone { index: global_bone_index });
                 continue;
             }
@@ -89,7 +89,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
                 index: source_bone_table.len(),
             });
             source_bone_table.insert(
-                import_bone.name.clone(),
+                import_bone_name.clone(),
                 ProcessedBone {
                     parent: processed_parent,
                     position: import_bone.position,
@@ -138,15 +138,13 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
     })
 }
 
-fn create_bone_flags(bone_index: usize, import_parts: &[ImportPart]) -> ProcessedBoneFlags {
+fn create_bone_flags(bone_index: usize, import_parts: &IndexMap<String, ImportPart>) -> ProcessedBoneFlags {
     let mut flags = ProcessedBoneFlags::default();
 
-    for import_part in import_parts {
+    for (_, import_part) in import_parts {
         for vertex in &import_part.vertices {
-            for link in &vertex.links {
-                if link.bone == bone_index {
-                    flags.insert(ProcessedBoneFlags::USED_BY_VERTEX);
-                }
+            if vertex.links.contains_key(&bone_index) {
+                flags.insert(ProcessedBoneFlags::USED_BY_VERTEX);
             }
         }
     }

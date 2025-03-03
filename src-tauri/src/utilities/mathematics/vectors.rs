@@ -1,8 +1,10 @@
 use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
 
+use serde::{Deserialize, Serialize};
+
 use super::Matrix3;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Vector2 {
     pub x: f64,
     pub y: f64,
@@ -50,7 +52,7 @@ impl Div for Vector2 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Vector3 {
     pub x: f64,
     pub y: f64,
@@ -219,7 +221,7 @@ impl Div<f64> for Vector3 {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Vector4 {
     pub x: f64,
     pub y: f64,

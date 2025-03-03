@@ -7,16 +7,56 @@ type LoadedFile = LoadedFileData & {
 };
 
 type LoadedFileData = {
-    skeleton: {
-        name: string;
-        parent: number | null;
-    }[];
-    animations: {
-        name: string;
-    }[];
-    parts: {
-        name: string;
-    }[];
+    skeleton: Record<string, ImportBone>;
+    animations: Record<string, ImportAnimation>;
+    parts: Record<string, ImportPart>;
+};
+
+type Vector3 = {
+    x: number;
+    y: number;
+    z: number;
+};
+
+type Quaternion = {
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+};
+
+type ImportBone = {
+    parent: number | null;
+    position: Vector3;
+    orientation: Quaternion;
+};
+
+type ImportAnimation = {
+    frame_count: number;
+    channels: Record<number, ImportChannel>;
+};
+
+type ImportChannel = {
+    position: Record<number, Vector3>;
+    rotation: Record<number, Quaternion>;
+};
+
+type ImportPart = {
+    vertices: Array<ImportVertex>;
+    polygons: Record<string, Array<Array<number>>>;
+    flexes: Record<string, Record<number, ImportFlexVertex>>;
+};
+
+type ImportVertex = {
+    position: Vector3;
+    normal: Vector3;
+    texture_coordinate: { x: number; y: number };
+    links: Record<number, number>;
+};
+
+type ImportFlexVertex = {
+    position: Vector3;
+    normal: Vector3;
 };
 
 const loadedModelFiles: Map<string, number> = new Map();

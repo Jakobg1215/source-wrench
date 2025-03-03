@@ -178,14 +178,14 @@ pub fn process_meshes(
 /// Combines parts into triangle lists for each material.
 fn create_triangle_lists(
     part_names: &[String],
-    parts: &[ImportPart],
+    parts: &IndexMap<String, ImportPart>,
     material_table: &mut IndexSet<String>,
     mapped_bones: &[ProcessedRemappedBone],
 ) -> Result<IndexMap<usize, TriangleList>, ProcessingMeshError> {
     let mut triangle_lists: IndexMap<usize, TriangleList> = IndexMap::new();
 
     for imputed_part_name in part_names {
-        let import_part = match parts.iter().find(|part| part.name == *imputed_part_name) {
+        let import_part = match parts.get(imputed_part_name) {
             Some(part) => part,
             None => return Err(ProcessingMeshError::PartNotFound(imputed_part_name.clone())),
         };
@@ -208,11 +208,11 @@ fn create_triangle_lists(
 
                         let mut mapped_links = Vec::with_capacity(import_vertex.links.len());
 
-                        for link in &import_vertex.links {
-                            let mapped_bone = &mapped_bones[link.bone];
+                        for (link, weight) in &import_vertex.links {
+                            let mapped_bone = &mapped_bones[*link];
                             mapped_links.push(WeightLink {
                                 bone: mapped_bone.index.try_into().unwrap(),
-                                weight: link.weight,
+                                weight: *weight,
                             });
                         }
 

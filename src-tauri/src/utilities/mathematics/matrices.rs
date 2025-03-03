@@ -1,8 +1,10 @@
 use std::ops::Mul;
 
+use serde::{Deserialize, Serialize};
+
 use super::Vector3;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Matrix3 {
     pub entries: [[f64; 3]; 3],
 }
@@ -69,7 +71,7 @@ impl Mul for Matrix3 {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Matrix4 {
     pub entries: [[f64; 4]; 4],
 }

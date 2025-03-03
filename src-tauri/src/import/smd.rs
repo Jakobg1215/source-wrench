@@ -1,6 +1,7 @@
 use std::{
     fs::File,
     io::{BufRead, BufReader},
+    num::NonZero,
     path::Path,
 };
 
@@ -9,7 +10,7 @@ use thiserror::Error as ThisError;
 
 use crate::utilities::mathematics::{Angles, Vector2, Vector3};
 
-use super::{ImportAnimation, ImportBone, ImportChannel, ImportFileData, ImportFlex, ImportFlexVertex, ImportKeyFrame, ImportLink, ImportPart, ImportVertex};
+use super::{ImportAnimation, ImportBone, ImportFileData, ImportFlexVertex, ImportPart, ImportVertex};
 
 #[derive(Debug, ThisError)]
 pub enum ParseSMDError {
@@ -502,27 +503,26 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
     }
 
     if !flexes.is_empty() {
-        let mut flex_part = ImportPart {
-            name: file_path.file_stem().unwrap().to_string_lossy().to_string(),
-            ..Default::default()
-        };
+        let mut flex_part = ImportPart::default();
 
-        for flex in flexes {
-            let mut import_flex = ImportFlex::default();
+        for (frame, flex) in flexes.into_iter().enumerate() {
+            let mut import_flex = IndexMap::with_capacity(flex.len());
 
-            for (index, vertex) in flex {
-                import_flex.vertices.push(ImportFlexVertex {
-                    index,
-                    position: vertex.position,
-                    normal: vertex.normal,
-                });
+            for (vertex_index, flex_data) in flex {
+                import_flex.insert(
+                    vertex_index,
+                    ImportFlexVertex {
+                        position: flex_data.position,
+                        normal: flex_data.normal,
+                    },
+                );
             }
 
-            flex_part.flexes.push(import_flex);
+            flex_part.flexes.insert(format!("frame{}", frame), import_flex);
         }
 
         return Ok(ImportFileData {
-            parts: vec![flex_part],
+            parts: IndexMap::from([(file_path.file_stem().unwrap().to_string_lossy().to_string(), flex_part)]),
             ..Default::default()
         });
     }
@@ -536,53 +536,38 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
     }
 
     let bind_frame = &frames[0];
-    let mut import_bones = Vec::with_capacity(nodes.len());
+    let mut import_bones = IndexMap::with_capacity(nodes.len());
     for (id, node) in nodes.into_iter().enumerate() {
         let bind_pose = bind_frame.get(&id).unwrap();
-        import_bones.push(ImportBone {
-            name: node.name,
-            parent: node.parent,
-            position: bind_pose.position,
-            orientation: bind_pose.rotation.to_quaternion(),
-        });
+
+        import_bones.insert(
+            node.name,
+            ImportBone {
+                parent: node.parent,
+                position: bind_pose.position,
+                orientation: bind_pose.rotation.to_quaternion(),
+            },
+        );
     }
 
     let mut animation = ImportAnimation {
-        name: file_path.file_stem().unwrap().to_string_lossy().to_string(),
-        frame_count: frames.len(),
-        ..Default::default()
+        frame_count: NonZero::new(frames.len()).unwrap(),
+        channels: IndexMap::with_capacity(import_bones.len()),
     };
 
-    let mut channels = IndexMap::new();
     for (frame, keys) in frames.into_iter().enumerate() {
         for (bone, key) in keys {
-            let channel = channels.entry(bone).or_insert_with(|| ImportChannel {
-                bone,
-                position: Vec::new(),
-                rotation: Vec::new(),
-            });
-
-            channel.position.push(ImportKeyFrame { frame, value: key.position });
-
-            channel.rotation.push(ImportKeyFrame {
-                frame,
-                value: key.rotation.to_quaternion(),
-            });
+            let channel = animation.channels.entry(bone).or_default();
+            channel.position.insert(frame, key.position);
+            channel.rotation.insert(frame, key.rotation.to_quaternion());
         }
     }
-    channels.sort_keys();
+    animation.channels.sort_keys();
 
-    for (_, channel) in channels.into_iter() {
-        animation.channels.push(channel);
-    }
-
-    let mut parts = Vec::new();
+    let mut parts = IndexMap::new();
 
     if !triangles.is_empty() {
-        let mut part = ImportPart {
-            name: file_path.file_stem().unwrap().to_string_lossy().to_string(),
-            ..Default::default()
-        };
+        let mut part = ImportPart::default();
 
         for (material, vertices) in triangles {
             let polygon_list = part.polygons.entry(material).or_default();
@@ -596,19 +581,19 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
                         position: vertex.position,
                         normal: vertex.normal,
                         texture_coordinate: vertex.texture_coordinate,
-                        links: vertex.links.into_iter().map(|(bone, weight)| ImportLink { bone, weight }).collect(),
+                        links: vertex.links,
                     });
                 }
                 polygon_list.push(polygon);
             }
         }
 
-        parts.push(part);
+        parts.insert(file_path.file_stem().unwrap().to_string_lossy().to_string(), part);
     }
 
     Ok(ImportFileData {
         skeleton: import_bones,
-        animations: vec![animation],
+        animations: IndexMap::from_iter([(file_path.file_stem().unwrap().to_string_lossy().to_string(), animation)]),
         parts,
     })
 }

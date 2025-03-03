@@ -3,10 +3,12 @@ use std::{
     ops::{Add, Index, Sub},
 };
 
+use serde::{Deserialize, Serialize};
+
 use super::Matrix3;
 
 /// Euler angles in radians. Roll, Pitch, Yaw
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub struct Angles {
     pub roll: f64,
     pub pitch: f64,
@@ -143,7 +145,7 @@ impl Sub for Angles {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Quaternion {
     pub x: f64,
     pub y: f64,

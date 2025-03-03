@@ -59,7 +59,7 @@ const AnimationEntry: Component<AnimationEntryProperties> = (properties) => {
 
                         changeAnimationFileSource(loadedFile.path);
 
-                        const animations = loadedFile.animations.map((animation) => animation.name);
+                        const animations = Object.keys(loadedFile.animations);
                         changeAnimationSourceAnimation(animations[0]!);
                         setAvailableAnimations(animations);
                         setSelectedFile(() => loadedFile.path);

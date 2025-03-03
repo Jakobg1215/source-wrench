@@ -3,7 +3,7 @@ use tauri::State;
 use thiserror::Error as ThisError;
 
 use crate::{
-    import::{FileManager, ImportKeyFrame},
+    import::FileManager,
     input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
@@ -61,7 +61,7 @@ pub fn process_animations(
                 return Err(ProcessingAnimationError::FileSourceNotLoaded);
             }
         };
-        let imported_animation = match imported_file.animations.iter().find(|anim| anim.name == imputed_animation.animation_name) {
+        let imported_animation = match imported_file.animations.get(&imputed_animation.animation_name) {
             Some(imported_animation) => imported_animation,
             None => {
                 return Err(ProcessingAnimationError::AnimationNotFound(imputed_animation.animation_name.clone()));
@@ -70,8 +70,8 @@ pub fn process_animations(
 
         let mut animation_channels = IndexMap::new();
 
-        for channel in &imported_animation.channels {
-            let mapped_bone = &remapped_bones[channel.bone];
+        for (bone, channel) in &imported_animation.channels {
+            let mapped_bone = &remapped_bones[*bone];
             if animation_channels.contains_key(&mapped_bone.index) {
                 continue;
             }
@@ -81,13 +81,13 @@ pub fn process_animations(
             animation_channels.insert(
                 mapped_bone.index,
                 ChannelData {
-                    position: bake_channel_keyframes(&channel.position, imported_animation.frame_count, bone.position),
-                    rotation: bake_channel_keyframes(&channel.rotation, imported_animation.frame_count, bone.rotation.to_quaternion()),
+                    position: bake_channel_keyframes(&channel.position, imported_animation.frame_count.get(), bone.position),
+                    rotation: bake_channel_keyframes(&channel.rotation, imported_animation.frame_count.get(), bone.rotation.to_quaternion()),
                 },
             );
         }
 
-        let frame_count = imported_animation.frame_count;
+        let frame_count = imported_animation.frame_count.get();
 
         // TODO: Implement animation processing.
         // TODO: Add a check if the position data is going to be out of bounds.
@@ -181,12 +181,12 @@ pub fn process_animations(
 }
 
 /// Convert channel keyframes to a continuous set of values.
-fn bake_channel_keyframes<T: Copy>(channel: &[ImportKeyFrame<T>], frame_count: usize, default: T) -> Vec<T> {
+fn bake_channel_keyframes<T: Copy>(channel: &IndexMap<usize, T>, frame_count: usize, default: T) -> Vec<T> {
     let mut baked_channel = Vec::with_capacity(frame_count);
 
     for frame in 0..frame_count {
-        if let Some(keyframe) = channel.iter().find(|keyframe| keyframe.frame == frame) {
-            baked_channel.push(keyframe.value);
+        if let Some(keyframe) = channel.get(&frame) {
+            baked_channel.push(*keyframe);
             continue;
         }
 
