@@ -36,15 +36,15 @@ pub fn process_animations(
     }
 
     let mut processed_animations = Vec::new();
-    for imputed_animation in &input.animations {
+    for (imputed_animation_name, imputed_animation) in &input.animations {
         // Check if the animation is used in any sequence.
-        if !input.sequences.iter().any(|sequence| {
+        if !input.sequences.iter().any(|(_, sequence)| {
             sequence
                 .animations
                 .iter()
-                .any(|row| row.iter().any(|animation| animation == &imputed_animation.name))
+                .any(|row| row.iter().any(|animation| animation == imputed_animation_name))
         }) {
-            log(format!("Animation \"{}\" Not Used!", imputed_animation.name), LogLevel::Warn);
+            log(format!("Animation \"{}\" Not Used!", imputed_animation_name), LogLevel::Warn);
             continue;
         }
 
@@ -108,7 +108,7 @@ pub fn process_animations(
         };
 
         let mut processed_animation = ProcessedAnimation {
-            name: imputed_animation.name.clone(),
+            name: imputed_animation_name.clone(),
             frame_count,
             sections: Vec::with_capacity(section_count),
         };
@@ -204,9 +204,9 @@ fn bake_channel_keyframes<T: Copy>(channel: &IndexMap<usize, T>, frame_count: us
 pub fn process_sequences(input: &ImputedCompilationData, animations: &[ProcessedAnimation]) -> Result<Vec<ProcessedSequence>, ProcessingAnimationError> {
     let mut processed_sequences = Vec::with_capacity(input.sequences.len());
 
-    for input_sequence in &input.sequences {
+    for (input_sequence_name, input_sequence) in &input.sequences {
         let mut processed_sequence = ProcessedSequence {
-            name: input_sequence.name.clone(),
+            name: input_sequence_name.clone(),
             animations: vec![vec![0; input_sequence.animations[0].len()]; input_sequence.animations.len()],
         };
 

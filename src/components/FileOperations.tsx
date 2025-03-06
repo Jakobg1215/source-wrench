@@ -2,11 +2,12 @@ import { invoke } from '@tauri-apps/api/core';
 import { documentDir } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 
-type LoadedFile = LoadedFileData & {
+type LoadedFile = ImportFileData & {
     path: string;
 };
 
-type LoadedFileData = {
+// These types should be synced with src-tauri\src\import.rs
+type ImportFileData = {
     skeleton: Record<string, ImportBone>;
     animations: Record<string, ImportAnimation>;
     parts: Record<string, ImportPart>;
@@ -79,7 +80,7 @@ const loadModelFile = async (previousPath: string): Promise<LoadedFile | null> =
         return null;
     }
 
-    const loadedFiles: LoadedFileData | null = await invoke('load_file', { path: selectedFile });
+    const loadedFiles: ImportFileData | null = await invoke('load_file', { path: selectedFile });
 
     if (loadedFiles === null) {
         return null;

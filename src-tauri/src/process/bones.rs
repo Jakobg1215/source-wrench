@@ -26,8 +26,8 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
     let mut source_bone_table: IndexMap<String, ProcessedBone> = IndexMap::new();
     let mut remapped_files = IndexMap::new();
 
-    for imputed_body_part in &input.body_parts {
-        for imputed_model in &imputed_body_part.models {
+    for (_, imputed_body_part) in &input.body_parts {
+        for (_, imputed_model) in &imputed_body_part.models {
             if remapped_files.contains_key(&imputed_model.file_source) {
                 continue;
             }
@@ -66,7 +66,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
         }
     }
 
-    for imputed_animation in &input.animations {
+    for (_, imputed_animation) in &input.animations {
         if remapped_files.contains_key(&imputed_animation.file_source) {
             continue;
         }

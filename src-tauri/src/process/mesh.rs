@@ -74,20 +74,20 @@ pub fn process_meshes(
     let mut processed_model_data = ProcessedModelData::default();
 
     let mut bounding_box = BoundingBox::default();
-    for imputed_body_part in &input.body_parts {
+    for (imputed_body_part_name, imputed_body_part) in &input.body_parts {
         let mut processed_body_part = ProcessedBodyPart {
-            name: imputed_body_part.name.clone(),
+            name: imputed_body_part_name.clone(),
             ..Default::default()
         };
 
-        for imputed_model in &imputed_body_part.models {
+        for (imputed_model_name, imputed_model) in &imputed_body_part.models {
             if imputed_model.is_blank {
                 processed_body_part.models.push(ProcessedModel::default());
                 continue;
             }
 
             let mut processed_model = ProcessedModel {
-                name: imputed_model.name.clone(),
+                name: imputed_model_name.clone(),
                 ..Default::default()
             };
 
@@ -136,12 +136,12 @@ pub fn process_meshes(
             }
 
             if bad_vertex_count > 0 {
-                log(format!("{} Had {} Bad Vertices!", imputed_model.name, bad_vertex_count), LogLevel::Warn);
+                log(format!("{} Had {} Bad Vertices!", imputed_model_name, bad_vertex_count), LogLevel::Warn);
             }
 
             if culled_vertex_count > 0 {
                 log(
-                    format!("{} Had {} Weight Culled Vertices!", imputed_model.name, culled_vertex_count),
+                    format!("{} Had {} Weight Culled Vertices!", imputed_model_name, culled_vertex_count),
                     LogLevel::Warn,
                 );
             }
@@ -149,7 +149,7 @@ pub fn process_meshes(
             log(
                 format!(
                     "{} has {} faces, {} vertices and {} indices",
-                    imputed_model.name, face_count, vertex_count, indices_count
+                    imputed_model_name, face_count, vertex_count, indices_count
                 ),
                 LogLevel::Verbose,
             );

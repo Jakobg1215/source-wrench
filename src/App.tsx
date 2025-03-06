@@ -11,27 +11,32 @@ import Logging from './components/Logging';
 import { SequenceEntryProperties } from './components/SequenceEntry';
 import SequenceMenu from './components/SequenceMenu';
 
+// These types should be synced with src-tauri\src\input.rs
 type ImputedCompilationData = {
     model_name: string;
     export_path: string;
-    body_parts: {
-        name: string;
-        models: {
-            name: string;
-            is_blank: boolean;
-            file_source: string;
-            part_names: string[];
-        }[];
-    }[];
-    animations: {
-        name: string;
-        file_source: string;
-        animation_name: string;
-    }[];
-    sequences: {
-        name: string;
-        animations: string[][];
-    }[];
+    body_parts: Record<string, ImputedBodyPart>;
+    animations: Record<string, ImputedAnimation>;
+    sequences: Record<string, ImputedSequence>;
+};
+
+type ImputedBodyPart = {
+    models: Record<string, ImputedModel>;
+};
+
+type ImputedModel = {
+    is_blank: boolean;
+    file_source: string;
+    part_names: Array<string>;
+};
+
+type ImputedAnimation = {
+    file_source: string;
+    animation_name: string;
+};
+
+type ImputedSequence = {
+    animations: Array<Array<string>>;
 };
 
 const App: Component = () => {
@@ -48,24 +53,40 @@ const App: Component = () => {
         const data: ImputedCompilationData = {
             model_name: modelName(),
             export_path: modelExportPath(),
-            body_parts: bodyPartEntries.map((bodyPart) => ({
-                name: bodyPart.data.name,
-                models: bodyPart.data.models.map((model) => ({
-                    name: model.data.name,
-                    is_blank: model.data.blank,
-                    file_source: model.data.file_source,
-                    part_names: model.data.part_names.filter((part) => part !== null),
-                })),
-            })),
-            animations: animationEntries.map((animation) => ({
-                name: animation.data.name,
-                file_source: animation.data.file_source,
-                animation_name: animation.data.source_animation,
-            })),
-            sequences: sequenceEntries.map((sequence) => ({
-                name: sequence.data.name,
-                animations: sequence.data.animations,
-            })),
+            body_parts: Object.fromEntries(
+                bodyPartEntries.map((bodyPart) => [
+                    bodyPart.data.name,
+                    {
+                        models: Object.fromEntries(
+                            bodyPart.data.models.map((model) => [
+                                model.data.name,
+                                {
+                                    is_blank: model.data.blank,
+                                    file_source: model.data.file_source,
+                                    part_names: model.data.part_names.filter((part) => part !== null),
+                                },
+                            ]),
+                        ),
+                    },
+                ]),
+            ),
+            animations: Object.fromEntries(
+                animationEntries.map((animation) => [
+                    animation.data.name,
+                    {
+                        file_source: animation.data.file_source,
+                        animation_name: animation.data.source_animation,
+                    },
+                ]),
+            ),
+            sequences: Object.fromEntries(
+                sequenceEntries.map((sequence) => [
+                    sequence.data.name,
+                    {
+                        animations: sequence.data.animations,
+                    },
+                ]),
+            ),
         };
 
         await invoke('compile_model', { data });
