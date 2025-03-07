@@ -120,18 +120,16 @@ pub fn process_meshes(
             let mut culled_vertex_count = 0;
             let mut face_count = 0;
             let mut vertex_count = 0;
-            let mut indices_count = 0;
             for (material_index, mut triangle_list) in triangle_lists {
                 reorder_triangle_vertex_order(&mut triangle_list);
                 sort_vertices_by_hardware_bones(&mut triangle_list);
                 optimize_vertex_cache(&mut triangle_list);
-                optimize_overdraw(&mut triangle_list);
+                // optimize_overdraw(&mut triangle_list); // FIXME: This is broken!
                 bad_vertex_count += calculate_vertex_tangents(&mut triangle_list);
                 culled_vertex_count += cull_weight_links(&mut triangle_list);
                 let meshes = convert_to_meshes(material_index, triangle_list, &mut bounding_box);
                 face_count += meshes.1;
                 vertex_count += meshes.2;
-                indices_count += meshes.3;
                 processed_model.meshes.extend(meshes.0);
             }
 
@@ -149,7 +147,10 @@ pub fn process_meshes(
             log(
                 format!(
                     "{} has {} faces, {} vertices and {} indices",
-                    imputed_model_name, face_count, vertex_count, indices_count
+                    imputed_model_name,
+                    face_count,
+                    vertex_count,
+                    face_count * 3
                 ),
                 LogLevel::Verbose,
             );
@@ -528,7 +529,7 @@ fn optimize_vertex_cache(triangle_list: &mut TriangleList) {
 
 /// Sorts the indices to decrease the amount of overdraw.
 /// Implementation of https://github.com/zeux/meshoptimizer/blob/master/src/overdrawoptimizer.cpp
-fn optimize_overdraw(triangle_list: &mut TriangleList) {
+fn _optimize_overdraw(triangle_list: &mut TriangleList) {
     // TODO: Configure threshold to work well with source or make it a parameter.
     let threshold = 1.05;
 
@@ -845,7 +846,7 @@ fn cull_weight_links(triangle_list: &mut TriangleList) -> usize {
 }
 
 /// Converts a triangle list into a list of processed meshes.
-fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, bounding_box: &mut BoundingBox) -> (Vec<ProcessedMesh>, usize, usize, usize) {
+fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, bounding_box: &mut BoundingBox) -> (Vec<ProcessedMesh>, usize, usize) {
     let mut processed_meshes = Vec::new();
 
     let mut processed_mesh = ProcessedMesh {
@@ -855,7 +856,6 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
 
     let mut triangle_count = 0;
     let mut vertex_count = 0;
-    let mut indices_count = 0;
 
     let mut processed_strip_group = ProcessedStripGroup::default();
     let mut processed_strip = ProcessedStrip::default();
@@ -879,9 +879,7 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
 
         let unique_new_hardware_bones = new_hardware_bone_count.iter().collect::<IndexSet<_>>();
 
-        if processed_strip_group.vertices.len() + unique_new_vertices.len() > (u16::MAX as usize + 1)
-            || hardware_bones.len() + unique_new_hardware_bones.len() > MAX_HARDWARE_BONES_PER_STRIP
-        {
+        if processed_strip_group.vertices.len() + unique_new_vertices.len() > (u16::MAX as usize + 1) {
             processed_strip_group.strips.push(processed_strip);
             processed_mesh.strip_groups.push(processed_strip_group);
             processed_meshes.push(processed_mesh);
@@ -897,17 +895,6 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
             processed_strip = ProcessedStrip::default();
         }
 
-        // FIXME: I just couldn't get this to work. Strips are so weird and have 0 idea what is going wrong. The code below is what I tried to do.
-        /*
-        let new_hardware_bone_count = triangle
-        .iter()
-        .map(|index| &triangle_list.vertices[*index])
-        .flat_map(|vertex| vertex.links.iter().filter(|link| !hardware_bones.contains(&link.bone)))
-        .map(|link| link.bone)
-        .collect::<Vec<u8>>();
-
-        let unique_new_hardware_bones = new_hardware_bone_count.iter().collect::<IndexSet<_>>();
-
         if hardware_bones.len() + unique_new_hardware_bones.len() > MAX_HARDWARE_BONES_PER_STRIP {
             let new_processed_strip = ProcessedStrip {
                 indices_offset: processed_strip.indices_offset + processed_strip.indices_count,
@@ -919,13 +906,11 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
             processed_strip_group.strips.push(processed_strip);
             processed_strip = new_processed_strip;
         }
-        */
 
         for index in triangle {
             if mapped_indices.contains_key(&index) {
                 processed_strip_group.indices.push((*mapped_indices.get(&index).unwrap()).try_into().unwrap());
                 processed_strip.indices_count += 1;
-                indices_count += 1;
                 continue;
             }
 
@@ -937,6 +922,12 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
 
             for link in &vertex_data.links {
                 debug_assert!(weight_count < 3, "Vertex has more than 3 weights!");
+
+                // Merge links with the same bone
+                if let Some(existing_link) = weight_bones.iter().take(weight_count).position(|&bone| bone == link.bone) {
+                    vertex_weights[existing_link] += link.weight as f32;
+                    continue;
+                }
 
                 vertex_weights[weight_count] = link.weight as f32;
                 weight_bones[weight_count] = link.bone;
@@ -998,7 +989,6 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
             processed_strip.vertex_count += 1;
 
             vertex_count += 1;
-            indices_count += 1;
         }
 
         triangle_count += 1;
@@ -1008,5 +998,5 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
     processed_mesh.strip_groups.push(processed_strip_group);
     processed_meshes.push(processed_mesh);
 
-    (processed_meshes, triangle_count, vertex_count, indices_count)
+    (processed_meshes, triangle_count, vertex_count)
 }
