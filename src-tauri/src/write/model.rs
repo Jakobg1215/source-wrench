@@ -564,33 +564,23 @@ impl WriteToWriter for ModelFileBone {
 bitflags! {
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
     pub struct ModelFileBoneFlags: i32 {
-        const ALWAYS_PROCEDURAL        = 0x00000004;
-        const SCREEN_ALIGN_SPHERE      = 0x00000008;
-        const SCREEN_ALIGN_CYLINDER    = 0x00000010;
-        const USED_BY_HITBOX           = 0x00000100;
-        const USED_BY_ATTACHMENT       = 0x00000200;
-        const USED_BY_VERTEX_AT_LOD0   = 0x00000400;
-        const USED_BY_VERTEX_AT_LOD1   = 0x00000800;
-        const USED_BY_VERTEX_AT_LOD2   = 0x00001000;
-        const USED_BY_VERTEX_AT_LOD3   = 0x00002000;
-        const USED_BY_VERTEX_AT_LOD4   = 0x00004000;
-        const USED_BY_VERTEX_AT_LOD5   = 0x00008000;
-        const USED_BY_VERTEX_AT_LOD6   = 0x00010000;
-        const USED_BY_VERTEX_AT_LOD7   = 0x00020000;
-        const USED_BY_VERTEX_MASK      = 0x0003FC00;
-        const USED_BY_BONE_MERGE       = 0x00040000;
-        const USED_BY_ANYTHING_AT_LOD0 = 0x00040700;
-        const USED_BY_ANYTHING_AT_LOD1 = 0x00040b00;
-        const USED_BY_ANYTHING_AT_LOD2 = 0x00041300;
-        const USED_BY_ANYTHING_AT_LOD3 = 0x00042300;
-        const USED_BY_ANYTHING_AT_LOD4 = 0x00044300;
-        const USED_BY_ANYTHING_AT_LOD5 = 0x00048300;
-        const USED_BY_ANYTHING_AT_LOD6 = 0x00050300;
-        const USED_BY_ANYTHING_AT_LOD7 = 0x00060300;
-        const USED_BY_ANYTHING         = 0x0007FF00;
-        const FIXED_ALIGNMENT          = 0x00100000;
-        const HAS_SAVE_FRAME_POSITION  = 0x00200000;
-        const HAS_SAVE_FRAME_ROTATION  = 0x00400000;
+        const ALWAYS_PROCEDURAL       = 0x00000004;
+        const SCREEN_ALIGN_SPHERE     = 0x00000008;
+        const SCREEN_ALIGN_CYLINDER   = 0x00000010;
+        const USED_BY_HITBOX          = 0x00000100;
+        const USED_BY_ATTACHMENT      = 0x00000200;
+        const USED_BY_VERTEX_AT_LOD0  = 0x00000400;
+        const USED_BY_VERTEX_AT_LOD1  = 0x00000800;
+        const USED_BY_VERTEX_AT_LOD2  = 0x00001000;
+        const USED_BY_VERTEX_AT_LOD3  = 0x00002000;
+        const USED_BY_VERTEX_AT_LOD4  = 0x00004000;
+        const USED_BY_VERTEX_AT_LOD5  = 0x00008000;
+        const USED_BY_VERTEX_AT_LOD6  = 0x00010000;
+        const USED_BY_VERTEX_AT_LOD7  = 0x00020000;
+        const USED_BY_BONE_MERGE      = 0x00040000;
+        const FIXED_ALIGNMENT         = 0x00100000;
+        const HAS_SAVE_FRAME_POSITION = 0x00200000;
+        const HAS_SAVE_FRAME_ROTATION = 0x00400000;
     }
 }
 

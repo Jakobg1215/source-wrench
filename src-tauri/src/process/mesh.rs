@@ -1,4 +1,4 @@
-use core::f64;
+use std::sync::Arc;
 
 use indexmap::{IndexMap, IndexSet};
 use kdtree::{distance::squared_euclidean, KdTree};
@@ -6,7 +6,7 @@ use tauri::State;
 use thiserror::Error as ThisError;
 
 use crate::{
-    import::{FileManager, ImportPart, ImportVertex},
+    import::{FileManager, ImportFileData, ImportVertex},
     input::ImputedCompilationData,
     process::{
         ProcessedHardwareBone, ProcessedMeshVertex, ProcessedStrip, ProcessedStripGroup, ProcessedVertex, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE,
@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-use super::{ProcessedBodyPart, ProcessedBoneData, ProcessedMesh, ProcessedModel, ProcessedModelData, ProcessedRemappedBone, FLOAT_TOLERANCE};
+use super::{ProcessedBodyPart, ProcessedBoneData, ProcessedMesh, ProcessedModel, ProcessedModelData, FLOAT_TOLERANCE};
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingMeshError {
@@ -105,9 +105,9 @@ pub fn process_meshes(
 
             let triangle_lists = create_triangle_lists(
                 &imputed_model.part_names,
-                &imported_file.parts,
+                imported_file,
                 &mut processed_model_data.materials,
-                processed_bone_data.remapped_bones[&imputed_model.file_source].as_slice(),
+                processed_bone_data,
             )?;
 
             if triangle_lists.is_empty() {
@@ -178,14 +178,14 @@ pub fn process_meshes(
 /// Combines parts into triangle lists for each material.
 fn create_triangle_lists(
     part_names: &[String],
-    parts: &IndexMap<String, ImportPart>,
+    imported_file: Arc<ImportFileData>,
     material_table: &mut IndexSet<String>,
-    mapped_bones: &[ProcessedRemappedBone],
+    processed_bone_data: &ProcessedBoneData,
 ) -> Result<IndexMap<usize, TriangleList>, ProcessingMeshError> {
     let mut triangle_lists: IndexMap<usize, TriangleList> = IndexMap::new();
 
     for imputed_part_name in part_names {
-        let import_part = match parts.get(imputed_part_name) {
+        let import_part = match imported_file.parts.get(imputed_part_name) {
             Some(part) => part,
             None => return Err(ProcessingMeshError::PartNotFound(imputed_part_name.clone())),
         };
@@ -209,9 +209,15 @@ fn create_triangle_lists(
                         let mut mapped_links = Vec::with_capacity(import_vertex.links.len());
 
                         for (link, weight) in &import_vertex.links {
-                            let mapped_bone = &mapped_bones[*link];
+                            let (import_bone_name, _) = imported_file.skeleton.get_index(*link).unwrap();
+
+                            let mapped_index = match processed_bone_data.processed_bones.get_full(import_bone_name) {
+                                Some((index, _, _)) => index,
+                                None => todo!("Find the collapsed bone index!"),
+                            };
+
                             mapped_links.push(WeightLink {
-                                bone: mapped_bone.index.try_into().unwrap(),
+                                bone: mapped_index.try_into().unwrap(),
                                 weight: *weight,
                             });
                         }

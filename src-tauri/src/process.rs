@@ -31,21 +31,20 @@ pub struct ProcessedData {
 #[derive(Debug, Default)]
 pub struct ProcessedBoneData {
     pub processed_bones: IndexMap<String, ProcessedBone>,
-    pub remapped_bones: IndexMap<String, Vec<ProcessedRemappedBone>>,
     pub sorted_bones_by_name: Vec<u8>,
-}
-
-#[derive(Debug, Default)]
-pub struct ProcessedRemappedBone {
-    pub index: usize,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedBone {
     pub parent: Option<usize>,
+    /// The position of the bone relative to the parent bone.
     pub position: Vector3,
+    /// The rotation of the bone relative to the parent bone.
     pub rotation: Angles,
     pub flags: ProcessedBoneFlags,
+    /// The transforms in world space from the source file.
+    pub source_pose: Matrix4,
+    /// The transforms in world space.
     pub pose: Matrix4,
 }
 

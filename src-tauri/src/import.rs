@@ -145,7 +145,7 @@ impl FileManager {
             _ => return Err(ParseError::UnsupportedFileFormat),
         };
 
-        debug_assert!(!imported_file.parts.is_empty(), "File source must have 1 bone!");
+        debug_assert!(!imported_file.skeleton.is_empty(), "File source must have 1 bone!");
         debug_assert!(!imported_file.animations.is_empty(), "File source must have 1 animation!");
 
         log(
@@ -170,5 +170,9 @@ impl FileManager {
     pub fn get_file(&self, path: &str) -> Option<Arc<ImportFileData>> {
         let file_path = Path::new(path);
         self.files.lock().unwrap().get(file_path).cloned()
+    }
+
+    pub fn loaded_file_count(&self) -> usize {
+        self.files.lock().unwrap().len()
     }
 }

@@ -123,6 +123,18 @@ impl Matrix4 {
         ])
     }
 
+    pub fn rotation(&self) -> Matrix3 {
+        Matrix3::new([
+            [self.0[0][0], self.0[0][1], self.0[0][2]],
+            [self.0[1][0], self.0[1][1], self.0[1][2]],
+            [self.0[2][0], self.0[2][1], self.0[2][2]],
+        ])
+    }
+
+    pub fn translation(&self) -> Vector3 {
+        Vector3::new(self.0[0][3], self.0[1][3], self.0[2][3])
+    }
+
     pub fn entries(&self) -> [[f64; 4]; 4] {
         self.0
     }

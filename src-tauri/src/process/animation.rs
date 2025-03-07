@@ -28,7 +28,7 @@ pub enum ProcessingAnimationError {
 pub fn process_animations(
     input: &ImputedCompilationData,
     import: &State<FileManager>,
-    bone_table: &ProcessedBoneData,
+    processed_bone_data: &ProcessedBoneData,
 ) -> Result<ProcessedAnimationData, ProcessingAnimationError> {
     struct ChannelData {
         position: Vec<Vector3>,
@@ -55,12 +55,6 @@ pub fn process_animations(
                 return Err(ProcessingAnimationError::FileSourceNotLoaded);
             }
         };
-        let remapped_bones = match bone_table.remapped_bones.get(&imputed_animation.file_source) {
-            Some(remapped_bones) => remapped_bones,
-            None => {
-                return Err(ProcessingAnimationError::FileSourceNotLoaded);
-            }
-        };
         let imported_animation = match imported_file.animations.get(&imputed_animation.animation_name) {
             Some(imported_animation) => imported_animation,
             None => {
@@ -71,18 +65,18 @@ pub fn process_animations(
         let mut animation_channels = IndexMap::new();
 
         for (bone, channel) in &imported_animation.channels {
-            let mapped_bone = &remapped_bones[*bone];
-            if animation_channels.contains_key(&mapped_bone.index) {
-                continue;
-            }
+            let (import_bone_name, _) = imported_file.skeleton.get_index(*bone).unwrap();
 
-            let bone = &bone_table.processed_bones[mapped_bone.index];
+            let (mapped_index, bone_data) = match processed_bone_data.processed_bones.get_full(import_bone_name) {
+                Some((index, _, data)) => (index, data),
+                None => continue,
+            };
 
             animation_channels.insert(
-                mapped_bone.index,
+                mapped_index,
                 ChannelData {
-                    position: bake_channel_keyframes(&channel.position, imported_animation.frame_count.get(), bone.position),
-                    rotation: bake_channel_keyframes(&channel.rotation, imported_animation.frame_count.get(), bone.rotation.to_quaternion()),
+                    position: bake_channel_keyframes(&channel.position, imported_animation.frame_count.get(), bone_data.position),
+                    rotation: bake_channel_keyframes(&channel.rotation, imported_animation.frame_count.get(), bone_data.rotation.to_quaternion()),
                 },
             );
         }
@@ -119,7 +113,7 @@ pub fn process_animations(
 
             let mut section_data = Vec::new();
             for (index_bone, channel_data) in &animation_channels {
-                let bone = &bone_table.processed_bones[*index_bone];
+                let bone = &processed_bone_data.processed_bones[*index_bone];
                 let mut position = Vec::new();
                 let mut rotation = Vec::new();
 
@@ -142,7 +136,7 @@ pub fn process_animations(
         processed_animations.push(processed_animation);
     }
 
-    let mut animation_scales = vec![(Vector3::default(), Vector3::default()); bone_table.processed_bones.len()];
+    let mut animation_scales = vec![(Vector3::default(), Vector3::default()); processed_bone_data.processed_bones.len()];
     for processed_animation in &processed_animations {
         for sections in &processed_animation.sections {
             for section in sections {
