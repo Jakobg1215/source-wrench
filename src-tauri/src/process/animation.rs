@@ -62,26 +62,51 @@ pub fn process_animations(
             }
         };
 
+        let frame_count = imported_animation.frame_count.get();
+
         let mut animation_channels = IndexMap::new();
-
         for (bone, channel) in &imported_animation.channels {
-            let (import_bone_name, _) = imported_file.skeleton.get_index(*bone).unwrap();
+            let (import_bone_name, import_bone_data) = imported_file.skeleton.get_index(*bone).unwrap();
 
-            let (mapped_index, bone_data) = match processed_bone_data.processed_bones.get_full(import_bone_name) {
+            let (mapped_index, _) = match processed_bone_data.processed_bones.get_full(import_bone_name) {
                 Some((index, _, data)) => (index, data),
                 None => continue,
             };
 
+            /// Convert channel keyframes to a continuous set of values.
+            fn bake_channel_keyframes<T: Copy>(channel: &IndexMap<usize, T>, frame_count: usize, default: T) -> Vec<T> {
+                let mut baked_channel = Vec::with_capacity(frame_count);
+
+                for frame in 0..frame_count {
+                    if let Some(keyframe) = channel.get(&frame) {
+                        baked_channel.push(*keyframe);
+                        continue;
+                    }
+
+                    if let Some(last_value) = baked_channel.last() {
+                        baked_channel.push(*last_value);
+                        continue;
+                    }
+
+                    baked_channel.push(default);
+                }
+
+                baked_channel
+            }
+
+            let position_channel = bake_channel_keyframes(&channel.position, frame_count, import_bone_data.position);
+            let rotation_channel = bake_channel_keyframes(&channel.rotation, frame_count, import_bone_data.orientation);
+
+            // TODO: Translate channel data to bone table.
+
             animation_channels.insert(
                 mapped_index,
                 ChannelData {
-                    position: bake_channel_keyframes(&channel.position, imported_animation.frame_count.get(), bone_data.position),
-                    rotation: bake_channel_keyframes(&channel.rotation, imported_animation.frame_count.get(), bone_data.rotation.to_quaternion()),
+                    position: position_channel,
+                    rotation: rotation_channel,
                 },
             );
         }
-
-        let frame_count = imported_animation.frame_count.get();
 
         // TODO: Implement animation processing.
         // TODO: Add a check if the position data is going to be out of bounds.
@@ -111,22 +136,24 @@ pub fn process_animations(
             let section_frame_start = (section * section_frame_count).min(frame_count - 1);
             let section_frame_end = ((section + 1) * section_frame_count).min(frame_count - 1);
 
-            let mut section_data = Vec::new();
+            let mut section_data = Vec::with_capacity(animation_channels.len());
             for (index_bone, channel_data) in &animation_channels {
                 let bone = &processed_bone_data.processed_bones[*index_bone];
-                let mut position = Vec::new();
-                let mut rotation = Vec::new();
+                let mut delta_position = Vec::with_capacity(section_frame_count);
+                let mut delta_rotation = Vec::with_capacity(section_frame_count);
 
                 // TODO: If animation is delta then skip subtracting from bone
                 for frame in section_frame_start..=section_frame_end {
-                    position.push(channel_data.position[frame] - bone.position);
-                    rotation.push(channel_data.rotation[frame].to_angles() - bone.rotation);
+                    delta_position.push(channel_data.position[frame] - bone.position);
+                    delta_rotation.push(channel_data.rotation[frame].to_angles() - bone.rotation);
                 }
 
                 section_data.push(ProcessedAnimatedBoneData {
                     bone: (*index_bone).try_into().unwrap(),
-                    position,
-                    rotation,
+                    raw_position: channel_data.position[section_frame_start..=section_frame_end].to_vec(),
+                    raw_rotation: channel_data.rotation[section_frame_start..=section_frame_end].to_vec(),
+                    delta_position,
+                    delta_rotation,
                 });
             }
 
@@ -140,7 +167,7 @@ pub fn process_animations(
     for processed_animation in &processed_animations {
         for sections in &processed_animation.sections {
             for section in sections {
-                for position in &section.position {
+                for position in &section.delta_position {
                     for axis in 0..3 {
                         let value = position[axis].abs();
                         if value > animation_scales[section.bone as usize].0[axis] {
@@ -149,7 +176,7 @@ pub fn process_animations(
                     }
                 }
 
-                for rotation in &section.rotation {
+                for rotation in &section.delta_rotation {
                     for axis in 0..3 {
                         let value = rotation[axis].abs();
                         if value > animation_scales[section.bone as usize].1[axis] {
@@ -172,27 +199,6 @@ pub fn process_animations(
         processed_animations,
         animation_scales,
     })
-}
-
-/// Convert channel keyframes to a continuous set of values.
-fn bake_channel_keyframes<T: Copy>(channel: &IndexMap<usize, T>, frame_count: usize, default: T) -> Vec<T> {
-    let mut baked_channel = Vec::with_capacity(frame_count);
-
-    for frame in 0..frame_count {
-        if let Some(keyframe) = channel.get(&frame) {
-            baked_channel.push(*keyframe);
-            continue;
-        }
-
-        if let Some(last_value) = baked_channel.last() {
-            baked_channel.push(*last_value);
-            continue;
-        }
-
-        baked_channel.push(default);
-    }
-
-    baked_channel
 }
 
 pub fn process_sequences(input: &ImputedCompilationData, animations: &[ProcessedAnimation]) -> Result<Vec<ProcessedSequence>, ProcessingAnimationError> {

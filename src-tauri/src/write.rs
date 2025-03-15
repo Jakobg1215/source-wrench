@@ -370,32 +370,32 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
             section.sort_by(|to, from| to.bone.cmp(&from.bone));
 
             for animation_bone_data in section {
-                let scale = animations.animation_scales[animation_bone_data.bone as usize].0;
-                let mut scaled_position_axis = [
-                    Vec::with_capacity(animation_bone_data.position.len()),
-                    Vec::with_capacity(animation_bone_data.position.len()),
-                    Vec::with_capacity(animation_bone_data.position.len()),
+                let scale = animations.animation_scales[animation_bone_data.bone as usize].1;
+                let mut scaled_rotation_axis = [
+                    Vec::with_capacity(animation_bone_data.delta_rotation.len()),
+                    Vec::with_capacity(animation_bone_data.delta_rotation.len()),
+                    Vec::with_capacity(animation_bone_data.delta_rotation.len()),
                 ];
-                for position in &animation_bone_data.position {
+                for rotation in &animation_bone_data.delta_rotation {
                     for axis in 0..3 {
-                        scaled_position_axis[axis].push(if position[axis].abs() > FLOAT_TOLERANCE {
-                            (position[axis] / scale[axis]) as i16
+                        scaled_rotation_axis[axis].push(if rotation[axis].abs() > FLOAT_TOLERANCE {
+                            (rotation[axis] / scale[axis]) as i16
                         } else {
                             0
                         });
                     }
                 }
 
-                let scale = animations.animation_scales[animation_bone_data.bone as usize].1;
-                let mut scaled_rotation_axis = [
-                    Vec::with_capacity(animation_bone_data.rotation.len()),
-                    Vec::with_capacity(animation_bone_data.rotation.len()),
-                    Vec::with_capacity(animation_bone_data.rotation.len()),
+                let scale = animations.animation_scales[animation_bone_data.bone as usize].0;
+                let mut scaled_position_axis = [
+                    Vec::with_capacity(animation_bone_data.delta_position.len()),
+                    Vec::with_capacity(animation_bone_data.delta_position.len()),
+                    Vec::with_capacity(animation_bone_data.delta_position.len()),
                 ];
-                for rotation in &animation_bone_data.rotation {
+                for position in &animation_bone_data.delta_position {
                     for axis in 0..3 {
-                        scaled_rotation_axis[axis].push(if rotation[axis].abs() > FLOAT_TOLERANCE {
-                            (rotation[axis] / scale[axis]) as i16
+                        scaled_position_axis[axis].push(if position[axis].abs() > FLOAT_TOLERANCE {
+                            (position[axis] / scale[axis]) as i16
                         } else {
                             0
                         });
@@ -459,93 +459,91 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
                     encoding
                 }
 
+                let encoded_rotation_axis = [
+                    encode_run_length(&scaled_rotation_axis[0]),
+                    encode_run_length(&scaled_rotation_axis[1]),
+                    encode_run_length(&scaled_rotation_axis[2]),
+                ];
                 let encoded_position_axis = [
                     encode_run_length(&scaled_position_axis[0]),
                     encode_run_length(&scaled_position_axis[1]),
                     encode_run_length(&scaled_position_axis[2]),
                 ];
 
+                let mut rotation = None;
                 let mut position = None;
 
-                // Handle single frame
-                if encoded_position_axis[0].len() == 2 && encoded_position_axis[1].len() == 2 && encoded_position_axis[2].len() == 2 {
-                    match (&encoded_position_axis[0][1], &encoded_position_axis[1][1], &encoded_position_axis[2][1]) {
-                        (ModelFileAnimationEncoding::Value(x), ModelFileAnimationEncoding::Value(y), ModelFileAnimationEncoding::Value(z)) => {
-                            if *x != 0 || *y != 0 || *z != 0 {
-                                position = Some(ModelFileAnimationData::Single(animation_bone_data.position[0]));
-                            }
-                        }
-                        _ => {
-                            unreachable!("All the values should be ModelFileAnimationEncoding::Value");
-                        }
-                    }
-                }
-
-                // Handle multiple frame
-                if encoded_position_axis[0].len() > 2 || encoded_position_axis[1].len() > 2 || encoded_position_axis[2].len() > 2 {
-                    let mut animation_axis = ModelFileAnimationValue::default();
-
-                    let [x_encoded, y_encoded, z_encoded] = encoded_position_axis;
-
-                    if x_encoded.len() > 2 {
-                        animation_axis.values[0] = Some(x_encoded);
-                    }
-
-                    if y_encoded.len() > 2 {
-                        animation_axis.values[1] = Some(y_encoded);
-                    }
-
-                    if z_encoded.len() > 2 {
-                        animation_axis.values[2] = Some(z_encoded);
-                    }
-
-                    position = Some(ModelFileAnimationData::Array(animation_axis));
-                }
-
-                let encoded_rotation_axis = [
-                    encode_run_length(&scaled_rotation_axis[0]),
-                    encode_run_length(&scaled_rotation_axis[1]),
-                    encode_run_length(&scaled_rotation_axis[2]),
-                ];
-
-                let mut rotation = None;
-
-                // Handle single frame
-                if encoded_rotation_axis[0].len() == 2 && encoded_rotation_axis[1].len() == 2 && encoded_rotation_axis[2].len() == 2 {
+                if encoded_rotation_axis[0].len() <= 2
+                    && encoded_rotation_axis[1].len() <= 2
+                    && encoded_rotation_axis[2].len() <= 2
+                    && encoded_position_axis[0].len() <= 2
+                    && encoded_position_axis[1].len() <= 2
+                    && encoded_position_axis[2].len() <= 2
+                {
                     match (&encoded_rotation_axis[0][1], &encoded_rotation_axis[1][1], &encoded_rotation_axis[2][1]) {
                         (ModelFileAnimationEncoding::Value(x), ModelFileAnimationEncoding::Value(y), ModelFileAnimationEncoding::Value(z)) => {
                             if *x != 0 || *y != 0 || *z != 0 {
-                                rotation = Some(ModelFileAnimationData::Single(animation_bone_data.rotation[0]));
+                                rotation = Some(ModelFileAnimationData::Single(animation_bone_data.raw_rotation[0]));
                             }
                         }
                         _ => {
                             unreachable!("All the values should be ModelFileAnimationEncoding::Value");
                         }
                     }
+
+                    match (&encoded_position_axis[0][1], &encoded_position_axis[1][1], &encoded_position_axis[2][1]) {
+                        (ModelFileAnimationEncoding::Value(x), ModelFileAnimationEncoding::Value(y), ModelFileAnimationEncoding::Value(z)) => {
+                            if *x != 0 || *y != 0 || *z != 0 {
+                                position = Some(ModelFileAnimationData::Single(animation_bone_data.raw_position[0]));
+                            }
+                        }
+                        _ => {
+                            unreachable!("All the values should be ModelFileAnimationEncoding::Value");
+                        }
+                    }
+                } else {
+                    if encoded_rotation_axis[0].len() > 2 || encoded_rotation_axis[1].len() > 2 || encoded_rotation_axis[2].len() > 2 {
+                        let mut animation_axis = ModelFileAnimationValue::default();
+
+                        let [x_encoded, y_encoded, z_encoded] = encoded_rotation_axis;
+
+                        if x_encoded.len() > 2 {
+                            animation_axis.values[0] = Some(x_encoded);
+                        }
+
+                        if y_encoded.len() > 2 {
+                            animation_axis.values[1] = Some(y_encoded);
+                        }
+
+                        if z_encoded.len() > 2 {
+                            animation_axis.values[2] = Some(z_encoded);
+                        }
+
+                        rotation = Some(ModelFileAnimationData::Array(animation_axis));
+                    }
+
+                    if encoded_position_axis[0].len() > 2 || encoded_position_axis[1].len() > 2 || encoded_position_axis[2].len() > 2 {
+                        let mut animation_axis = ModelFileAnimationValue::default();
+
+                        let [x_encoded, y_encoded, z_encoded] = encoded_position_axis;
+
+                        if x_encoded.len() > 2 {
+                            animation_axis.values[0] = Some(x_encoded);
+                        }
+
+                        if y_encoded.len() > 2 {
+                            animation_axis.values[1] = Some(y_encoded);
+                        }
+
+                        if z_encoded.len() > 2 {
+                            animation_axis.values[2] = Some(z_encoded);
+                        }
+
+                        position = Some(ModelFileAnimationData::Array(animation_axis));
+                    }
                 }
 
-                // Handle multiple frame
-                if encoded_rotation_axis[0].len() > 2 || encoded_rotation_axis[1].len() > 2 || encoded_rotation_axis[2].len() > 2 {
-                    let mut animation_axis = ModelFileAnimationValue::default();
-
-                    let [x_encoded, y_encoded, z_encoded] = encoded_rotation_axis;
-
-                    if x_encoded.len() > 2 {
-                        animation_axis.values[0] = Some(x_encoded);
-                    }
-
-                    if y_encoded.len() > 2 {
-                        animation_axis.values[1] = Some(y_encoded);
-                    }
-
-                    if z_encoded.len() > 2 {
-                        animation_axis.values[2] = Some(z_encoded);
-                    }
-
-                    rotation = Some(ModelFileAnimationData::Array(animation_axis));
-                }
-
-                if position.is_none() && rotation.is_none() {
+                if rotation.is_none() && position.is_none() {
                     continue;
                 }
 

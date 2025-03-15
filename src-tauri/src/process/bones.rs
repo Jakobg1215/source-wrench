@@ -121,13 +121,11 @@ pub fn process_bones(input: &ImputedCompilationData, import: &State<FileManager>
         if let Some(parent_pose) = source_bone_table[bone_index].parent.map(|index| source_bone_table[index].pose) {
             let bone = &mut source_bone_table[bone_index];
             let pose_matrix = parent_pose * Matrix4::new(bone.rotation, bone.position);
-            bone.source_pose = pose_matrix;
             bone.pose = pose_matrix;
             continue;
         }
 
         let bone = &mut source_bone_table[bone_index];
-        bone.source_pose = Matrix4::new(bone.rotation, bone.position);
         bone.pose = Matrix4::new(bone.rotation, bone.position);
     }
 

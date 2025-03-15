@@ -8,7 +8,7 @@ use crate::{
     input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{Angles, BoundingBox, Matrix4, Vector2, Vector3, Vector4},
+        mathematics::{Angles, BoundingBox, Matrix4, Quaternion, Vector2, Vector3, Vector4},
     },
 };
 
@@ -42,8 +42,6 @@ pub struct ProcessedBone {
     /// The rotation of the bone relative to the parent bone.
     pub rotation: Angles,
     pub flags: ProcessedBoneFlags,
-    /// The transforms in world space from the source file.
-    pub source_pose: Matrix4,
     /// The transforms in world space.
     pub pose: Matrix4,
 }
@@ -71,8 +69,10 @@ pub struct ProcessedAnimation {
 #[derive(Debug, Default)]
 pub struct ProcessedAnimatedBoneData {
     pub bone: u8,
-    pub position: Vec<Vector3>,
-    pub rotation: Vec<Angles>,
+    pub raw_position: Vec<Vector3>,
+    pub raw_rotation: Vec<Quaternion>,
+    pub delta_position: Vec<Vector3>,
+    pub delta_rotation: Vec<Angles>,
 }
 
 #[derive(Debug, Default)]

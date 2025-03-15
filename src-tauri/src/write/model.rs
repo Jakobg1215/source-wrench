@@ -839,7 +839,7 @@ pub struct ModelFileAnimation {
     pub write_base: usize,
     pub delta: bool,
     pub bone: u8,
-    pub rotation: Option<ModelFileAnimationData<Angles>>,
+    pub rotation: Option<ModelFileAnimationData<Quaternion>>,
     pub position: Option<ModelFileAnimationData<Vector3>>,
     pub next_offset: usize,
 }
@@ -863,6 +863,17 @@ impl WriteToWriter for ModelFileAnimation {
             }
         }
 
+        debug_assert!(
+            matches!(
+                (&self.rotation, &self.position),
+                (None, _)
+                    | (_, None)
+                    | (Some(ModelFileAnimationData::Single(_)), Some(ModelFileAnimationData::Single(_)))
+                    | (Some(ModelFileAnimationData::Array(_)), Some(ModelFileAnimationData::Array(_)))
+            ),
+            "Invalid combination: rotation and position cannot be one Single and one Array"
+        );
+
         if let Some(data) = &self.position {
             match data {
                 ModelFileAnimationData::Single(_) => flags |= ModelFileAnimationFlags::RAW_POSITION,
@@ -876,7 +887,7 @@ impl WriteToWriter for ModelFileAnimation {
         if let Some(data) = &mut self.rotation {
             match data {
                 ModelFileAnimationData::Single(value) => {
-                    writer.write_quaternion64(value.to_quaternion());
+                    writer.write_quaternion64(*value);
                 }
                 ModelFileAnimationData::Array(value) => {
                     value.write(writer)?;
