@@ -85,6 +85,7 @@ pub struct ProcessedSequence {
 pub struct ProcessedModelData {
     pub body_parts: Vec<ProcessedBodyPart>,
     pub bounding_box: BoundingBox,
+    pub hitboxes: IndexMap<u8, BoundingBox>,
     pub materials: IndexSet<String>,
 }
 

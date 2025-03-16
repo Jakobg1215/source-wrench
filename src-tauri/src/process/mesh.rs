@@ -13,7 +13,7 @@ use crate::{
     },
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{BoundingBox, Vector2, Vector3, Vector4},
+        mathematics::{BoundingBox, Matrix3, Matrix4, Vector2, Vector3, Vector4},
     },
 };
 
@@ -49,23 +49,11 @@ struct TriangleVertex {
     links: Vec<WeightLink>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct TriangleList {
     vertices: Vec<TriangleVertex>,
-    vertex_tree: KdTree<f64, usize, [f64; 3]>,
     tangents: Vec<Vector4>,
     triangles: Vec<[usize; 3]>,
-}
-
-impl Default for TriangleList {
-    fn default() -> Self {
-        Self {
-            vertices: Vec::new(),
-            vertex_tree: KdTree::new(3),
-            tangents: Vec::new(),
-            triangles: Vec::new(),
-        }
-    }
 }
 
 pub fn process_meshes(
@@ -75,7 +63,6 @@ pub fn process_meshes(
 ) -> Result<ProcessedModelData, ProcessingMeshError> {
     let mut processed_model_data = ProcessedModelData::default();
 
-    let mut bounding_box = BoundingBox::default();
     for (imputed_body_part_name, imputed_body_part) in &input.body_parts {
         let mut processed_body_part = ProcessedBodyPart {
             name: imputed_body_part_name.clone(),
@@ -129,7 +116,13 @@ pub fn process_meshes(
                 // optimize_overdraw(&mut triangle_list); // FIXME: This is broken!
                 bad_vertex_count += calculate_vertex_tangents(&mut triangle_list);
                 culled_vertex_count += cull_weight_links(&mut triangle_list);
-                let meshes = convert_to_meshes(material_index, triangle_list, &mut bounding_box);
+                let meshes = convert_to_meshes(
+                    material_index,
+                    triangle_list,
+                    processed_bone_data,
+                    &mut processed_model_data.bounding_box,
+                    &mut processed_model_data.hitboxes,
+                );
                 face_count += meshes.1;
                 vertex_count += meshes.2;
                 processed_model.meshes.extend(meshes.0);
@@ -176,8 +169,6 @@ pub fn process_meshes(
 
     // TODO: Check if bounding box is too large
 
-    processed_model_data.bounding_box = bounding_box; // TODO: Overwrite this with input bounding box.
-
     Ok(processed_model_data)
 }
 
@@ -189,6 +180,7 @@ fn create_triangle_lists(
     processed_bone_data: &ProcessedBoneData,
 ) -> Result<IndexMap<usize, TriangleList>, ProcessingMeshError> {
     let mut triangle_lists: IndexMap<usize, TriangleList> = IndexMap::new();
+    let mut vertex_trees = IndexMap::new();
 
     for imputed_part_name in part_names {
         let import_part = match imported_file.parts.get(imputed_part_name) {
@@ -200,6 +192,7 @@ fn create_triangle_lists(
             let material_index = material_table.insert_full(material.clone()).0;
 
             let triangle_list = triangle_lists.entry(material_index).or_default();
+            let vertex_tree = vertex_trees.entry(material_index).or_insert(KdTree::new(3));
 
             for face in faces {
                 if face.len() < 3 {
@@ -235,8 +228,7 @@ fn create_triangle_lists(
                             links: mapped_links,
                         };
 
-                        let neighbors = triangle_list
-                            .vertex_tree
+                        let neighbors = vertex_tree
                             .within(&triangle_vertex.position.as_slice(), FLOAT_TOLERANCE, &squared_euclidean)
                             .unwrap();
 
@@ -245,10 +237,7 @@ fn create_triangle_lists(
                             continue;
                         }
 
-                        triangle_list
-                            .vertex_tree
-                            .add(triangle_vertex.position.as_slice(), triangle_list.vertices.len())
-                            .unwrap();
+                        vertex_tree.add(triangle_vertex.position.as_slice(), triangle_list.vertices.len()).unwrap();
 
                         *vertex_index = triangle_list.vertices.len();
                         triangle_list.vertices.push(triangle_vertex);
@@ -849,7 +838,13 @@ fn cull_weight_links(triangle_list: &mut TriangleList) -> usize {
 }
 
 /// Converts a triangle list into a list of processed meshes.
-fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, bounding_box: &mut BoundingBox) -> (Vec<ProcessedMesh>, usize, usize) {
+fn convert_to_meshes(
+    material_index: usize,
+    triangle_list: TriangleList,
+    processed_bone_data: &ProcessedBoneData,
+    bounding_box: &mut BoundingBox,
+    hitboxes: &mut IndexMap<u8, BoundingBox>,
+) -> (Vec<ProcessedMesh>, usize, usize) {
     let mut processed_meshes = Vec::new();
 
     let mut processed_mesh = ProcessedMesh {
@@ -932,6 +927,10 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
                     continue;
                 }
 
+                if link.weight < FLOAT_TOLERANCE {
+                    continue;
+                }
+
                 vertex_weights[weight_count] = link.weight as f32;
                 weight_bones[weight_count] = link.bone;
 
@@ -957,6 +956,15 @@ fn convert_to_meshes(material_index: usize, triangle_list: TriangleList, boundin
             };
 
             bounding_box.add_point(processed_vertex.position);
+
+            for (index, link) in processed_vertex.bones.iter().take(processed_vertex.bone_count.into()).enumerate() {
+                let bone = &processed_bone_data.processed_bones[*link as usize];
+                let local_point = (bone.pose.inverse() * Matrix4::new(Matrix3::default(), processed_vertex.position)).translation();
+                hitboxes
+                    .entry(*link)
+                    .or_default()
+                    .add_point(local_point * processed_vertex.weights[index] as f64);
+            }
 
             let mut processed_mesh_vertex = ProcessedMeshVertex {
                 vertex_index: processed_strip_group.vertices.len().try_into().unwrap(),

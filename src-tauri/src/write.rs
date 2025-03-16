@@ -20,8 +20,8 @@ use mesh::{
 
 use model::{
     ModelFileAnimation, ModelFileAnimationData, ModelFileAnimationDescription, ModelFileAnimationEncoding, ModelFileAnimationEncodingHeader,
-    ModelFileAnimationSection, ModelFileAnimationValue, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHitboxSet,
-    ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
+    ModelFileAnimationSection, ModelFileAnimationValue, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHeaderFlags,
+    ModelFileHitBox, ModelFileHitboxSet, ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
 };
 
 use vertex::{VertexFileHeader, VertexFileVertex};
@@ -255,6 +255,7 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
         checksum: 69420,
         bounding_box: processed_data.model_data.bounding_box, // TODO: If the model has no mesh use sequence bounding box.
         illumination_position: processed_data.model_data.bounding_box.center(), // TODO: If input, use the input value.
+        flags: ModelFileHeaderFlags::FORCE_OPAQUE | ModelFileHeaderFlags::AUTOMATIC_GENERATED_HITBOXES,
         second_header: ModelFileSecondHeader {
             name: model_name,
             ..Default::default()
@@ -283,10 +284,21 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
 
     mdl_header.sorted_bone_table_by_name = processed_data.bone_data.sorted_bones_by_name;
 
-    mdl_header.hitbox_sets.push(ModelFileHitboxSet {
+    let mut hitbox_set = ModelFileHitboxSet {
         name: String::from("default"),
+        hitboxes: Vec::with_capacity(processed_data.model_data.hitboxes.len()),
         ..Default::default()
-    });
+    };
+
+    for (bone, bounding_box) in processed_data.model_data.hitboxes {
+        hitbox_set.hitboxes.push(ModelFileHitBox {
+            bone: bone.into(),
+            bounding_box,
+            ..Default::default()
+        });
+    }
+
+    mdl_header.hitbox_sets.push(hitbox_set);
 
     write_animations(processed_data.animation_data, &mut mdl_header);
 
