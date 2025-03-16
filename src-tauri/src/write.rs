@@ -612,8 +612,6 @@ fn write_body_parts(
                 vertex_count += processed_mesh.vertex_data.len();
 
                 for processed_vertex in processed_mesh.vertex_data {
-                    // let mut uv_fix = vertex.texture_coordinate; // FIXME: This should be in the mesh processing stage.
-                    // uv_fix.y = 1.0 - uv_fix.y;
                     vertex_header.vertices.push(VertexFileVertex {
                         weights: processed_vertex.weights,
                         bones: processed_vertex.bones,

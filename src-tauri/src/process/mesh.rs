@@ -31,6 +31,8 @@ pub enum ProcessingMeshError {
     TooManyMaterials,
     #[error("Model Has Too Many Body Parts")]
     TooManyBodyParts,
+    #[error("Part Has Too Many Meshes")]
+    TooMeshes,
 }
 
 #[derive(Debug, Default)]
@@ -123,7 +125,7 @@ pub fn process_meshes(
             for (material_index, mut triangle_list) in triangle_lists {
                 reorder_triangle_vertex_order(&mut triangle_list);
                 sort_vertices_by_hardware_bones(&mut triangle_list);
-                optimize_vertex_cache(&mut triangle_list);
+                // optimize_vertex_cache(&mut triangle_list); // FIXME: This is broken!
                 // optimize_overdraw(&mut triangle_list); // FIXME: This is broken!
                 bad_vertex_count += calculate_vertex_tangents(&mut triangle_list);
                 culled_vertex_count += cull_weight_links(&mut triangle_list);
@@ -131,6 +133,9 @@ pub fn process_meshes(
                 face_count += meshes.1;
                 vertex_count += meshes.2;
                 processed_model.meshes.extend(meshes.0);
+                if processed_model.meshes.len() > i32::MAX as usize {
+                    return Err(ProcessingMeshError::TooMeshes);
+                }
             }
 
             if bad_vertex_count > 0 {
@@ -226,7 +231,7 @@ fn create_triangle_lists(
                         let triangle_vertex = TriangleVertex {
                             position: import_vertex.position,
                             normal: import_vertex.normal.normalize(),
-                            texture_coordinate: import_vertex.texture_coordinate,
+                            texture_coordinate: Vector2::new(0.0, 1.0) - import_vertex.texture_coordinate, // For DirectX?
                             links: mapped_links,
                         };
 
@@ -276,13 +281,7 @@ fn triangulate_face(face: &[usize], vertices: &[ImportVertex]) -> Vec<[usize; 3]
     let mut minimum_distance = f64::MAX;
     let mut minimum_index = 0;
 
-    let loop_count = match index_count {
-        count if count > 4 => count,
-        4 => 2,
-        _ => 0,
-    };
-
-    for loop_index in 0..loop_count {
+    for loop_index in 0..index_count {
         let mut distance = 0.0;
 
         let center = vertices[face[loop_index]].position;
@@ -342,9 +341,13 @@ fn vertex_equals(from: &TriangleVertex, to: &TriangleVertex) -> bool {
 
 /// Reorders the triangle vertex order to be clockwise.
 fn reorder_triangle_vertex_order(triangle_list: &mut TriangleList) {
-    // TODO: Actually implement this function if a file format has a clockwise format.
     for triangle in &mut triangle_list.triangles {
-        triangle.reverse();
+        let edge1 = triangle_list.vertices[triangle[1]].position - triangle_list.vertices[triangle[0]].position;
+        let edge2 = triangle_list.vertices[triangle[2]].position - triangle_list.vertices[triangle[0]].position;
+        let computed_normal = edge1.cross(edge2).normalize();
+        if computed_normal.magnitude() >= 0.0 {
+            triangle.reverse();
+        }
     }
 }
 
@@ -355,7 +358,7 @@ fn sort_vertices_by_hardware_bones(_triangle_list: &mut TriangleList) {
 
 /// Sorts the indices to decrease the amount of cache misses.
 /// Implementation of https://github.com/zeux/meshoptimizer/blob/master/src/vcacheoptimizer.cpp
-fn optimize_vertex_cache(triangle_list: &mut TriangleList) {
+fn _optimize_vertex_cache(triangle_list: &mut TriangleList) {
     const VERTEX_VALENCE_SIZE: usize = 8;
 
     struct VertexScoreTable {
