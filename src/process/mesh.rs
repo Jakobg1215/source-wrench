@@ -105,6 +105,7 @@ pub fn process_meshes(
             let mut culled_vertex_count = 0;
             let mut face_count = 0;
             let mut vertex_count = 0;
+            let mut strip_count = 0;
             for (material_index, mut triangle_list) in triangle_lists {
                 reorder_triangle_vertex_order(&mut triangle_list);
                 sort_vertices_by_hardware_bones(&mut triangle_list);
@@ -121,6 +122,7 @@ pub fn process_meshes(
                 );
                 face_count += meshes.1;
                 vertex_count += meshes.2;
+                strip_count += meshes.3;
                 processed_model.meshes.extend(meshes.0);
                 if processed_model.meshes.len() > i32::MAX as usize {
                     return Err(ProcessingMeshError::TooMeshes);
@@ -140,7 +142,7 @@ pub fn process_meshes(
 
             log(
                 format!(
-                    "{} has {} faces, {} vertices and {} indices",
+                    "{} has {} faces, {} vertices and {} indices.",
                     imputed_model.name,
                     face_count,
                     vertex_count,
@@ -148,6 +150,8 @@ pub fn process_meshes(
                 ),
                 LogLevel::Verbose,
             );
+
+            log(format!("{} has {} strips.", imputed_model.name, strip_count), LogLevel::Debug);
 
             processed_body_part.models.push(processed_model);
         }
@@ -841,7 +845,7 @@ fn convert_to_meshes(
     processed_bone_data: &ProcessedBoneData,
     bounding_box: &mut BoundingBox,
     hitboxes: &mut IndexMap<u8, BoundingBox>,
-) -> (Vec<ProcessedMesh>, usize, usize) {
+) -> (Vec<ProcessedMesh>, usize, usize, usize) {
     let mut processed_meshes = Vec::new();
 
     let mut processed_mesh = ProcessedMesh {
@@ -851,6 +855,7 @@ fn convert_to_meshes(
 
     let mut triangle_count = 0;
     let mut vertex_count = 0;
+    let mut strip_count = 0;
 
     let mut processed_strip_group = ProcessedStripGroup::default();
     let mut processed_strip = ProcessedStrip::default();
@@ -888,6 +893,7 @@ fn convert_to_meshes(
             };
             processed_strip_group = ProcessedStripGroup::default();
             processed_strip = ProcessedStrip::default();
+            strip_count += 1;
         }
 
         if hardware_bones.len() + unique_new_hardware_bones.len() > MAX_HARDWARE_BONES_PER_STRIP {
@@ -900,6 +906,7 @@ fn convert_to_meshes(
             hardware_bones.clear();
             processed_strip_group.strips.push(processed_strip);
             processed_strip = new_processed_strip;
+            strip_count += 1;
         }
 
         for index in triangle {
@@ -1003,8 +1010,9 @@ fn convert_to_meshes(
     }
 
     processed_strip_group.strips.push(processed_strip);
+    strip_count += 1;
     processed_mesh.strip_groups.push(processed_strip_group);
     processed_meshes.push(processed_mesh);
 
-    (processed_meshes, triangle_count, vertex_count)
+    (processed_meshes, triangle_count, vertex_count, strip_count)
 }

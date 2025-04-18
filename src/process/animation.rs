@@ -34,6 +34,7 @@ pub fn process_animations(
 
     let mut remapped_animations = Vec::with_capacity(input.animations.len());
     let mut processed_animations = Vec::new();
+    let mut model_frame_count = 0;
     for (_, imputed_animation) in &input.animations {
         // Check if the animation is used in any sequence.
         if !input.sequences.iter().any(|(_, sequence)| {
@@ -55,6 +56,7 @@ pub fn process_animations(
         let (_, imported_animation) = imported_file.animations.get_index(imputed_animation.source_animation.unwrap()).unwrap();
 
         let frame_count = imported_animation.frame_count.get();
+        model_frame_count += frame_count;
 
         let mut animation_channels = IndexMap::new();
         for (bone, channel) in &imported_animation.channels {
@@ -154,6 +156,8 @@ pub fn process_animations(
 
         processed_animations.push(processed_animation);
     }
+
+    log(format!("Model uses {} frames.", model_frame_count), LogLevel::Debug);
 
     if processed_animations.len() > (i16::MAX as usize + 1) {
         return Err(ProcessingAnimationError::TooManyAnimations);

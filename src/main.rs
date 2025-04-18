@@ -176,6 +176,8 @@ impl SourceWrenchTabManager<'_> {
                     model_name.push_str(".mdl");
                 }
 
+                log(format!("Processing {}!", &model_name), LogLevel::Info);
+
                 let processed_data = match process::process(self.input_data, self.loaded_files) {
                     Ok(data) => data,
                     Err(error) => {

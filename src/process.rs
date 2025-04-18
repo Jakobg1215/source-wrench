@@ -178,29 +178,29 @@ pub fn process(input: &ImputedCompilationData, file_manager: &FileManager) -> Re
         return Err(ProcessingDataError::NoSequences);
     }
 
-    log("Processing Bones", LogLevel::Debug);
+    log("Processing Bones.", LogLevel::Debug);
     let processed_bone_data = process_bones(input, file_manager)?;
-    log(format!("Model uses {} bones", processed_bone_data.processed_bones.len()), LogLevel::Verbose);
+    log(format!("Model uses {} bones.", processed_bone_data.processed_bones.len()), LogLevel::Verbose);
 
     if processed_bone_data.processed_bones.is_empty() {
         return Err(ProcessingDataError::NoBones);
     }
 
-    log("Processing Animations", LogLevel::Debug);
+    log("Processing Animations.", LogLevel::Debug);
     let processed_animation_data = process_animations(input, file_manager, &processed_bone_data)?;
     log(
-        format!("Model has {} animations", processed_animation_data.processed_animations.len()),
+        format!("Model has {} animations.", processed_animation_data.processed_animations.len()),
         LogLevel::Verbose,
     );
 
-    log("Processing Sequences", LogLevel::Debug);
+    log("Processing Sequences.", LogLevel::Debug);
     let processed_sequences = process_sequences(input, &processed_animation_data.remapped_animations)?;
-    log(format!("Model has {} sequences", processed_sequences.len()), LogLevel::Verbose);
+    log(format!("Model has {} sequences.", processed_sequences.len()), LogLevel::Verbose);
 
-    log("Processing Mesh Data", LogLevel::Debug);
+    log("Processing Mesh Data.", LogLevel::Debug);
     let processed_mesh = process_meshes(input, file_manager, &processed_bone_data)?;
-    log(format!("Model has {} materials", processed_mesh.materials.len()), LogLevel::Verbose);
-    log(format!("Model has {} body parts", processed_mesh.body_parts.len()), LogLevel::Verbose);
+    log(format!("Model has {} material.s", processed_mesh.materials.len()), LogLevel::Verbose);
+    log(format!("Model has {} body parts.", processed_mesh.body_parts.len()), LogLevel::Verbose);
 
     Ok(ProcessedData {
         bone_data: processed_bone_data,

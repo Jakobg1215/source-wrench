@@ -82,7 +82,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
     }
 
     for (_, imputed_animation) in &input.animations {
-        let source_file_path = &imputed_animation.source_file_path.as_ref().ok_or(ProcessingBoneError::NoFileSource)?;
+        let source_file_path = imputed_animation.source_file_path.as_ref().ok_or(ProcessingBoneError::NoFileSource)?;
 
         if remapped_files.contains(source_file_path) {
             continue;
@@ -96,7 +96,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
             }
 
             // TODO: Validate the data and not unwrap
-            let import_bone_parent = import_bone.parent.map(|parent_index| {
+            let import_bone_parent = import_bone.parent.map(|parent_index: usize| {
                 source_bone_table
                     .get_index_of(imported_file.skeleton.get_index(parent_index).map(|(parent_name, _)| parent_name).unwrap())
                     .unwrap()
@@ -137,6 +137,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
 
     let mut collapsed_bone_table = IndexMap::with_capacity(source_bone_table.len());
     let mut collapsed_remap = Vec::with_capacity(source_bone_table.len());
+    let mut collapsed_count = 0;
     for (bone_name, bone_data) in source_bone_table {
         if !bone_data.flags.is_empty() {
             collapsed_bone_table.insert(bone_name, bone_data);
@@ -145,8 +146,10 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
         }
 
         collapsed_remap.push((true, bone_data.parent));
-        log(format!("Collapsed {}", bone_name), LogLevel::Verbose);
+        collapsed_count += 1;
+        log(format!("Collapsed \"{}\"!", bone_name), LogLevel::Verbose);
     }
+    log(format!("Collapsed {} bones.", collapsed_count), LogLevel::Debug);
 
     if collapsed_bone_table.len() > (i8::MAX as usize) + 1 {
         return Err(ProcessingBoneError::TooManyBones);

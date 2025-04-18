@@ -160,7 +160,7 @@ impl FileManager {
 
                 log(
                     format!(
-                        "Loaded {} file: {}",
+                        "Loaded \"{}\" file: \"{}\".",
                         file_extension.to_string_lossy().to_uppercase(),
                         file_path.as_os_str().to_string_lossy()
                     ),
@@ -212,7 +212,7 @@ impl FileManager {
             let current_count = *existing_count - 1;
 
             if current_count == 0 {
-                log(format!("Unloaded {}", file_path.as_os_str().to_string_lossy()), LogLevel::Debug);
+                log(format!("Unloaded {}!", file_path.as_os_str().to_string_lossy()), LogLevel::Debug);
                 files.shift_remove(file_path);
                 return;
             }
