@@ -1,0 +1,14 @@
+[package]
+name = "source-wrench"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.31.1"
+egui_dock = "0.16.0"
+indexmap = "2.9.0"
+rfd = "0.15.3"
+thiserror = "2.0.12"
+kdtree = "0.7.0"
+half = "2.4.1"
+bitflags = "2.9.0"

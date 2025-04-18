@@ -7,20 +7,10 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Tauri Development Debug",
+            "name": "Cargo launch",
             "cargo": {
-                "args": ["build", "--manifest-path=./src-tauri/Cargo.toml", "--no-default-features"]
-            },
-            "preLaunchTask": "ui:dev"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Tauri Production Debug",
-            "cargo": {
-                "args": ["build", "--release", "--manifest-path=./src-tauri/Cargo.toml"]
-            },
-            "preLaunchTask": "ui:build"
+                "args": ["build"]
+            }
         }
     ]
 }
