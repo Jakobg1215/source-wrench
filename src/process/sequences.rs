@@ -5,7 +5,10 @@ use crate::input::ImputedCompilationData;
 use super::ProcessedSequence;
 
 #[derive(Debug, ThisError)]
-pub enum ProcessingSequenceError {}
+pub enum ProcessingSequenceError {
+    #[error("Model Has Too Many Sequences")]
+    TooManySequences,
+}
 
 pub fn process_sequences(input: &ImputedCompilationData, remapped_animations: &[usize]) -> Result<Vec<ProcessedSequence>, ProcessingSequenceError> {
     let mut processed_sequences = Vec::with_capacity(input.sequences.len());
@@ -25,6 +28,10 @@ pub fn process_sequences(input: &ImputedCompilationData, remapped_animations: &[
         }
 
         processed_sequences.push(processed_sequence);
+    }
+
+    if processed_sequences.len() > i32::MAX as usize {
+        return Err(ProcessingSequenceError::TooManySequences);
     }
 
     Ok(processed_sequences)

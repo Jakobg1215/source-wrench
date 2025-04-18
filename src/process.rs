@@ -155,8 +155,6 @@ pub struct ProcessedHardwareBone {
 pub enum ProcessingDataError {
     #[error("Model Has No Bones")]
     NoBones,
-    #[error("Model Has Too Many Sequences")]
-    TooManySequences,
     #[error("Model Has No Sequences")]
     NoSequences,
     #[error("Failed To Process Bone Data: {0}")]
@@ -198,10 +196,6 @@ pub fn process(input: &ImputedCompilationData, file_manager: &FileManager) -> Re
     log("Processing Sequences", LogLevel::Debug);
     let processed_sequences = process_sequences(input, &processed_animation_data.remapped_animations)?;
     log(format!("Model has {} sequences", processed_sequences.len()), LogLevel::Verbose);
-
-    if processed_sequences.len() > i32::MAX as usize {
-        return Err(ProcessingDataError::TooManySequences);
-    }
 
     log("Processing Mesh Data", LogLevel::Debug);
     let processed_mesh = process_meshes(input, file_manager, &processed_bone_data)?;
