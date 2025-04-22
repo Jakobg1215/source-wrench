@@ -19,8 +19,10 @@ fn main() -> eframe::Result {
 
 use egui_dock::DockState;
 use import::{FileManager, FileStatus, SUPPORTED_FILES};
+use std::sync::{atomic::AtomicBool, Arc};
 struct SourceWrenchApplication {
     tab_tree: DockState<SourceWrenchTabType>,
+    compiling: Arc<AtomicBool>,
     input_data_identifier_generator: usize,
     input_data: ImputedCompilationData,
     loaded_files: FileManager,
@@ -42,6 +44,7 @@ impl Default for SourceWrenchApplication {
 
         Self {
             tab_tree: tree,
+            compiling: Arc::new(AtomicBool::new(false)),
             input_data_identifier_generator: Default::default(),
             input_data: Default::default(),
             loaded_files: Default::default(),
@@ -63,6 +66,7 @@ impl eframe::App for SourceWrenchApplication {
                 ctx,
                 &mut SourceWrenchTabManager {
                     new_tabs: &mut new_tabs,
+                    compiling: Arc::clone(&self.compiling),
                     input_data_identifier_generator: &mut self.input_data_identifier_generator,
                     input_data: &mut self.input_data,
                     loaded_files: &mut self.loaded_files,
@@ -93,6 +97,7 @@ enum SourceWrenchTabType {
 
 struct SourceWrenchTabManager<'a> {
     new_tabs: &'a mut Vec<SourceWrenchTabType>,
+    compiling: Arc<AtomicBool>,
     input_data_identifier_generator: &'a mut usize,
     input_data: &'a mut ImputedCompilationData,
     loaded_files: &'a mut FileManager,
@@ -162,46 +167,51 @@ impl SourceWrenchTabManager<'_> {
             let name_label = ui.label("Model Name: ");
             ui.text_edit_singleline(&mut self.input_data.model_name).labelled_by(name_label.id);
 
-            let button_response = ui.add_enabled(!self.loaded_files.is_loading_files(), egui::Button::new("Compile Model"));
+            let is_compiling = self.compiling.load(std::sync::atomic::Ordering::Relaxed);
+
+            let button_response = ui.add_enabled(!self.loaded_files.is_loading_files() && !is_compiling, egui::Button::new("Compile Model"));
             if button_response.clicked() {
-                // FIXME: Make this run on a different thread!
+                // The best thing to do is just to clone the data.
+                let input_data = self.input_data.clone();
+                let loaded_files = self.loaded_files.clone();
+                let export_path = export_path.to_string_lossy().to_string();
+                let compiling = Arc::clone(&self.compiling);
+                compiling.store(true, std::sync::atomic::Ordering::Relaxed);
 
-                if self.input_data.model_name.is_empty() {
-                    log("Model name is empty!", LogLevel::Error);
-                    return;
-                }
-
-                let mut model_name = self.input_data.model_name.clone();
-                if !model_name.ends_with(".mdl") {
-                    model_name.push_str(".mdl");
-                }
-
-                log(format!("Processing {}!", &model_name), LogLevel::Info);
-
-                let processed_data = match process::process(self.input_data, self.loaded_files) {
-                    Ok(data) => data,
-                    Err(error) => {
-                        log(format!("Fail To Compile Model: {}!", error), LogLevel::Error);
+                std::thread::spawn(move || {
+                    if input_data.model_name.is_empty() {
+                        log("Model name is empty!", LogLevel::Error);
                         return;
                     }
-                };
 
-                log("Writing Files!", LogLevel::Info);
-
-                match write::write_files(
-                    self.input_data.model_name.clone(),
-                    model_name,
-                    processed_data,
-                    export_path.to_string_lossy().to_string(),
-                ) {
-                    Ok(_) => {}
-                    Err(error) => {
-                        log(format!("Fail To Write Files: {}!", error), LogLevel::Error);
-                        return;
+                    let mut model_name = input_data.model_name.clone();
+                    if !model_name.ends_with(".mdl") {
+                        model_name.push_str(".mdl");
                     }
-                }
 
-                log("Model compiled successfully!", LogLevel::Info);
+                    log(format!("Processing {}!", &model_name), LogLevel::Info);
+
+                    let processed_data = match process::process(&input_data, &loaded_files) {
+                        Ok(data) => data,
+                        Err(error) => {
+                            log(format!("Fail To Compile Model: {}!", error), LogLevel::Error);
+                            return;
+                        }
+                    };
+
+                    log("Writing Files!", LogLevel::Info);
+
+                    match write::write_files(input_data.model_name.clone(), model_name, processed_data, export_path) {
+                        Ok(_) => {}
+                        Err(error) => {
+                            log(format!("Fail To Write Files: {}!", error), LogLevel::Error);
+                            return;
+                        }
+                    }
+
+                    log("Model compiled successfully!", LogLevel::Info);
+                    compiling.store(false, std::sync::atomic::Ordering::Relaxed);
+                });
             }
         }
 

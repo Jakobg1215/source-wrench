@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ImputedCompilationData {
     /// The name of the mdl output as *.mdl
     pub model_name: String,
@@ -14,7 +14,7 @@ pub struct ImputedCompilationData {
 }
 
 /// A struct to define a body part for the model.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ImputedBodyPart {
     pub name: String,
     /// The models used by the body part.
@@ -31,7 +31,7 @@ impl Default for ImputedBodyPart {
 }
 
 /// A struct to define a model for a body part.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ImputedModel {
     pub name: String,
     /// This specify if the model will have no mesh.
@@ -54,7 +54,7 @@ impl Default for ImputedModel {
 }
 
 /// A struct to define an animation for the model.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ImputedAnimation {
     pub name: String,
     /// The source file to get the animation data from.
@@ -74,7 +74,7 @@ impl Default for ImputedAnimation {
 }
 
 /// A struct the define a sequence for a model.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ImputedSequence {
     pub name: String,
     /// A N by N grid of animations used by the sequence.

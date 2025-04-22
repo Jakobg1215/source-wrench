@@ -130,7 +130,7 @@ pub enum FileStatus {
     Failed,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct FileManager(Arc<RwLock<IndexMap<PathBuf, (usize, FileStatus)>>>);
 
 impl FileManager {
