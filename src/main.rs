@@ -19,7 +19,10 @@ fn main() -> eframe::Result {
 
 use egui_dock::DockState;
 use import::{FileManager, FileStatus, SUPPORTED_FILES};
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 struct SourceWrenchApplication {
     tab_tree: DockState<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
@@ -181,6 +184,7 @@ impl SourceWrenchTabManager<'_> {
                 std::thread::spawn(move || {
                     if input_data.model_name.is_empty() {
                         log("Model name is empty!", LogLevel::Error);
+                        compiling.store(false, Ordering::Relaxed);
                         return;
                     }
 
@@ -195,6 +199,7 @@ impl SourceWrenchTabManager<'_> {
                         Ok(data) => data,
                         Err(error) => {
                             log(format!("Fail To Compile Model: {}!", error), LogLevel::Error);
+                            compiling.store(false, Ordering::Relaxed);
                             return;
                         }
                     };
@@ -205,12 +210,13 @@ impl SourceWrenchTabManager<'_> {
                         Ok(_) => {}
                         Err(error) => {
                             log(format!("Fail To Write Files: {}!", error), LogLevel::Error);
+                            compiling.store(false, Ordering::Relaxed);
                             return;
                         }
                     }
 
                     log("Model compiled successfully!", LogLevel::Info);
-                    compiling.store(false, std::sync::atomic::Ordering::Relaxed);
+                    compiling.store(false, Ordering::Relaxed);
                 });
             }
         }
