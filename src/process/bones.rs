@@ -39,7 +39,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
 
             for (import_bone_index, (import_bone_name, import_bone)) in imported_file.skeleton.iter().enumerate() {
                 let mut bone_flags = ProcessedBoneFlags::default();
-                for (enabled_part_index, enabled_part) in imputed_model.enabled_source_parts.as_ref().unwrap().iter().enumerate() {
+                for (enabled_part_index, enabled_part) in imputed_model.enabled_source_parts.iter().enumerate() {
                     if !enabled_part {
                         continue;
                     }

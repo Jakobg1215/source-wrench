@@ -39,7 +39,7 @@ pub struct ImputedModel {
     /// The source file to get the mesh data from.
     pub source_file_path: Option<PathBuf>,
     /// All the parts to use in the source file.
-    pub enabled_source_parts: Option<Vec<bool>>,
+    pub enabled_source_parts: Vec<bool>,
 }
 
 impl Default for ImputedModel {
@@ -60,7 +60,7 @@ pub struct ImputedAnimation {
     /// The source file to get the animation data from.
     pub source_file_path: Option<PathBuf>,
     /// The animation to get in the source file.
-    pub source_animation: Option<usize>,
+    pub source_animation: usize,
 }
 
 impl Default for ImputedAnimation {
@@ -78,7 +78,7 @@ impl Default for ImputedAnimation {
 pub struct ImputedSequence {
     pub name: String,
     /// A N by N grid of animations used by the sequence.
-    pub animations: Option<Vec<Vec<usize>>>,
+    pub animations: Vec<Vec<usize>>,
 }
 
 impl Default for ImputedSequence {

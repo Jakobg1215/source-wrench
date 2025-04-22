@@ -89,7 +89,7 @@ pub fn process_meshes(
                 .ok_or(ProcessingMeshError::FileSourceNotLoaded)?;
 
             let triangle_lists = create_triangle_lists(
-                imputed_model.enabled_source_parts.as_ref().unwrap(),
+                &imputed_model.enabled_source_parts,
                 imported_file,
                 &mut processed_model_data.materials,
                 processed_bone_data,

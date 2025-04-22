@@ -346,8 +346,8 @@ impl SourceWrenchTabManager<'_> {
                                             match file_status {
                                                 FileStatus::Loading => {
                                                     ui.spinner();
-                                                    if model.enabled_source_parts.is_some() {
-                                                        model.enabled_source_parts = None;
+                                                    if !model.enabled_source_parts.is_empty() {
+                                                        model.enabled_source_parts.clear();
                                                     }
                                                 }
                                                 FileStatus::Loaded(_) => {
@@ -355,8 +355,8 @@ impl SourceWrenchTabManager<'_> {
                                                 }
                                                 FileStatus::Failed => {
                                                     ui_failed(ui);
-                                                    if model.enabled_source_parts.is_some() {
-                                                        model.enabled_source_parts = None;
+                                                    if !model.enabled_source_parts.is_empty() {
+                                                        model.enabled_source_parts.clear();
                                                     }
                                                 }
                                             }
@@ -368,15 +368,15 @@ impl SourceWrenchTabManager<'_> {
                                                 return;
                                             }
 
-                                            if model.enabled_source_parts.is_none() {
-                                                model.enabled_source_parts = Some(vec![true; file_data.parts.len()]);
+                                            if model.enabled_source_parts.is_empty() {
+                                                model.enabled_source_parts = vec![true; file_data.parts.len()];
                                             }
 
                                             ui.heading("Enabled Parts");
                                             ui.separator();
                                             egui::ScrollArea::horizontal().show(ui, |ui| {
                                                 for (part_index, (part_name, _)) in file_data.parts.iter().enumerate() {
-                                                    let enabled_source_part = &mut model.enabled_source_parts.as_mut().unwrap()[part_index];
+                                                    let enabled_source_part = &mut model.enabled_source_parts[part_index];
                                                     ui.checkbox(enabled_source_part, part_name);
                                                 }
                                             });
@@ -460,33 +460,29 @@ impl SourceWrenchTabManager<'_> {
                                 match file_status {
                                     FileStatus::Loading => {
                                         ui.spinner();
-                                        if animation.source_animation.is_some() {
-                                            animation.source_animation = Some(0);
-                                        }
+                                        animation.source_animation = 0;
                                     }
                                     FileStatus::Loaded(_) => {
                                         ui_success(ui);
                                     }
                                     FileStatus::Failed => {
                                         ui_failed(ui);
-                                        if animation.source_animation.is_some() {
-                                            animation.source_animation = Some(0);
-                                        }
+                                        animation.source_animation = 0;
                                     }
                                 }
                             });
 
                             if let FileStatus::Loaded(file_data) = file_status {
-                                if animation.source_animation.is_none() {
-                                    animation.source_animation = Some(0);
+                                if animation.source_animation > file_data.animations.len() {
+                                    animation.source_animation = 0;
                                 }
 
                                 ui.separator();
                                 egui::ComboBox::from_label("Source Animation")
-                                    .selected_text(file_data.animations.get_index(animation.source_animation.unwrap()).unwrap().0)
+                                    .selected_text(file_data.animations.get_index(animation.source_animation).unwrap().0)
                                     .show_ui(ui, |ui| {
                                         for (source_animation_index, (source_animation_name, _)) in file_data.animations.iter().enumerate() {
-                                            ui.selectable_value(&mut animation.source_animation, Some(source_animation_index), source_animation_name);
+                                            ui.selectable_value(&mut animation.source_animation, source_animation_index, source_animation_name);
                                         }
                                     });
                             }
@@ -539,18 +535,18 @@ impl SourceWrenchTabManager<'_> {
                         if self.input_data.animations.is_empty() {
                             ui.colored_label(Color32::RED, "No Animations Created");
 
-                            if sequence.animations.is_some() {
-                                sequence.animations = None;
+                            if !sequence.animations.is_empty() {
+                                sequence.animations.clear();
                             }
 
                             return;
                         }
 
-                        if sequence.animations.is_none() {
-                            sequence.animations = Some(vec![vec![0]]);
+                        if sequence.animations.is_empty() {
+                            sequence.animations = vec![vec![0]];
                         }
 
-                        let sequence_animation = &mut sequence.animations.as_mut().unwrap()[0][0];
+                        let sequence_animation = &mut sequence.animations[0][0];
                         egui::ComboBox::from_label("Selected Animation")
                             .selected_text(&self.input_data.animations.get_index(*sequence_animation).unwrap().1.name)
                             .show_ui(ui, |ui| {

@@ -41,7 +41,7 @@ pub fn process_animations(
             sequence
                 .animations
                 .iter()
-                .any(|row| row.iter().any(|animation| animation.contains(&imputed_animation.source_animation.unwrap())))
+                .any(|row| row.iter().any(|animation| animation.eq(&imputed_animation.source_animation)))
         }) {
             log(format!("Animation \"{}\" Not Used!", imputed_animation.name), LogLevel::Warn);
             continue;
@@ -53,7 +53,7 @@ pub fn process_animations(
         let imported_file = import
             .get_file_data(imputed_animation.source_file_path.as_ref().ok_or(ProcessingAnimationError::NoFileSource)?)
             .ok_or(ProcessingAnimationError::FileSourceNotLoaded)?;
-        let (_, imported_animation) = imported_file.animations.get_index(imputed_animation.source_animation.unwrap()).unwrap();
+        let (_, imported_animation) = imported_file.animations.get_index(imputed_animation.source_animation).unwrap();
 
         let frame_count = imported_animation.frame_count.get();
         model_frame_count += frame_count;
