@@ -59,6 +59,15 @@ pub struct ImportAnimation {
     pub channels: IndexMap<usize, ImportChannel>,
 }
 
+impl Default for ImportAnimation {
+    fn default() -> Self {
+        Self {
+            frame_count: NonZeroUsize::new(1).unwrap(),
+            channels: Default::default(),
+        }
+    }
+}
+
 /// Data of an animated bone from a source file.
 #[derive(Debug, Default)]
 pub struct ImportChannel {
@@ -123,8 +132,9 @@ pub enum ParseError {
     FailedOBJFileParse(#[from] ParseOBJError),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum FileStatus {
+    #[default]
     Loading,
     Loaded(Arc<ImportFileData>),
     Failed,
