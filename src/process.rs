@@ -157,6 +157,8 @@ pub enum ProcessingDataError {
     NoBones,
     #[error("Model Has No Sequences")]
     NoSequences,
+    #[error("Model Has No Animations")]
+    NoAnimations,
     #[error("Failed To Process Bone Data: {0}")]
     ProcessingBoneError(#[from] ProcessingBoneError),
     #[error("Failed To Process Animation Data: {0}")]
@@ -192,6 +194,10 @@ pub fn process(input: &ImputedCompilationData, file_manager: &FileManager) -> Re
         format!("Model has {} animations.", processed_animation_data.processed_animations.len()),
         LogLevel::Verbose,
     );
+
+    if processed_animation_data.processed_animations.is_empty() {
+        return Err(ProcessingDataError::NoAnimations);
+    }
 
     log("Processing Sequences.", LogLevel::Debug);
     let processed_sequences = process_sequences(input, &processed_animation_data.remapped_animations)?;
