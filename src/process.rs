@@ -199,7 +199,7 @@ pub fn process(input: &ImputedCompilationData, file_manager: &FileManager) -> Re
 
     log("Processing Mesh Data.", LogLevel::Debug);
     let processed_mesh = process_meshes(input, file_manager, &processed_bone_data)?;
-    log(format!("Model has {} material.s", processed_mesh.materials.len()), LogLevel::Verbose);
+    log(format!("Model has {} materials.", processed_mesh.materials.len()), LogLevel::Verbose);
     log(format!("Model has {} body parts.", processed_mesh.body_parts.len()), LogLevel::Verbose);
 
     Ok(ProcessedData {
