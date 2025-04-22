@@ -176,10 +176,6 @@ pub const VERTEX_CACHE_SIZE: usize = 16;
 pub const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
 
 pub fn process(input: &ImputedCompilationData, file_manager: &FileManager) -> Result<ProcessedData, ProcessingDataError> {
-    if input.sequences.is_empty() {
-        return Err(ProcessingDataError::NoSequences);
-    }
-
     log("Processing Bones.", LogLevel::Debug);
     let processed_bone_data = process_bones(input, file_manager)?;
     log(format!("Model uses {} bones.", processed_bone_data.processed_bones.len()), LogLevel::Verbose);
@@ -202,6 +198,10 @@ pub fn process(input: &ImputedCompilationData, file_manager: &FileManager) -> Re
     log("Processing Sequences.", LogLevel::Debug);
     let processed_sequences = process_sequences(input, &processed_animation_data.remapped_animations)?;
     log(format!("Model has {} sequences.", processed_sequences.len()), LogLevel::Verbose);
+
+    if processed_sequences.is_empty() {
+        return Err(ProcessingDataError::NoSequences);
+    }
 
     log("Processing Mesh Data.", LogLevel::Debug);
     let processed_mesh = process_meshes(input, file_manager, &processed_bone_data)?;
