@@ -10,7 +10,7 @@ use thiserror::Error as ThisError;
 
 use crate::utilities::{
     logging::{log, LogLevel},
-    mathematics::{Vector2, Vector3},
+    mathematics::{AxisDirection, Vector2, Vector3},
 };
 
 use super::{ImportAnimation, ImportBone, ImportFileData, ImportPart, ImportVertex};
@@ -39,6 +39,8 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
     let lines = file_buffer.lines().map_while(Result::ok);
 
     let mut file_data = ImportFileData {
+        up: AxisDirection::PositiveZ,
+        forward: AxisDirection::PositiveX,
         skeleton: IndexMap::from([(String::from("default"), ImportBone::default())]),
         animations: IndexMap::from([(
             file_path.file_stem().unwrap().to_string_lossy().to_string(),

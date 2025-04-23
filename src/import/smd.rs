@@ -8,7 +8,7 @@ use std::{
 use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
-use crate::utilities::mathematics::{Angles, Vector2, Vector3};
+use crate::utilities::mathematics::{Angles, AxisDirection, Vector2, Vector3};
 
 use super::{ImportAnimation, ImportBone, ImportFileData, ImportFlexVertex, ImportPart, ImportVertex};
 
@@ -592,6 +592,8 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
     }
 
     Ok(ImportFileData {
+        up: AxisDirection::PositiveZ,
+        forward: AxisDirection::NegativeY,
         skeleton: import_bones,
         animations: IndexMap::from_iter([(file_path.file_stem().unwrap().to_string_lossy().to_string(), animation)]),
         parts,

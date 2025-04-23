@@ -6,7 +6,7 @@ use crate::{
     input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::Matrix4,
+        mathematics::{Matrix3, Matrix4, Vector3},
     },
 };
 
@@ -65,12 +65,20 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
                         .unwrap()
                 });
 
+                let source_transform = Matrix4::new(Matrix3::from_up_forward(imported_file.up, imported_file.forward), Vector3::default());
+                let bone_matrix = Matrix4::new(import_bone.orientation.to_matrix(), import_bone.position);
+                let bone_transform = if import_bone_parent.is_none() {
+                    source_transform.inverse() * bone_matrix
+                } else {
+                    bone_matrix
+                };
+
                 source_bone_table.insert(
                     import_bone_name.clone(),
                     ProcessedBone {
                         parent: import_bone_parent,
-                        position: import_bone.position,
-                        rotation: import_bone.orientation.to_angles(),
+                        position: bone_transform.translation(),
+                        rotation: bone_transform.rotation().to_angles(),
                         flags: bone_flags,
                         ..Default::default()
                     },
@@ -102,12 +110,20 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
                     .unwrap()
             });
 
+            let source_transform = Matrix4::new(Matrix3::from_up_forward(imported_file.up, imported_file.forward), Vector3::default());
+            let bone_matrix = Matrix4::new(import_bone.orientation.to_matrix(), import_bone.position);
+            let bone_transform = if import_bone_parent.is_none() {
+                source_transform.inverse() * bone_matrix
+            } else {
+                bone_matrix
+            };
+
             source_bone_table.insert(
                 import_bone_name.clone(),
                 ProcessedBone {
                     parent: import_bone_parent,
-                    position: import_bone.position,
-                    rotation: import_bone.orientation.to_angles(),
+                    position: bone_transform.translation(),
+                    rotation: bone_transform.rotation().to_angles(),
                     ..Default::default()
                 },
             );

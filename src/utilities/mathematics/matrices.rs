@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use super::{Angles, Quaternion, Vector3};
+use super::{Angles, AxisDirection, Quaternion, Vector3};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Matrix3([[f64; 3]; 3]);
@@ -8,6 +8,22 @@ pub struct Matrix3([[f64; 3]; 3]);
 impl Matrix3 {
     pub fn new(entries: [[f64; 3]; 3]) -> Self {
         Self(entries)
+    }
+
+    pub fn from_up_forward(up: AxisDirection, forward: AxisDirection) -> Self {
+        if forward.is_parallel(up) {
+            return Matrix3::default();
+        }
+
+        let forward_direction = forward.as_vector();
+        let up_direction = up.as_vector();
+        let left_direction = up_direction.cross(forward_direction);
+
+        Self([
+            [forward_direction[0], left_direction[0], up_direction[0]],
+            [forward_direction[1], left_direction[1], up_direction[1]],
+            [forward_direction[2], left_direction[2], up_direction[2]],
+        ])
     }
 
     pub fn to_angles(self) -> Angles {

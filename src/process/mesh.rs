@@ -222,9 +222,11 @@ fn create_triangle_lists(
                             });
                         }
 
+                        let source_transform = Matrix3::from_up_forward(imported_file.up, imported_file.forward);
+
                         let triangle_vertex = TriangleVertex {
-                            position: import_vertex.position,
-                            normal: import_vertex.normal.normalize(),
+                            position: import_vertex.position * source_transform,
+                            normal: import_vertex.normal.normalize() * source_transform,
                             texture_coordinate: Vector2::new(0.0, 1.0) - import_vertex.texture_coordinate, // For DirectX?
                             links: mapped_links,
                         };

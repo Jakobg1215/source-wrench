@@ -81,7 +81,11 @@ impl Vector3 {
     }
 
     pub fn cross(self, other: Self) -> Self {
-        Self::new(self.y * other.z - self.z * other.x, self.z * other.x, self.x * other.y - self.y * other.x)
+        Self::new(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
     }
 
     pub fn is_normalized(self) -> bool {

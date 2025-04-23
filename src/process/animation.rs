@@ -6,7 +6,7 @@ use crate::{
     input::ImputedCompilationData,
     utilities::{
         logging::{log, LogLevel},
-        mathematics::{Quaternion, Vector3},
+        mathematics::{Matrix3, Matrix4, Quaternion, Vector3},
     },
 };
 
@@ -88,8 +88,19 @@ pub fn process_animations(
                 baked_channel
             }
 
-            let position_channel = bake_channel_keyframes(&channel.position, frame_count, import_bone_data.position);
-            let rotation_channel = bake_channel_keyframes(&channel.rotation, frame_count, import_bone_data.orientation.normalize());
+            let mut position_channel = bake_channel_keyframes(&channel.position, frame_count, import_bone_data.position);
+            let mut rotation_channel = bake_channel_keyframes(&channel.rotation, frame_count, import_bone_data.orientation.normalize());
+
+            if import_bone_data.parent.is_none() {
+                let source_transform = Matrix4::new(Matrix3::from_up_forward(imported_file.up, imported_file.forward), Vector3::default());
+
+                for frame in 0..frame_count {
+                    let key_matrix = Matrix4::new(rotation_channel[frame].to_matrix(), position_channel[frame]);
+                    let key_transform = source_transform.inverse() * key_matrix;
+                    position_channel[frame] = key_transform.translation();
+                    rotation_channel[frame] = key_transform.rotation().to_quaternion();
+                }
+            }
 
             // TODO: Translate channel data to bone table.
 

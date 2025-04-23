@@ -11,7 +11,7 @@ use thiserror::Error as ThisError;
 
 use crate::utilities::{
     logging::{log, LogLevel},
-    mathematics::{Quaternion, Vector2, Vector3},
+    mathematics::{AxisDirection, Quaternion, Vector2, Vector3},
 };
 
 mod obj;
@@ -25,6 +25,8 @@ pub const SUPPORTED_FILES: [&str; 2] = ["smd", "obj"];
 /// The collection of all data from a source file.
 #[derive(Debug, Default)]
 pub struct ImportFileData {
+    pub up: AxisDirection,
+    pub forward: AxisDirection,
     /// All the bones in the source file, mapped to their name.
     pub skeleton: IndexMap<String, ImportBone>,
     /// All the animations in the source file, mapped to their name.
@@ -197,6 +199,7 @@ impl FileManager {
 
             debug_assert!(!file_data.skeleton.is_empty(), "File source must have 1 bone!");
             debug_assert!(!file_data.animations.is_empty(), "File source must have 1 animation!");
+            debug_assert!(!file_data.forward.is_parallel(file_data.up), "File Source Directions are parallel!");
 
             if let Some(entry) = files.get_mut(&file_path) {
                 entry.1 = FileStatus::Loaded(Arc::new(file_data));

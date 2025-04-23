@@ -38,6 +38,35 @@ impl BoundingBox {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+#[allow(dead_code)]
+pub enum AxisDirection {
+    #[default]
+    PositiveX,
+    NegativeX,
+    PositiveY,
+    NegativeY,
+    PositiveZ,
+    NegativeZ,
+}
+
+impl AxisDirection {
+    pub fn as_vector(self) -> Vector3 {
+        match self {
+            AxisDirection::PositiveX => Vector3::new(1.0, 0.0, 0.0),
+            AxisDirection::NegativeX => Vector3::new(-1.0, 0.0, 0.0),
+            AxisDirection::PositiveY => Vector3::new(0.0, 1.0, 0.0),
+            AxisDirection::NegativeY => Vector3::new(0.0, -1.0, 0.0),
+            AxisDirection::PositiveZ => Vector3::new(0.0, 0.0, 1.0),
+            AxisDirection::NegativeZ => Vector3::new(0.0, 0.0, -1.0),
+        }
+    }
+
+    pub fn is_parallel(self, other: Self) -> bool {
+        self.as_vector().cross(other.as_vector()).magnitude() < f64::EPSILON
+    }
+}
+
 pub fn clamp<T: PartialOrd>(value: T, minimum: T, maximum: T) -> T {
     if value < minimum {
         return minimum;
