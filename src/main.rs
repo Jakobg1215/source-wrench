@@ -41,7 +41,7 @@ impl Default for SourceWrenchApplication {
 
         let [_, _] = tree.main_surface_mut().split_below(
             main_tab,
-            0.3,
+            0.4,
             vec![SourceWrenchTabType::BodyGroups, SourceWrenchTabType::Animations, SourceWrenchTabType::Sequences],
         );
 
@@ -318,10 +318,6 @@ impl SourceWrenchTabManager<'_> {
                                     let name_label = ui.label("Model Name: ");
                                     ui.text_edit_singleline(&mut model.name).labelled_by(name_label.id);
                                     ui.horizontal(|ui| {
-                                        if ui.button("Remove Model").clicked() {
-                                            removed_models.push(**model_identifier);
-                                        }
-
                                         if ui.button("Select Model File…").clicked() {
                                             if let Some(path) = rfd::FileDialog::new()
                                                 .set_title("Select Model File")
@@ -334,6 +330,10 @@ impl SourceWrenchTabManager<'_> {
                                                 model.source_file_path = Some(path.clone());
                                                 self.loaded_files.load_file(path);
                                             }
+                                        }
+
+                                        if ui.button("Remove Model").clicked() {
+                                            removed_models.push(**model_identifier);
                                         }
                                     });
 
@@ -432,10 +432,6 @@ impl SourceWrenchTabManager<'_> {
                         ui.text_edit_singleline(&mut animation.name).labelled_by(name_label.id);
 
                         ui.horizontal(|ui| {
-                            if ui.button("Remove Animation").clicked() {
-                                removed_animations.push(**animation_identifier);
-                            }
-
                             if ui.button("Select Model File…").clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .set_title("Select Model File")
@@ -448,6 +444,10 @@ impl SourceWrenchTabManager<'_> {
                                     animation.source_file_path = Some(path.clone());
                                     self.loaded_files.load_file(path);
                                 }
+                            }
+
+                            if ui.button("Remove Animation").clicked() {
+                                removed_animations.push(**animation_identifier);
                             }
                         });
 
