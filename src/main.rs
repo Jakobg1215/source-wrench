@@ -263,6 +263,14 @@ impl SourceWrenchTabManager<'_> {
                     logging::LogLevel::Error => Color32::RED,
                 };
 
+                if matches!(level, LogLevel::Verbose) && !logger.allow_verbose {
+                    continue;
+                }
+
+                if matches!(level, LogLevel::Debug) && !logger.allow_debug {
+                    continue;
+                }
+
                 ui.colored_label(log_color, log);
                 ui.separator();
             }

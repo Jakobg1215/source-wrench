@@ -14,14 +14,6 @@ pub fn log<T: Into<String>>(message: T, level: LogLevel) {
     let log_message = message.into();
     let mut logger = LOGGER.lock().unwrap();
 
-    if matches!(level, LogLevel::Verbose) && !logger.allow_verbose {
-        return;
-    }
-
-    if matches!(level, LogLevel::Debug) && !logger.allow_debug {
-        return;
-    }
-
     let level_string = match &level {
         LogLevel::Log => "LOG",
         LogLevel::Info => "INFO",
