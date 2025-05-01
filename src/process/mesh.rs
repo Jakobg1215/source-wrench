@@ -359,8 +359,8 @@ fn calculate_vertex_tangents(triangle_list: &mut TriangleList) -> usize {
 
         if denominator.abs() < f64::EPSILON {
             for vertex_index in 0..3 {
-                tangents[face[vertex_index]] = Vector3::new(1.0, 0.0, 0.0);
-                bi_tangents[face[vertex_index]] = Vector3::new(0.0, 1.0, 0.0);
+                tangents[face[vertex_index]] = tangents[face[vertex_index]] + Vector3::new(1.0, 0.0, 0.0);
+                bi_tangents[face[vertex_index]] = bi_tangents[face[vertex_index]] + Vector3::new(0.0, 1.0, 0.0);
             }
             continue;
         }
@@ -391,16 +391,18 @@ fn calculate_vertex_tangents(triangle_list: &mut TriangleList) -> usize {
         let normalized_tangent = tangents[index].normalize();
         let normalized_bi_tangent = bi_tangents[index].normalize();
 
-        let cross_product = triangle_list.vertices[index].normal.cross(normalized_tangent);
+        let vertex_normal = triangle_list.vertices[index].normal;
+        let orthogonalized_tangent = (normalized_tangent - vertex_normal * normalized_tangent.dot(vertex_normal)).normalize();
+
+        let cross_product = vertex_normal.cross(normalized_tangent);
         let sign = if cross_product.dot(normalized_bi_tangent) < 0.0 { -1.0 } else { 1.0 };
 
-        let vertex_tangent = Vector4::new(normalized_tangent.x, normalized_tangent.y, normalized_tangent.z, sign);
+        let vertex_tangent = Vector4::new(orthogonalized_tangent.x, orthogonalized_tangent.y, orthogonalized_tangent.z, sign);
 
         triangle_list.tangents.push(vertex_tangent);
 
         // This is what source considers a bad vertex.
-        // TODO: Find a better way to calculate vertex tangents to not have bad vertices.
-        let tangent_dot = normalized_tangent.dot(triangle_list.vertices[index].normal);
+        let tangent_dot = orthogonalized_tangent.dot(vertex_normal);
         if !(-0.95..=0.95).contains(&tangent_dot) {
             bad_vertex_count += 1;
         }
