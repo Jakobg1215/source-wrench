@@ -35,19 +35,19 @@ pub fn process_animations(
     let mut remapped_animations = Vec::with_capacity(input.animations.len());
     let mut processed_animations = Vec::new();
     let mut model_frame_count = 0;
-    for (_, imputed_animation) in &input.animations {
+    for (imputed_animation_index, (_, imputed_animation)) in input.animations.iter().enumerate() {
+        remapped_animations.push(processed_animations.len());
+
         // Check if the animation is used in any sequence.
         if !input.sequences.iter().any(|(_, sequence)| {
             sequence
                 .animations
                 .iter()
-                .any(|row| row.iter().any(|animation| animation.eq(&imputed_animation.source_animation)))
+                .any(|row| row.iter().any(|&used_animation| used_animation == imputed_animation_index))
         }) {
             log(format!("Animation \"{}\" Not Used!", imputed_animation.name), LogLevel::Warn);
             continue;
         }
-
-        remapped_animations.push(processed_animations.len());
 
         // Gather imported animation data.
         let imported_file = import
