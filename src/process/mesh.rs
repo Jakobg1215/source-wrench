@@ -223,7 +223,7 @@ fn create_triangle_lists(
                         let triangle_vertex = TriangleVertex {
                             position: import_vertex.position * source_transform,
                             normal: import_vertex.normal.normalize() * source_transform,
-                            texture_coordinate: Vector2::new(0.0, 1.0) - import_vertex.texture_coordinate, // For DirectX?
+                            texture_coordinate: Vector2::new(import_vertex.texture_coordinate.x, 1.0 - import_vertex.texture_coordinate.y), // For DirectX?
                             links: mapped_links,
                         };
 
