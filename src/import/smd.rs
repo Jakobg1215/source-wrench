@@ -1,7 +1,7 @@
 use std::{
     fs::File,
-    io::{BufRead, BufReader},
-    num::NonZero,
+    io::{BufRead, BufReader, Error},
+    num::{NonZero, ParseFloatError, ParseIntError},
     path::Path,
 };
 
@@ -10,540 +10,499 @@ use thiserror::Error as ThisError;
 
 use crate::utilities::mathematics::{Angles, AxisDirection, Vector2, Vector3};
 
-use super::{ImportAnimation, ImportBone, ImportFileData, ImportFlexVertex, ImportPart, ImportVertex};
+use super::{ImportAnimation, ImportBone, ImportFileData, ImportPart, ImportVertex};
 
 #[derive(Debug, ThisError)]
 pub enum ParseSMDError {
-    #[error("Unknown Command {0} On Line {1}")]
-    UnknownCommand(String, usize),
-    #[error("Missing {0} Argument On Line {1}")]
-    MissingArgument(&'static str, usize),
-    #[error("Failed To Parse Integer On Line {0}")]
-    FailedIntegerParse(usize),
-    #[error("Invalid Version On Line {0}")]
-    InvalidVersion(usize),
-    #[error("Node Index Is Not Sequential On Line {0}")]
-    InvalidNodeIndex(usize),
-    #[error("Invalid Node Parent Index On Line {0}")]
-    InvalidNodeParentIndex(usize),
-    #[error("Invalid Frame Index {0}")]
-    InvalidFrameIndex(usize),
-    #[error("File Ended Unexpectedly")]
+    #[error("IO Error: {0}")]
+    IOError(#[from] Error),
+    #[error("Invalid Quote Delimiter At Line {0}, Column {1}")]
+    InvalidQuoteDelimiter(usize, usize),
+    #[error("Unfinished Quote Block At Line {0}, Column {1}")]
+    UnfinishedQuoteBlock(usize, usize),
+    #[error("Unexpected End Of File")]
     UnexpectedEndOfFile,
-    #[error("No Frames In File")]
-    NoBindFrame,
-    #[error("Not All Bones Specified")]
-    MissingBoneBind,
+    #[error("Missing Command Argument '{0}' On Line {1}")]
+    MissingArgument(&'static str, usize),
+    #[error("Unknown Command Argument '{0}' On Line {1}")]
+    UnknownArgument(String, usize),
+    #[error("Failed To Parse Integer Argument: {0}")]
+    ParseIntError(#[from] ParseIntError),
+    #[error("Failed To Parse Float Argument: {0}")]
+    ParseFloatError(#[from] ParseFloatError),
+    #[error("Duplicate Version Command On Line {0}")]
+    DuplicateVersionCommand(usize),
+    #[error("Missing Version Command")]
+    MissingVersionCommand,
+    #[error("Invalid Version Number {0}")]
+    InvalidVersionNumber(usize),
+    #[error("Duplicate Node Id {0} On Line {1}")]
+    DuplicateNodeId(usize, usize),
+    #[error("Invalid Node Id {0} On Line {1}")]
+    InvalidNodeId(usize, usize),
+    #[error("No Nodes Specified")]
+    NoNodesSpecified,
+    #[error("Frames Are Not Sequential On Line {0}")]
+    NonSequentialFrames(usize),
+    #[error("Missing Frame Before Nodes On Line {0}")]
+    MissingFirstFrame(usize),
+    #[error("Duplicate Node Key {0} On Line {1}")]
+    DuplicateNodeKey(usize, usize),
+    #[error("No Frames Specified")]
+    NoFramesSpecified,
+    #[error("Duplicate Node Link {0} On Line {1}")]
+    DuplicateNodeLink(usize, usize),
+    #[error("Unknown Studio Command '{0}' On Line {1}")]
+    UnknownStudioCommand(String, usize),
+    #[error("Node {0} Does Not Have A Bind On First Frame")]
+    MissingBoneBind(usize),
 }
 
 pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
-    let file = File::open(file_path).expect("This should be checked before called!");
-    let file_buffer = BufReader::new(file);
-    let mut lines = file_buffer.lines().map_while(Result::ok);
-    let mut line_count = 0;
+    let buffer = BufReader::new(File::open(file_path).unwrap());
+    let mut reader = FileReader::new(buffer);
 
-    struct SplitAtWhitespace {
-        input: String,
-    }
-
-    impl SplitAtWhitespace {
-        fn new(input: String) -> Self {
-            Self { input }
-        }
-    }
-
-    impl Iterator for SplitAtWhitespace {
-        type Item = String;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.input.is_empty() {
-                return None;
-            }
-
-            let characters = self.input.as_bytes();
-
-            let mut output = None;
-            let mut in_quotes = false;
-            let mut comment_check = false;
-            let mut in_comment = false;
-
-            let mut index = 0;
-            while index < self.input.len() {
-                let character = characters[index] as char;
-                index += 1;
-
-                if in_comment {
-                    continue;
-                }
-
-                if character.is_whitespace() {
-                    if in_quotes || output.is_none() {
-                        continue;
-                    }
-
-                    if !in_quotes && output.is_some() {
-                        break;
-                    }
-                }
-
-                match character {
-                    '"' => {
-                        if in_quotes {
-                            break;
-                        }
-
-                        in_quotes = true;
-                    }
-                    '/' => {
-                        if in_quotes {
-                            output.get_or_insert_with(String::new).push(character);
-                        }
-
-                        if comment_check {
-                            in_comment = true;
-                            continue;
-                        }
-
-                        comment_check = true;
-                    }
-                    ';' | '#' => {
-                        if in_quotes {
-                            output.get_or_insert_with(String::new).push(character);
-                            continue;
-                        }
-
-                        in_comment = true;
-                    }
-                    char => {
-                        output.get_or_insert_with(String::new).push(char);
-                        comment_check = false;
-                    }
-                }
-            }
-
-            self.input.drain(..index);
-
-            output
-        }
-    }
+    let mut version = None;
+    let mut nodes = IndexMap::new();
+    let mut frames = Vec::new();
+    let mut triangles = IndexMap::new();
 
     struct Node {
         name: String,
         parent: Option<usize>,
     }
 
-    let mut nodes = Vec::new();
-
-    struct KeyFrame {
+    struct Key {
         position: Vector3,
         rotation: Angles,
     }
-
-    let mut frames = Vec::new();
 
     struct Vertex {
         position: Vector3,
         normal: Vector3,
         texture_coordinate: Vector2,
         links: IndexMap<usize, f64>,
+        #[allow(dead_code)]
+        extra_texture_coordinates: Vec<Vector2>,
     }
 
-    let mut triangles: IndexMap<String, Vec<[Vertex; 3]>> = IndexMap::new();
+    while let Some(token) = reader.next_token(false)? {
+        if let Some(token_string) = token.get_string() {
+            match token_string.as_str() {
+                "version" => {
+                    if version.is_some() {
+                        return Err(ParseSMDError::DuplicateVersionCommand(reader.line));
+                    }
+                    let version_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                    let version_string = version_token
+                        .get_string()
+                        .ok_or(ParseSMDError::MissingArgument("Version Number", reader.line))?;
+                    let version_number = version_string.parse()?;
+                    if !(1..=3).contains(&version_number) {
+                        return Err(ParseSMDError::InvalidVersionNumber(version_number));
+                    }
+                    version = Some(version_number);
 
-    struct FlexVertex {
-        position: Vector3,
-        normal: Vector3,
-    }
-
-    let mut flexes = Vec::new();
-
-    while let Some(line) = lines.next() {
-        line_count += 1;
-
-        let mut line_arguments = SplitAtWhitespace::new(line);
-        let command = match line_arguments.next() {
-            Some(command) => command,
-            None => continue,
-        };
-
-        match command.as_str() {
-            "version" => {
-                let version = line_arguments
-                    .next()
-                    .ok_or(ParseSMDError::MissingArgument("Version", line_count))?
-                    .parse::<isize>()
-                    .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?;
-
-                if !(1..=2).contains(&version) {
-                    return Err(ParseSMDError::InvalidVersion(line_count));
+                    if let Some(check_token) = reader.next_token(false)? {
+                        if let Some(check_token_string) = check_token.get_string() {
+                            return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                        }
+                    }
                 }
-            }
-            "nodes" => {
-                for line in lines.by_ref() {
-                    line_count += 1;
-
-                    if line.starts_with("end") {
-                        break;
+                "nodes" => {
+                    if version.is_none() {
+                        return Err(ParseSMDError::MissingVersionCommand);
                     }
 
-                    let mut line_arguments = SplitAtWhitespace::new(line);
+                    loop {
+                        let token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                        if let Some(token_string) = token.get_string() {
+                            if token_string == "end" {
+                                break;
+                            }
 
-                    let node_index = match line_arguments.next() {
-                        Some(index) => index.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        None => continue,
-                    };
+                            let node_id = token_string.parse()?;
 
-                    if node_index != nodes.len() {
-                        return Err(ParseSMDError::InvalidNodeIndex(line_count));
-                    }
+                            if nodes.contains_key(&node_id) {
+                                return Err(ParseSMDError::DuplicateNodeId(node_id, reader.line));
+                            }
 
-                    let node_name = line_arguments.next().ok_or(ParseSMDError::MissingArgument("Node Name", line_count))?;
+                            let name_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let node_name = name_token.get_string().ok_or(ParseSMDError::MissingArgument("Node name", reader.line))?;
 
-                    let node_parent = match line_arguments.next() {
-                        Some(index) => {
-                            if index.starts_with('-') {
-                                None
-                            } else {
-                                Some(index.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?)
+                            let parent_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let parent_string = parent_token.get_string().ok_or(ParseSMDError::MissingArgument("Node Parent", reader.line))?;
+                            let node_parent = if parent_string.eq("-1") { None } else { Some(parent_string.parse()?) };
+
+                            if let Some(parent) = node_parent {
+                                if !nodes.contains_key(&parent) {
+                                    return Err(ParseSMDError::InvalidNodeId(node_id, reader.line));
+                                }
+                            }
+
+                            nodes.insert(
+                                node_id,
+                                Node {
+                                    name: node_name,
+                                    parent: node_parent,
+                                },
+                            );
+
+                            if let Some(check_token) = reader.next_token(false)? {
+                                if let Some(check_token_string) = check_token.get_string() {
+                                    return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                                }
                             }
                         }
-                        None => return Err(ParseSMDError::MissingArgument("Node Parent", line_count)),
-                    };
-
-                    if node_parent.is_some() && node_parent.unwrap() > nodes.len() {
-                        return Err(ParseSMDError::InvalidNodeParentIndex(line_count));
                     }
-
-                    nodes.push(Node {
-                        name: node_name,
-                        parent: node_parent,
-                    });
                 }
-            }
-            "skeleton" => {
-                for line in lines.by_ref() {
-                    line_count += 1;
-
-                    if line.starts_with("end") {
-                        break;
+                "skeleton" => {
+                    if version.is_none() {
+                        return Err(ParseSMDError::MissingVersionCommand);
                     }
 
-                    let mut line_arguments = SplitAtWhitespace::new(line);
+                    if nodes.is_empty() {
+                        return Err(ParseSMDError::NoNodesSpecified);
+                    }
 
-                    let node_index = match line_arguments.next() {
-                        Some(index) => {
-                            if index.starts_with("time") {
-                                match line_arguments.next() {
-                                    Some(time) => {
-                                        let time = time.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?;
-                                        if time != frames.len() {
-                                            return Err(ParseSMDError::InvalidFrameIndex(line_count));
-                                        }
-                                        frames.push(IndexMap::new());
-                                        continue;
+                    loop {
+                        let token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                        if let Some(token_string) = token.get_string() {
+                            if token_string == "end" {
+                                break;
+                            }
+
+                            if token_string == "time" {
+                                let frame_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                let frame_string = frame_token.get_string().ok_or(ParseSMDError::MissingArgument("Frame Number", reader.line))?;
+                                let frame_number = frame_string.parse()?;
+
+                                if frames.len() != frame_number {
+                                    return Err(ParseSMDError::NonSequentialFrames(reader.line));
+                                }
+
+                                frames.push(IndexMap::new());
+                                continue;
+                            }
+
+                            let node_id = token_string.parse::<usize>()?;
+
+                            if !nodes.contains_key(&node_id) {
+                                return Err(ParseSMDError::InvalidNodeId(node_id, reader.line));
+                            }
+
+                            let last_frame = frames.last_mut().ok_or(ParseSMDError::MissingFirstFrame(reader.line))?;
+
+                            if last_frame.contains_key(&node_id) {
+                                return Err(ParseSMDError::DuplicateNodeKey(node_id, reader.line));
+                            }
+
+                            let position_x_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let position_x_string = position_x_token.get_string().ok_or(ParseSMDError::MissingArgument("Position X", reader.line))?;
+                            let position_x = position_x_string.parse()?;
+
+                            let position_y_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let position_y_string = position_y_token.get_string().ok_or(ParseSMDError::MissingArgument("Position Y", reader.line))?;
+                            let position_y = position_y_string.parse()?;
+
+                            let position_z_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let position_z_string = position_z_token.get_string().ok_or(ParseSMDError::MissingArgument("Position Z", reader.line))?;
+                            let position_z = position_z_string.parse()?;
+
+                            let rotation_x_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let rotation_x_string = rotation_x_token.get_string().ok_or(ParseSMDError::MissingArgument("Rotation X", reader.line))?;
+                            let rotation_x = rotation_x_string.parse()?;
+
+                            let rotation_y_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let rotation_y_string = rotation_y_token.get_string().ok_or(ParseSMDError::MissingArgument("Rotation Y", reader.line))?;
+                            let rotation_y = rotation_y_string.parse()?;
+
+                            let rotation_z_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                            let rotation_z_string = rotation_z_token.get_string().ok_or(ParseSMDError::MissingArgument("Rotation Z", reader.line))?;
+                            let rotation_z = rotation_z_string.parse()?;
+
+                            last_frame.insert(
+                                node_id,
+                                Key {
+                                    position: Vector3::new(position_x, position_y, position_z),
+                                    rotation: Angles::new(rotation_x, rotation_y, rotation_z),
+                                },
+                            );
+
+                            if let Some(check_token) = reader.next_token(false)? {
+                                if let Some(check_token_string) = check_token.get_string() {
+                                    return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                                }
+                            }
+                        }
+                    }
+                }
+                "triangles" => {
+                    if version.is_none() {
+                        return Err(ParseSMDError::MissingVersionCommand);
+                    }
+
+                    if nodes.is_empty() {
+                        return Err(ParseSMDError::NoNodesSpecified);
+                    }
+
+                    if frames.is_empty() {
+                        return Err(ParseSMDError::NoFramesSpecified);
+                    }
+
+                    loop {
+                        let token = reader.next_token(true)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+
+                        if let Some(token_string) = token.get_string() {
+                            if token_string.is_empty() {
+                                continue;
+                            }
+                            if token_string == "end" {
+                                break;
+                            }
+
+                            let mut vertices = Vec::with_capacity(3);
+
+                            if let Some(check_token) = reader.next_token(false)? {
+                                if let Some(check_token_string) = check_token.get_string() {
+                                    return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                                }
+                            }
+
+                            loop {
+                                if vertices.len() == 3 {
+                                    break;
+                                }
+
+                                let token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+
+                                if let Some(token_string) = token.get_string() {
+                                    let node_id = token_string.parse::<usize>()?;
+
+                                    if !nodes.contains_key(&node_id) {
+                                        return Err(ParseSMDError::InvalidNodeId(node_id, reader.line));
                                     }
-                                    None => return Err(ParseSMDError::MissingArgument("Time", line_count)),
-                                }
-                            }
 
-                            index.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?
-                        }
-                        None => continue,
-                    };
+                                    let position_x_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let position_x_string = position_x_token.get_string().ok_or(ParseSMDError::MissingArgument("Position X", reader.line))?;
+                                    let position_x = position_x_string.parse()?;
 
-                    if node_index > nodes.len() {
-                        return Err(ParseSMDError::InvalidNodeIndex(line_count));
-                    }
+                                    let position_y_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let position_y_string = position_y_token.get_string().ok_or(ParseSMDError::MissingArgument("Position Y", reader.line))?;
+                                    let position_y = position_y_string.parse()?;
 
-                    let position = Vector3::new(
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Position X", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Position Y", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Position Z", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                    );
+                                    let position_z_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let position_z_string = position_z_token.get_string().ok_or(ParseSMDError::MissingArgument("Position Z", reader.line))?;
+                                    let position_z = position_z_string.parse()?;
 
-                    let rotation = Angles::new(
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Rotation X", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Rotation Y", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Rotation Z", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                    );
+                                    let normal_x_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let normal_x_string = normal_x_token.get_string().ok_or(ParseSMDError::MissingArgument("Normal X", reader.line))?;
+                                    let normal_x = normal_x_string.parse()?;
 
-                    let previous_frame = frames.last_mut().unwrap();
-                    previous_frame.insert(node_index, KeyFrame { position, rotation });
-                }
-            }
-            "triangles" => {
-                while let Some(line) = lines.next() {
-                    line_count += 1;
+                                    let normal_y_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let normal_y_string = normal_y_token.get_string().ok_or(ParseSMDError::MissingArgument("Normal Y", reader.line))?;
+                                    let normal_y = normal_y_string.parse()?;
 
-                    if line.starts_with("end") {
-                        break;
-                    }
+                                    let normal_z_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let normal_z_string = normal_z_token.get_string().ok_or(ParseSMDError::MissingArgument("Normal Z", reader.line))?;
+                                    let normal_z = normal_z_string.parse()?;
 
-                    let mut line_arguments = SplitAtWhitespace::new(line);
+                                    let texture_coordinate_u_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let texture_coordinate_u_string = texture_coordinate_u_token
+                                        .get_string()
+                                        .ok_or(ParseSMDError::MissingArgument("Texture Coordinate U", reader.line))?;
+                                    let texture_coordinate_u = texture_coordinate_u_string.parse()?;
 
-                    let material = match line_arguments.next() {
-                        Some(material) => material,
-                        None => continue,
-                    };
+                                    let texture_coordinate_v_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                    let texture_coordinate_v_string = texture_coordinate_v_token
+                                        .get_string()
+                                        .ok_or(ParseSMDError::MissingArgument("Texture Coordinate V", reader.line))?;
+                                    let texture_coordinate_v = texture_coordinate_v_string.parse()?;
 
-                    fn parse_vertex(lines: &mut impl Iterator<Item = String>, line_count: &mut usize, node_count: usize) -> Result<Vertex, ParseSMDError> {
-                        for line in lines {
-                            *line_count += 1;
+                                    if let Some(link_count_token) = reader.next_token(false)? {
+                                        if let Some(link_count_string) = link_count_token.get_string() {
+                                            let link_count = link_count_string.parse()?;
+                                            let mut links = IndexMap::with_capacity(link_count);
 
-                            let mut line_arguments = SplitAtWhitespace::new(line);
+                                            for _ in 0..link_count {
+                                                let link_id_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                                let link_id_token_string =
+                                                    link_id_token.get_string().ok_or(ParseSMDError::MissingArgument("Link Id", reader.line))?;
+                                                let link_id = link_id_token_string.parse()?;
 
-                            let node_index = match line_arguments.next() {
-                                Some(index) => index.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                None => continue,
-                            };
+                                                if !nodes.contains_key(&link_id) {
+                                                    return Err(ParseSMDError::InvalidNodeId(node_id, reader.line));
+                                                }
 
-                            if node_index > node_count {
-                                return Err(ParseSMDError::InvalidNodeIndex(*line_count));
-                            }
+                                                if links.contains_key(&link_id) {
+                                                    return Err(ParseSMDError::DuplicateNodeLink(node_id, reader.line));
+                                                }
 
-                            let position = Vector3::new(
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Position X", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Position Y", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Position Z", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                            );
+                                                let link_weight_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                                let link_weight_token_string = link_weight_token
+                                                    .get_string()
+                                                    .ok_or(ParseSMDError::MissingArgument("Link Weight", reader.line))?;
+                                                let link_weight = link_weight_token_string.parse()?;
 
-                            let normal = Vector3::new(
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Normal X", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Normal Y", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Normal Z", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                            );
+                                                links.insert(link_id, link_weight);
+                                            }
 
-                            let texture_coordinate = Vector2::new(
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Texture Coordinate X", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                line_arguments
-                                    .next()
-                                    .ok_or(ParseSMDError::MissingArgument("Texture Coordinate Y", *line_count))?
-                                    .parse::<f64>()
-                                    .map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                            );
+                                            let weight_count = links.values().sum::<f64>();
 
-                            let mut vertex = Vertex {
-                                position,
-                                normal,
-                                texture_coordinate,
-                                links: IndexMap::new(),
-                            };
+                                            if version.unwrap() < 3 {
+                                                if weight_count == 0.0 {
+                                                    vertices.push(Vertex {
+                                                        position: Vector3::new(position_x, position_y, position_z),
+                                                        normal: Vector3::new(normal_x, normal_y, normal_z),
+                                                        texture_coordinate: Vector2::new(texture_coordinate_u, texture_coordinate_v),
+                                                        links: IndexMap::from([(node_id, 1.0)]),
+                                                        extra_texture_coordinates: Vec::new(),
+                                                    });
+                                                    if let Some(check_token) = reader.next_token(false)? {
+                                                        if let Some(check_token_string) = check_token.get_string() {
+                                                            return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                                                        }
+                                                    }
+                                                    continue;
+                                                }
 
-                            let link_count = match line_arguments.next() {
-                                Some(count) => count.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                None => {
-                                    vertex.links.insert(node_index, 1.0);
-                                    return Ok(vertex);
-                                }
-                            };
+                                                vertices.push(Vertex {
+                                                    position: Vector3::new(position_x, position_y, position_z),
+                                                    normal: Vector3::new(normal_x, normal_y, normal_z),
+                                                    texture_coordinate: Vector2::new(texture_coordinate_u, texture_coordinate_v),
+                                                    links,
+                                                    extra_texture_coordinates: Vec::new(),
+                                                });
+                                                if let Some(check_token) = reader.next_token(false)? {
+                                                    if let Some(check_token_string) = check_token.get_string() {
+                                                        return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                                                    }
+                                                }
+                                                continue;
+                                            }
 
-                            if link_count == 0 {
-                                vertex.links.insert(node_index, 1.0);
-                                return Ok(vertex);
-                            }
+                                            if let Some(extra_texture_coordinates_token) = reader.next_token(false)? {
+                                                if let Some(extra_texture_coordinates_string) = extra_texture_coordinates_token.get_string() {
+                                                    let extra_texture_coordinate_count = extra_texture_coordinates_string.parse()?;
+                                                    let mut extra_texture_coordinates = Vec::with_capacity(extra_texture_coordinate_count);
 
-                            for _ in 0..link_count {
-                                let node_index = match line_arguments.next() {
-                                    Some(index) => index.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                    None => return Err(ParseSMDError::MissingArgument("Link Node", *line_count)),
-                                };
+                                                    for _ in 0..extra_texture_coordinate_count {
+                                                        let extra_texture_coordinate_u_token =
+                                                            reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                                        let extra_texture_coordinate_u_string = extra_texture_coordinate_u_token
+                                                            .get_string()
+                                                            .ok_or(ParseSMDError::MissingArgument("Extra Texture Coordinate U", reader.line))?;
+                                                        let extra_texture_coordinate_u = extra_texture_coordinate_u_string.parse()?;
 
-                                if node_index > node_count {
-                                    return Err(ParseSMDError::InvalidNodeIndex(*line_count));
-                                }
+                                                        let extra_texture_coordinate_v_token =
+                                                            reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
+                                                        let extra_texture_coordinate_v_string = extra_texture_coordinate_v_token
+                                                            .get_string()
+                                                            .ok_or(ParseSMDError::MissingArgument("Extra Texture Coordinate V", reader.line))?;
+                                                        let extra_texture_coordinate_v = extra_texture_coordinate_v_string.parse()?;
 
-                                let weight = match line_arguments.next() {
-                                    Some(weight) => weight.parse::<f64>().map_err(|_| ParseSMDError::FailedIntegerParse(*line_count))?,
-                                    None => return Err(ParseSMDError::MissingArgument("Link Weight", *line_count)),
-                                };
+                                                        extra_texture_coordinates.push(Vector2::new(extra_texture_coordinate_u, extra_texture_coordinate_v));
+                                                    }
 
-                                vertex.links.insert(node_index, weight);
-                            }
+                                                    if weight_count == 0.0 {
+                                                        vertices.push(Vertex {
+                                                            position: Vector3::new(position_x, position_y, position_z),
+                                                            normal: Vector3::new(normal_x, normal_y, normal_z),
+                                                            texture_coordinate: Vector2::new(texture_coordinate_u, texture_coordinate_v),
+                                                            links: IndexMap::from([(node_id, 1.0)]),
+                                                            extra_texture_coordinates,
+                                                        });
+                                                        if let Some(check_token) = reader.next_token(false)? {
+                                                            if let Some(check_token_string) = check_token.get_string() {
+                                                                return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                                                            }
+                                                        }
+                                                        continue;
+                                                    }
 
-                            return Ok(vertex);
-                        }
-                        Err(ParseSMDError::UnexpectedEndOfFile)
-                    }
+                                                    vertices.push(Vertex {
+                                                        position: Vector3::new(position_x, position_y, position_z),
+                                                        normal: Vector3::new(normal_x, normal_y, normal_z),
+                                                        texture_coordinate: Vector2::new(texture_coordinate_u, texture_coordinate_v),
+                                                        links,
+                                                        extra_texture_coordinates,
+                                                    });
+                                                    if let Some(check_token) = reader.next_token(false)? {
+                                                        if let Some(check_token_string) = check_token.get_string() {
+                                                            return Err(ParseSMDError::UnknownArgument(check_token_string, reader.line));
+                                                        }
+                                                    }
+                                                    continue;
+                                                }
+                                            }
 
-                    let triangle = [
-                        parse_vertex(lines.by_ref(), &mut line_count, nodes.len())?,
-                        parse_vertex(lines.by_ref(), &mut line_count, nodes.len())?,
-                        parse_vertex(lines.by_ref(), &mut line_count, nodes.len())?,
-                    ];
+                                            if weight_count == 0.0 {
+                                                vertices.push(Vertex {
+                                                    position: Vector3::new(position_x, position_y, position_z),
+                                                    normal: Vector3::new(normal_x, normal_y, normal_z),
+                                                    texture_coordinate: Vector2::new(texture_coordinate_u, texture_coordinate_v),
+                                                    links: IndexMap::from([(node_id, 1.0)]),
+                                                    extra_texture_coordinates: Vec::new(),
+                                                });
+                                                continue;
+                                            }
 
-                    let triangle_list = triangles.entry(material).or_default();
-                    triangle_list.push(triangle);
-                }
-            }
-            "vertexanimation" => {
-                for line in lines.by_ref() {
-                    line_count += 1;
-
-                    if line.starts_with("end") {
-                        break;
-                    }
-
-                    let mut line_arguments = SplitAtWhitespace::new(line);
-
-                    let vertex_index = match line_arguments.next() {
-                        Some(index) => {
-                            if index.starts_with("time") {
-                                match line_arguments.next() {
-                                    Some(time) => {
-                                        let time = time.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?;
-                                        if time != frames.len() {
-                                            return Err(ParseSMDError::InvalidFrameIndex(line_count));
+                                            vertices.push(Vertex {
+                                                position: Vector3::new(position_x, position_y, position_z),
+                                                normal: Vector3::new(normal_x, normal_y, normal_z),
+                                                texture_coordinate: Vector2::new(texture_coordinate_u, texture_coordinate_v),
+                                                links,
+                                                extra_texture_coordinates: Vec::new(),
+                                            });
+                                            continue;
                                         }
-                                        flexes.push(IndexMap::new());
-                                        continue;
                                     }
-                                    None => return Err(ParseSMDError::MissingArgument("Time", line_count)),
+
+                                    vertices.push(Vertex {
+                                        position: Vector3::new(position_x, position_y, position_z),
+                                        normal: Vector3::new(normal_x, normal_y, normal_z),
+                                        texture_coordinate: Vector2::new(texture_coordinate_u, texture_coordinate_v),
+                                        links: IndexMap::from([(node_id, 1.0)]),
+                                        extra_texture_coordinates: Vec::new(),
+                                    });
                                 }
                             }
 
-                            index.parse::<usize>().map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?
+                            let vertex3 = vertices.pop().unwrap();
+                            let vertex2 = vertices.pop().unwrap();
+                            let vertex1 = vertices.pop().unwrap();
+
+                            let material: &mut Vec<[Vertex; 3]> = triangles.entry(token_string).or_default();
+                            material.push([vertex1, vertex2, vertex3]);
                         }
-                        None => continue,
-                    };
-
-                    let position = Vector3::new(
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Position X", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Position Y", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Position Z", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                    );
-
-                    let normal = Vector3::new(
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Normal X", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Normal Y", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                        line_arguments
-                            .next()
-                            .ok_or(ParseSMDError::MissingArgument("Normal Z", line_count))?
-                            .parse::<f64>()
-                            .map_err(|_| ParseSMDError::FailedIntegerParse(line_count))?,
-                    );
-
-                    let previous_flex = flexes.last_mut().unwrap();
-                    previous_flex.insert(vertex_index, FlexVertex { position, normal });
+                    }
+                }
+                _ => {
+                    return Err(ParseSMDError::UnknownStudioCommand(token_string, reader.line));
                 }
             }
-            _ => return Err(ParseSMDError::UnknownCommand(command, line_count)),
         }
     }
 
-    if !flexes.is_empty() {
-        let mut flex_part = ImportPart::default();
-
-        for (frame, flex) in flexes.into_iter().enumerate() {
-            let mut import_flex = IndexMap::with_capacity(flex.len());
-
-            for (vertex_index, flex_data) in flex {
-                import_flex.insert(
-                    vertex_index,
-                    ImportFlexVertex {
-                        position: flex_data.position,
-                        normal: flex_data.normal,
-                    },
-                );
-            }
-
-            flex_part.flexes.insert(format!("frame{}", frame), import_flex);
-        }
-
-        return Ok(ImportFileData {
-            parts: IndexMap::from([(file_path.file_stem().unwrap().to_string_lossy().to_string(), flex_part)]),
-            ..Default::default()
-        });
+    if nodes.is_empty() {
+        return Err(ParseSMDError::NoNodesSpecified);
     }
 
     if frames.is_empty() {
-        return Err(ParseSMDError::NoBindFrame);
-    }
-
-    if frames[0].len() != nodes.len() {
-        return Err(ParseSMDError::MissingBoneBind);
+        return Err(ParseSMDError::NoFramesSpecified);
     }
 
     let bind_frame = &frames[0];
     let mut import_bones = IndexMap::with_capacity(nodes.len());
-    for (id, node) in nodes.into_iter().enumerate() {
-        let bind_pose = bind_frame.get(&id).unwrap();
+    let mut node_remap = IndexMap::with_capacity(nodes.len());
+    for (id, node) in nodes {
+        let bind_pose = bind_frame.get(&id).ok_or(ParseSMDError::MissingBoneBind(id))?;
+        node_remap.insert(id, import_bones.len());
 
         import_bones.insert(
             node.name,
             ImportBone {
-                parent: node.parent,
+                parent: node.parent.map(|parent_id| *node_remap.get(&parent_id).unwrap()),
                 position: bind_pose.position,
                 orientation: bind_pose.rotation.to_quaternion(),
             },
@@ -556,7 +515,8 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
     };
 
     for (frame, keys) in frames.into_iter().enumerate() {
-        for (bone, key) in keys {
+        for (node, key) in keys {
+            let bone = *node_remap.get(&node).unwrap();
             let channel = animation.channels.entry(bone).or_default();
             channel.position.insert(frame, key.position);
             channel.rotation.insert(frame, key.rotation.to_quaternion());
@@ -598,4 +558,187 @@ pub fn load_smd(file_path: &Path) -> Result<ImportFileData, ParseSMDError> {
         animations: IndexMap::from_iter([(file_path.file_stem().unwrap().to_string_lossy().to_string(), animation)]),
         parts,
     })
+}
+
+struct FileReader<B: BufRead> {
+    buffer: B,
+    current_line: String,
+    line: usize,
+    column: usize,
+}
+
+enum ReadToken {
+    Text(String),
+    Quoted(String),
+    Comment,
+    LineEnd,
+}
+
+impl ReadToken {
+    fn get_string(self) -> Option<String> {
+        match self {
+            Self::Text(text) => Some(text),
+            Self::Quoted(quote) => Some(quote),
+            Self::Comment => None,
+            Self::LineEnd => None,
+        }
+    }
+}
+
+impl<B: BufRead> FileReader<B> {
+    fn new(buffer: B) -> Self {
+        Self {
+            buffer,
+            current_line: String::new(),
+            line: 0,
+            column: 0,
+        }
+    }
+
+    fn next_token(&mut self, greedy: bool) -> Result<Option<ReadToken>, ParseSMDError> {
+        if self.current_line.len() == self.column {
+            let new_line = match self.next_line()? {
+                Some(line) => line,
+                None => return Ok(None),
+            };
+            self.current_line = new_line;
+            self.line += 1;
+            self.column = 0;
+            return Ok(Some(ReadToken::LineEnd));
+        }
+
+        let mut line_characters = self.current_line[self.column..].chars();
+        let mut token = None;
+
+        loop {
+            let current_character = line_characters.next();
+            self.column += 1;
+            match current_character {
+                Some(';') => {
+                    if matches!(token, Some(ReadToken::Comment)) {
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Quoted(ref mut quote)) = token {
+                        quote.push(';');
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Text(_)) = token {
+                        self.column -= 1;
+                        break;
+                    }
+
+                    token = Some(ReadToken::Comment);
+                }
+                Some('#') => {
+                    if matches!(token, Some(ReadToken::Comment)) {
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Quoted(ref mut quote)) = token {
+                        quote.push('#');
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Text(_)) = token {
+                        self.column -= 1;
+                        break;
+                    }
+
+                    token = Some(ReadToken::Comment);
+                }
+                Some('/') => {
+                    if matches!(token, Some(ReadToken::Comment)) {
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Quoted(ref mut quote)) = token {
+                        quote.push('/');
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Text(ref mut text)) = token {
+                        if matches!(text.chars().last(), Some('/')) {
+                            text.pop();
+                            self.column -= 2;
+                            break;
+                        }
+                        text.push('/');
+                        continue;
+                    }
+
+                    token = Some(ReadToken::Comment);
+                }
+                Some('"') => {
+                    if matches!(token, Some(ReadToken::Text(_))) {
+                        return Err(ParseSMDError::InvalidQuoteDelimiter(self.line, self.column));
+                    }
+
+                    if matches!(token, Some(ReadToken::Quoted(_))) {
+                        break;
+                    }
+
+                    token = Some(ReadToken::Quoted(String::with_capacity(32)));
+                }
+                Some(character) => {
+                    if matches!(token, Some(ReadToken::Comment)) {
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Quoted(ref mut quote)) = token {
+                        quote.push(character);
+                        continue;
+                    }
+
+                    if let Some(ReadToken::Text(ref mut text)) = token {
+                        if character.is_whitespace() && !greedy {
+                            self.column -= 1;
+                            break;
+                        }
+
+                        text.push(character);
+                        continue;
+                    }
+
+                    if character.is_whitespace() && !greedy {
+                        continue;
+                    }
+
+                    let mut text = String::with_capacity(32);
+                    text.push(character);
+                    token = Some(ReadToken::Text(text));
+                }
+                None => {
+                    if matches!(token, Some(ReadToken::Quoted(_))) {
+                        return Err(ParseSMDError::UnfinishedQuoteBlock(self.line, self.column));
+                    }
+
+                    if token.is_none() {
+                        token = Some(ReadToken::LineEnd);
+                    }
+
+                    self.column -= 1;
+                    break;
+                }
+            }
+        }
+
+        Ok(token)
+    }
+
+    fn next_line(&mut self) -> Result<Option<String>, ParseSMDError> {
+        let mut line = String::new();
+        let byte_count = self.buffer.read_line(&mut line)?;
+        if byte_count == 0 {
+            return Ok(None);
+        }
+        if line.ends_with('\n') {
+            line.pop();
+            if line.ends_with('\r') {
+                line.pop();
+            }
+        }
+        Ok(Some(line))
+    }
 }

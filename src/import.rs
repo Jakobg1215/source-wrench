@@ -90,6 +90,7 @@ pub struct ImportPart {
     /// List of flex data, mapped to their name.
     ///
     /// A flex stores a list of indexes that map into [`vertices`][Self::vertices] that are flexed.
+    #[allow(dead_code)]
     pub flexes: IndexMap<String, IndexMap<usize, ImportFlexVertex>>,
 }
 
