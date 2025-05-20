@@ -7,7 +7,7 @@ mod ui;
 mod utilities;
 mod write;
 
-use eframe::egui::{self, Color32};
+use eframe::egui;
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1440.0, 720.0]).with_drag_and_drop(false),
@@ -35,15 +35,15 @@ impl Default for SourceWrenchApplication {
     fn default() -> Self {
         let mut tree = DockState::new(vec![SourceWrenchTabType::Main]);
 
-        let [main_tab, _] = tree
+        let [main_tab, logging_tab] = tree
             .main_surface_mut()
             .split_right(egui_dock::NodeIndex::root(), 0.5, vec![SourceWrenchTabType::Logging]);
 
-        let [_, _] = tree.main_surface_mut().split_below(
-            main_tab,
-            0.4,
-            vec![SourceWrenchTabType::BodyGroups, SourceWrenchTabType::Animations, SourceWrenchTabType::Sequences],
-        );
+        let [_, _] = tree.main_surface_mut().split_below(main_tab, 0.35, vec![SourceWrenchTabType::BodyGroups]);
+
+        let [_, _] = tree
+            .main_surface_mut()
+            .split_below(logging_tab, 0.35, vec![SourceWrenchTabType::Animations, SourceWrenchTabType::Sequences]);
 
         Self {
             tab_tree: tree,
@@ -64,7 +64,8 @@ impl eframe::App for SourceWrenchApplication {
         egui_dock::DockArea::new(&mut self.tab_tree)
             .style(egui_dock::Style::from_egui(ctx.style().as_ref()))
             .show_leaf_close_all_buttons(false)
-            .show_leaf_collapse_buttons(false)
+            .show_add_buttons(true)
+            .show_add_popup(true)
             .show(
                 ctx,
                 &mut SourceWrenchTabManager {
@@ -77,10 +78,10 @@ impl eframe::App for SourceWrenchApplication {
             );
 
         new_tabs.drain(..).for_each(|tab| {
-            let existing_tab = self.tab_tree.iter_all_tabs().find(|(_, tab_type)| **tab_type == tab);
+            let existing_tab = self.tab_tree.find_tab(&tab);
 
-            if let Some(((existing_surface, existing_node), _)) = existing_tab {
-                self.tab_tree.set_focused_node_and_surface((existing_surface, existing_node)); // FIXME: This does not select a tab in a window.
+            if let Some(existing_tab) = existing_tab {
+                self.tab_tree.set_active_tab(existing_tab);
                 return;
             }
 
@@ -98,6 +99,12 @@ enum SourceWrenchTabType {
     Sequences,
 }
 
+impl SourceWrenchTabType {
+    fn all_closeable_variants() -> Vec<Self> {
+        vec![Self::BodyGroups, Self::Animations, Self::Sequences]
+    }
+}
+
 struct SourceWrenchTabManager<'a> {
     new_tabs: &'a mut Vec<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
@@ -113,9 +120,9 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
         match &tab {
             SourceWrenchTabType::Main => String::from("Main").into(),
             SourceWrenchTabType::Logging => String::from("Log").into(),
-            SourceWrenchTabType::BodyGroups => String::from("Body Group").into(),
-            SourceWrenchTabType::Animations => String::from("Animation").into(),
-            SourceWrenchTabType::Sequences => String::from("Sequence").into(),
+            SourceWrenchTabType::BodyGroups => String::from("Body Groups").into(),
+            SourceWrenchTabType::Animations => String::from("Animations").into(),
+            SourceWrenchTabType::Sequences => String::from("Sequences").into(),
         }
     }
 
@@ -135,6 +142,18 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
 
     fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
         !matches!(tab, SourceWrenchTabType::Main | SourceWrenchTabType::Logging)
+    }
+
+    fn add_popup(&mut self, ui: &mut egui::Ui, _surface: egui_dock::SurfaceIndex, _node: egui_dock::NodeIndex) {
+        ui.set_min_width(100.0);
+        ui.style_mut().visuals.button_frame = false;
+
+        // TODO: Only show the ones that are missing.
+        for mut tab in SourceWrenchTabType::all_closeable_variants() {
+            if ui.button(self.title(&mut tab)).clicked() {
+                self.new_tabs.push(tab);
+            }
+        }
     }
 }
 
@@ -220,18 +239,6 @@ impl SourceWrenchTabManager<'_> {
                 });
             }
         }
-
-        if ui.button("Body Groups").clicked() {
-            self.new_tabs.push(SourceWrenchTabType::BodyGroups);
-        }
-
-        if ui.button("Animations").clicked() {
-            self.new_tabs.push(SourceWrenchTabType::Animations);
-        }
-
-        if ui.button("Sequences").clicked() {
-            self.new_tabs.push(SourceWrenchTabType::Sequences);
-        }
     }
 
     fn render_logging(&mut self, ui: &mut egui::Ui) {
@@ -255,12 +262,12 @@ impl SourceWrenchTabManager<'_> {
         egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom(true).show(ui, |ui| {
             for (log, level) in &logger.logs {
                 let log_color = match level {
-                    logging::LogLevel::Log => Color32::GRAY,
-                    logging::LogLevel::Info => Color32::DARK_GREEN,
-                    logging::LogLevel::Verbose => Color32::MAGENTA,
-                    logging::LogLevel::Debug => Color32::CYAN,
-                    logging::LogLevel::Warn => Color32::YELLOW,
-                    logging::LogLevel::Error => Color32::RED,
+                    logging::LogLevel::Log => egui::Color32::GRAY,
+                    logging::LogLevel::Info => egui::Color32::DARK_GREEN,
+                    logging::LogLevel::Verbose => egui::Color32::MAGENTA,
+                    logging::LogLevel::Debug => egui::Color32::CYAN,
+                    logging::LogLevel::Warn => egui::Color32::YELLOW,
+                    logging::LogLevel::Error => egui::Color32::RED,
                 };
 
                 if matches!(level, LogLevel::Verbose) && !logger.allow_verbose {
@@ -372,7 +379,7 @@ impl SourceWrenchTabManager<'_> {
 
                                         if let FileStatus::Loaded(file_data) = file_status {
                                             if file_data.parts.is_empty() {
-                                                ui.colored_label(Color32::RED, "Model File Has No Mesh!");
+                                                ui.colored_label(egui::Color32::RED, "Model File Has No Mesh!");
                                                 return;
                                             }
 
@@ -541,7 +548,7 @@ impl SourceWrenchTabManager<'_> {
                         ui.separator();
 
                         if self.input_data.animations.is_empty() {
-                            ui.colored_label(Color32::RED, "No Animations Created");
+                            ui.colored_label(egui::Color32::RED, "No Animations Created");
 
                             if !sequence.animations.is_empty() {
                                 sequence.animations.clear();
