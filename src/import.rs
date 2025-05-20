@@ -163,7 +163,7 @@ impl FileManager {
                     return Err(ParseError::FileDoesNotExist);
                 }
 
-                let file_extension = file_path.extension().ok_or_else(|| ParseError::FileDoesNotHaveExtension)?;
+                let file_extension = file_path.extension().ok_or(ParseError::FileDoesNotHaveExtension)?;
 
                 let loaded_file = match file_extension.to_string_lossy().to_lowercase().as_str() {
                     "smd" => smd::load_smd(&file_path)?,
