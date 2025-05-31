@@ -251,6 +251,25 @@ impl Matrix4 {
             ],
         ])
     }
+
+    pub fn is_finite(self) -> bool {
+        self.0[0][0].is_finite()
+            && self.0[0][1].is_finite()
+            && self.0[0][2].is_finite()
+            && self.0[0][3].is_finite()
+            && self.0[1][0].is_finite()
+            && self.0[1][1].is_finite()
+            && self.0[1][2].is_finite()
+            && self.0[1][3].is_finite()
+            && self.0[2][0].is_finite()
+            && self.0[2][1].is_finite()
+            && self.0[2][2].is_finite()
+            && self.0[2][3].is_finite()
+            && self.0[3][0].is_finite()
+            && self.0[3][1].is_finite()
+            && self.0[3][2].is_finite()
+            && self.0[3][3].is_finite()
+    }
 }
 
 impl Default for Matrix4 {

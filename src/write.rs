@@ -1,4 +1,4 @@
-use std::{fs::write, mem::size_of};
+use std::fs::write;
 
 use half::f16;
 use indexmap::IndexMap;
@@ -13,85 +13,87 @@ mod mesh;
 mod model;
 mod vertex;
 
-use mesh::{
-    MeshFileBodyPartHeader, MeshFileBoneStateChangeHeader, MeshFileHeader, MeshFileMaterialReplacementListHeader, MeshFileMeshHeader, MeshFileModelHeader,
-    MeshFileModelLODHeader, MeshFileStripFlags, MeshFileStripGroupHeader, MeshFileStripGroupHeaderFlags, MeshFileStripHeader, MeshFileVertexHeader,
-};
-
-use model::{
-    ModelFileAnimation, ModelFileAnimationData, ModelFileAnimationDescription, ModelFileAnimationEncoding, ModelFileAnimationEncodingHeader,
-    ModelFileAnimationSection, ModelFileAnimationValue, ModelFileBodyPart, ModelFileBone, ModelFileBoneFlags, ModelFileHeader, ModelFileHeaderFlags,
-    ModelFileHitBox, ModelFileHitboxSet, ModelFileMaterial, ModelFileMesh, ModelFileModel, ModelFileSecondHeader, ModelFileSequenceDescription,
-};
-
-use vertex::{VertexFileHeader, VertexFileVertex};
-
 pub const MAX_LOD_COUNT: usize = 8;
 
 #[derive(Debug, ThisError)]
-#[allow(clippy::enum_variant_names)]
 pub enum FileWriteError {
-    #[error("Array Provided Is Too Large To Write To File")]
-    ArraySizeToLarge,
-    #[error("Keyvalues Provided Are Too Large To Write To File")]
-    KeyvaluesToLarge,
-    #[error("Offset Provided Is Too Large To Write To File")]
-    OffsetToLarge,
+    #[error("Array Size Larger Than 2,147,483,647")]
+    ArraySizeIntegerTooLarge,
+    #[error("Array Size Larger Than 32,767")]
+    ArraySizeShortTooLarge,
+    #[error("Offset Larger Than 2,147,483,647")]
+    IntegerOffsetTooLarge,
+    #[error("offset Smaller Than -2,147,483,648")]
+    IntegerOffsetTooSmall,
+    #[error("Offset Larger Than 32,767")]
+    ShortOffsetTooLarge,
 }
 
 #[derive(Debug, Default)]
 pub struct FileWriter {
-    pub data: Vec<u8>,
+    buffer: Vec<u8>,
     string_table: IndexMap<String, Vec<(usize, usize)>>,
 }
 
 impl FileWriter {
     pub fn write_unsigned_byte(&mut self, value: u8) {
-        self.data.extend(value.to_le_bytes());
+        self.buffer.extend(value.to_le_bytes());
     }
 
     pub fn write_unsigned_byte_array(&mut self, values: &[u8]) {
-        for value in values {
-            self.write_unsigned_byte(*value);
+        for &value in values {
+            self.write_unsigned_byte(value);
         }
     }
 
     pub fn write_short(&mut self, value: i16) {
-        self.data.extend(value.to_le_bytes());
+        self.buffer.extend(value.to_le_bytes());
+    }
+
+    pub fn write_short_array(&mut self, values: &[i16]) {
+        for &value in values {
+            self.write_short(value);
+        }
     }
 
     pub fn write_unsigned_short(&mut self, value: u16) {
-        self.data.extend(value.to_le_bytes());
+        self.buffer.extend(value.to_le_bytes());
+    }
+
+    pub fn write_unsigned_short_array(&mut self, values: &[u16]) {
+        for &value in values {
+            self.write_unsigned_short(value);
+        }
     }
 
     pub fn write_integer(&mut self, value: i32) {
-        self.data.extend(value.to_le_bytes());
+        self.buffer.extend(value.to_le_bytes());
     }
 
     pub fn write_integer_array(&mut self, values: &[i32]) {
-        for value in values {
-            self.write_integer(*value);
+        for &value in values {
+            self.write_integer(value);
         }
     }
 
     pub fn write_float(&mut self, value: f32) {
-        self.data.extend(value.to_le_bytes());
+        self.buffer.extend(value.to_le_bytes());
     }
 
     pub fn write_float_array(&mut self, values: &[f32]) {
-        for value in values {
-            self.write_float(*value);
+        for &value in values {
+            self.write_float(value);
         }
     }
 
     pub fn write_unsigned_long(&mut self, value: u64) {
-        self.data.extend(value.to_le_bytes());
+        self.buffer.extend(value.to_le_bytes());
     }
 
     pub fn write_char_array(&mut self, value: &str, length: usize) {
         let mut bytes = value.as_bytes().to_vec();
         bytes.resize(length, 0);
-        self.data.extend(bytes);
+        self.buffer.extend(bytes);
     }
 
     pub fn write_vector2(&mut self, value: Vector2) {
@@ -144,7 +146,7 @@ impl FileWriter {
         entries.sort_by(|(to, _), (from, _)| to.cmp(from));
 
         for (string, string_entries) in entries {
-            let string_index = self.data.len();
+            let string_index = self.buffer.len();
             self.write_null_terminated_string(&string);
 
             for (base, index) in string_entries {
@@ -156,45 +158,53 @@ impl FileWriter {
     }
 
     pub fn write_null_terminated_string(&mut self, value: &str) {
-        self.data.extend_from_slice(value.as_bytes());
-        self.data.push(0);
+        self.buffer.extend_from_slice(value.as_bytes());
+        self.buffer.push(0);
     }
 
     pub fn write_integer_index(&mut self) -> usize {
+        let this = self.this();
         self.write_integer(0);
-        self.data.len() - size_of::<i32>()
+        this
     }
 
     pub fn write_short_index(&mut self) -> usize {
+        let this = self.this();
         self.write_short(0);
-        self.data.len() - size_of::<i16>()
+        this
     }
 
     pub fn write_to_integer_offset(&mut self, index: usize, offset: usize) -> Result<(), FileWriteError> {
         if offset > i32::MAX as usize {
-            return Err(FileWriteError::OffsetToLarge);
+            return Err(FileWriteError::IntegerOffsetTooLarge);
         }
 
         let bytes = (offset as i32).to_le_bytes();
 
-        self.data[index..index + bytes.len()].clone_from_slice(&bytes as &[u8]);
+        self.buffer[index..index + bytes.len()].clone_from_slice(&bytes as &[u8]);
         Ok(())
+    }
+
+    pub fn write_to_integer(&mut self, index: usize, value: i32) {
+        let bytes = value.to_le_bytes();
+
+        self.buffer[index..index + bytes.len()].clone_from_slice(&bytes as &[u8]);
     }
 
     pub fn write_to_short_offset(&mut self, index: usize, offset: usize) -> Result<(), FileWriteError> {
         if offset > i16::MAX as usize {
-            return Err(FileWriteError::OffsetToLarge);
+            return Err(FileWriteError::ShortOffsetTooLarge);
         }
 
         let bytes = (offset as i16).to_le_bytes();
 
-        self.data[index..index + bytes.len()].clone_from_slice(&bytes as &[u8]);
+        self.buffer[index..index + bytes.len()].clone_from_slice(&bytes as &[u8]);
         Ok(())
     }
 
     pub fn write_negative_offset(&mut self, offset: usize) -> Result<(), FileWriteError> {
         if offset > i32::MIN.unsigned_abs() as usize {
-            return Err(FileWriteError::OffsetToLarge);
+            return Err(FileWriteError::IntegerOffsetTooSmall);
         }
 
         self.write_integer(-(offset as i32));
@@ -210,31 +220,39 @@ impl FileWriter {
     }
 
     pub fn write_vector48(&mut self, value: Vector3) {
-        self.data.extend(f16::from_f64(value.x).to_le_bytes());
-        self.data.extend(f16::from_f64(value.y).to_le_bytes());
-        self.data.extend(f16::from_f64(value.z).to_le_bytes());
+        self.buffer.extend(f16::from_f64(value.x).to_le_bytes());
+        self.buffer.extend(f16::from_f64(value.y).to_le_bytes());
+        self.buffer.extend(f16::from_f64(value.z).to_le_bytes());
     }
 
-    pub fn write_array_size(&mut self, size: usize) -> Result<(), FileWriteError> {
+    pub fn write_array_size_integer<T>(&mut self, array: &[T]) -> Result<(), FileWriteError> {
+        let size = array.len();
+
         if size > i32::MAX as usize {
-            return Err(FileWriteError::ArraySizeToLarge);
+            return Err(FileWriteError::ArraySizeIntegerTooLarge);
         }
 
         self.write_integer(size as i32);
         Ok(())
     }
 
-    pub fn write_array_size_short(&mut self, size: usize) -> Result<(), FileWriteError> {
+    pub fn write_array_size_short<T>(&mut self, array: &[T]) -> Result<(), FileWriteError> {
+        let size = array.len();
+
         if size > i16::MAX as usize {
-            return Err(FileWriteError::ArraySizeToLarge);
+            return Err(FileWriteError::ArraySizeShortTooLarge);
         }
 
         self.write_short(size as i16);
         Ok(())
     }
 
+    pub fn this(&self) -> usize {
+        self.buffer.len()
+    }
+
     pub fn align(&mut self, alignment: usize) {
-        let remainder = self.data.len() % alignment;
+        let remainder = self.buffer.len() % alignment;
 
         if remainder == 0 {
             return;
@@ -242,22 +260,24 @@ impl FileWriter {
 
         let padding = alignment - remainder;
 
-        self.data.resize(self.data.len() + padding, 0);
+        self.buffer.resize(self.buffer.len() + padding, 0);
+    }
+
+    pub fn checksum(&self) -> i32 {
+        // TODO: Implement a better checksum.
+        self.buffer.iter().fold(0, |acc, &byte| acc.wrapping_add(byte as i32))
     }
 }
 
-pub trait WriteToWriter {
-    fn write(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError>;
-}
-
 pub fn write_files(file_name: String, model_name: String, processed_data: ProcessedData, export_path: String) -> Result<(), FileWriteError> {
-    let mut mdl_header = ModelFileHeader {
-        version: 48,
-        checksum: 69420,
-        bounding_box: processed_data.model_data.bounding_box, // TODO: If the model has no mesh use sequence bounding box.
+    let mut mdl_header = model::Header {
+        version: model::HeaderVersions::TwentyThirteen,
+        hull: processed_data.model_data.bounding_box, // TODO: If the model has no mesh use sequence bounding box.
         illumination_position: processed_data.model_data.bounding_box.center(), // TODO: If input, use the input value.
-        flags: ModelFileHeaderFlags::FORCE_OPAQUE | ModelFileHeaderFlags::AUTOMATIC_GENERATED_HITBOXES,
-        second_header: ModelFileSecondHeader {
+        flags: model::HeaderFlags::FORCE_OPAQUE | model::HeaderFlags::AUTO_GENERATED_HITBOX,
+        surface_property: String::from("default"),
+        contents: model::HeaderContents::SOLID,
+        second_header: model::SecondHeader {
             name: model_name,
             ..Default::default()
         },
@@ -265,36 +285,40 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
     };
 
     for (bone_index, (bone_name, processed_bone)) in processed_data.bone_data.processed_bones.into_iter().enumerate() {
-        let bone = ModelFileBone {
+        let bone = model::Bone {
             name: bone_name,
             parent: match processed_bone.parent {
                 Some(index) => index as i32,
                 None => -1,
             },
+            bone_controller: [-1; 6],
             position: processed_bone.position,
             rotation: processed_bone.rotation,
             quaternion: processed_bone.rotation.to_quaternion(),
             animation_position_scale: processed_data.animation_data.animation_scales[bone_index].0,
             animation_rotation_scale: processed_data.animation_data.animation_scales[bone_index].1,
             pose: processed_bone.pose.inverse(),
-            flags: ModelFileBoneFlags::from_bits_truncate(processed_bone.flags.bits()),
+            flags: model::BoneFlags::from_bits_truncate(processed_bone.flags.bits()),
+            physics_bone: -1,
+            surface_property: String::from("default"),
+            contents: model::HeaderContents::SOLID,
             ..Default::default()
         };
         mdl_header.bones.push(bone);
     }
 
-    mdl_header.sorted_bone_table_by_name = processed_data.bone_data.sorted_bones_by_name;
+    mdl_header.bone_table_by_name = processed_data.bone_data.sorted_bones_by_name;
 
-    let mut hitbox_set = ModelFileHitboxSet {
+    let mut hitbox_set = model::HitboxSet {
         name: String::from("default"),
         hitboxes: Vec::with_capacity(processed_data.model_data.hitboxes.len()),
         ..Default::default()
     };
 
-    for (bone, bounding_box) in processed_data.model_data.hitboxes {
-        hitbox_set.hitboxes.push(ModelFileHitBox {
+    for (bone, bounding) in processed_data.model_data.hitboxes {
+        hitbox_set.hitboxes.push(model::Hitbox {
             bone: bone.into(),
-            bounding_box,
+            bounding,
             ..Default::default()
         });
     }
@@ -304,41 +328,41 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
     write_animations(processed_data.animation_data, &mut mdl_header);
 
     for processed_sequence in processed_data.sequence_data {
-        let sequence_description = ModelFileSequenceDescription {
+        let sequence_description = model::SequenceDescription {
             name: processed_sequence.name,
+            activity_weight: -1,
             fade_in_time: 0.2,
             fade_out_time: 0.2,
             blend_size: [processed_sequence.animations.len() as i32, processed_sequence.animations[0].len() as i32],
+            parameter_index: [-1; 2],
             animations: processed_sequence.animations.into_iter().flatten().collect(),
             weight_list: vec![1.0; mdl_header.bones.len()],
             ..Default::default()
         };
 
-        mdl_header.local_sequence_descriptions.push(sequence_description);
+        mdl_header.sequence_descriptions.push(sequence_description);
     }
 
-    let mut vvd_header = VertexFileHeader {
+    let mut vvd_header = vertex::Header {
         version: 4,
-        checksum: 69420,
         lod_count: 1,
         ..Default::default()
     };
-    let mut vtx_header = MeshFileHeader {
+    let mut vtx_header = mesh::Header {
         version: 7,
         vertex_cache_size: VERTEX_CACHE_SIZE as i32,
         max_bones_per_strip: MAX_HARDWARE_BONES_PER_STRIP as u16,
         max_bones_per_triangle: 9,
         max_bones_per_vertex: 3,
-        checksum: 69420,
         ..Default::default()
     };
 
-    mdl_header.material_paths.push(String::from("\\"));
+    mdl_header.material_paths.push(String::from(""));
 
     write_body_parts(processed_data.model_data.body_parts, &mut mdl_header, &mut vtx_header, &mut vvd_header);
 
     for processed_material in processed_data.model_data.materials {
-        let material = ModelFileMaterial {
+        let material = model::Material {
             name: processed_material,
             ..Default::default()
         };
@@ -348,34 +372,36 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
     mdl_header.material_replacements.push((0..mdl_header.materials.len() as i16).collect());
 
     let mut mdl_writer = FileWriter::default();
+    mdl_header.write_data(&mut mdl_writer)?;
     let mut vvd_writer = FileWriter::default();
+    vvd_header.checksum = mdl_header.checksum;
+    vvd_header.write_data(&mut vvd_writer)?;
     let mut vtx_writer = FileWriter::default();
-    mdl_header.write(&mut mdl_writer)?;
-    vvd_header.write(&mut vvd_writer)?;
-    vtx_header.write(&mut vtx_writer)?;
+    vtx_header.checksum = mdl_header.checksum;
+    vtx_header.write_data(&mut vtx_writer)?;
 
-    // FIXME: This is a temporary solution to write the files.
-    let _ = write(format!("{}/{}.{}", export_path, file_name, "mdl"), mdl_writer.data);
-    let _ = write(format!("{}/{}.{}", export_path, file_name, "vvd"), vvd_writer.data);
-    let _ = write(format!("{}/{}.{}", export_path, file_name, "dx90.vtx"), vtx_writer.data);
+    // // FIXME: This is a temporary solution to write the files.
+    let _ = write(format!("{}/{}.{}", export_path, file_name, "mdl"), mdl_writer.buffer);
+    let _ = write(format!("{}/{}.{}", export_path, file_name, "vvd"), vvd_writer.buffer);
+    let _ = write(format!("{}/{}.{}", export_path, file_name, "dx90.vtx"), vtx_writer.buffer);
 
     Ok(())
 }
 
-fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHeader) {
+fn write_animations(animations: ProcessedAnimationData, header: &mut model::Header) {
     for processed_animation in animations.processed_animations {
-        let mut animation_description = ModelFileAnimationDescription {
+        let mut animation_description = model::AnimationDescription {
             name: processed_animation.name,
             fps: 30.0,
             frame_count: processed_animation.frame_count as i32,
-            // TODO: frames_per_section should use the imported frame count.
-            frames_per_section: if processed_animation.sections.len() > 1 { 30 } else { 0 },
-            animation_sections: Vec::with_capacity(processed_animation.sections.len()),
+            // TODO: section_frame_count should use the imported frame count.
+            section_frame_count: if processed_animation.sections.len() > 1 { 30 } else { 0 },
+            sections: Vec::with_capacity(processed_animation.sections.len()),
             ..Default::default()
         };
 
         for mut section in processed_animation.sections {
-            let mut animation_section = ModelFileAnimationSection {
+            let mut animation_section = model::AnimationSection {
                 animation_data: Vec::with_capacity(section.len()),
                 ..Default::default()
             };
@@ -415,20 +441,20 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
                     }
                 }
 
-                fn encode_run_length(values: &[i16]) -> Vec<ModelFileAnimationEncoding> {
+                fn encode_run_length(values: &[i16]) -> Vec<model::CompressedAnimationEntry> {
                     let mut encoding = Vec::new();
 
                     let mut current_total = 0;
                     let mut current_valid = Vec::new();
 
-                    for value in values {
+                    for &value in values {
                         // Check if the current header is full.
                         if current_total == u8::MAX {
-                            encoding.push(ModelFileAnimationEncoding::Header(ModelFileAnimationEncodingHeader {
+                            encoding.push(model::CompressedAnimationEntry::Header(model::CompressedAnimationEntryHeader {
                                 total: current_total,
                                 valid: current_valid.len() as u8,
                             }));
-                            encoding.extend(current_valid.into_iter().map(ModelFileAnimationEncoding::Value));
+                            encoding.extend(current_valid.into_iter().map(model::CompressedAnimationEntry::Value));
                             current_total = 0;
                             current_valid = Vec::new();
                         }
@@ -436,38 +462,38 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
                         // Check if the current header is empty.
                         if current_valid.is_empty() {
                             current_total += 1;
-                            current_valid.push(*value);
+                            current_valid.push(value);
                             continue;
                         }
 
                         // Check if the previous value is the same as the current value.
-                        if current_valid[current_valid.len() - 1] == *value {
+                        if current_valid[current_valid.len() - 1] == value {
                             current_total += 1;
                             continue;
                         }
 
                         // If the current value is not the same as the previous value and the values length is not equal to the total.
                         if current_valid.len() as u8 != current_total {
-                            encoding.push(ModelFileAnimationEncoding::Header(ModelFileAnimationEncodingHeader {
+                            encoding.push(model::CompressedAnimationEntry::Header(model::CompressedAnimationEntryHeader {
                                 total: current_total,
                                 valid: current_valid.len() as u8,
                             }));
-                            encoding.extend(current_valid.into_iter().map(ModelFileAnimationEncoding::Value));
+                            encoding.extend(current_valid.into_iter().map(model::CompressedAnimationEntry::Value));
 
                             current_total = 1;
-                            current_valid = vec![*value];
+                            current_valid = vec![value];
                             continue;
                         }
 
                         current_total += 1;
-                        current_valid.push(*value);
+                        current_valid.push(value);
                     }
 
-                    encoding.push(ModelFileAnimationEncoding::Header(ModelFileAnimationEncodingHeader {
+                    encoding.push(model::CompressedAnimationEntry::Header(model::CompressedAnimationEntryHeader {
                         total: current_total,
                         valid: current_valid.len() as u8,
                     }));
-                    encoding.extend(current_valid.into_iter().map(ModelFileAnimationEncoding::Value));
+                    encoding.extend(current_valid.into_iter().map(model::CompressedAnimationEntry::Value));
 
                     encoding
                 }
@@ -486,73 +512,81 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
                 let mut rotation = None;
                 let mut position = None;
 
-                if encoded_rotation_axis[0].len() <= 2
-                    && encoded_rotation_axis[1].len() <= 2
-                    && encoded_rotation_axis[2].len() <= 2
-                    && encoded_position_axis[0].len() <= 2
-                    && encoded_position_axis[1].len() <= 2
-                    && encoded_position_axis[2].len() <= 2
+                if encoded_rotation_axis[0].len() == 2
+                    && encoded_rotation_axis[1].len() == 2
+                    && encoded_rotation_axis[2].len() == 2
+                    && encoded_position_axis[0].len() == 2
+                    && encoded_position_axis[1].len() == 2
+                    && encoded_position_axis[2].len() == 2
                 {
                     match (&encoded_rotation_axis[0][1], &encoded_rotation_axis[1][1], &encoded_rotation_axis[2][1]) {
-                        (ModelFileAnimationEncoding::Value(x), ModelFileAnimationEncoding::Value(y), ModelFileAnimationEncoding::Value(z)) => {
-                            if *x != 0 || *y != 0 || *z != 0 {
-                                rotation = Some(ModelFileAnimationData::Single(animation_bone_data.raw_rotation[0]));
+                        (
+                            &model::CompressedAnimationEntry::Value(x),
+                            &model::CompressedAnimationEntry::Value(y),
+                            &model::CompressedAnimationEntry::Value(z),
+                        ) => {
+                            if x != 0 || y != 0 || z != 0 {
+                                rotation = Some(model::AnimationData::Raw(animation_bone_data.raw_rotation[0]));
                             }
                         }
                         _ => {
-                            unreachable!("All the values should be ModelFileAnimationEncoding::Value");
+                            unreachable!("All the values should be model::FileAnimationEncoding::Value");
                         }
                     }
 
                     match (&encoded_position_axis[0][1], &encoded_position_axis[1][1], &encoded_position_axis[2][1]) {
-                        (ModelFileAnimationEncoding::Value(x), ModelFileAnimationEncoding::Value(y), ModelFileAnimationEncoding::Value(z)) => {
-                            if *x != 0 || *y != 0 || *z != 0 {
-                                position = Some(ModelFileAnimationData::Single(animation_bone_data.raw_position[0]));
+                        (
+                            &model::CompressedAnimationEntry::Value(x),
+                            &model::CompressedAnimationEntry::Value(y),
+                            &model::CompressedAnimationEntry::Value(z),
+                        ) => {
+                            if x != 0 || y != 0 || z != 0 {
+                                position = Some(model::AnimationData::Raw(animation_bone_data.raw_position[0]));
                             }
                         }
                         _ => {
-                            unreachable!("All the values should be ModelFileAnimationEncoding::Value");
+                            unreachable!("All the values should be model::FileAnimationEncoding::Value");
                         }
                     }
                 } else {
-                    if encoded_rotation_axis[0].len() > 2 || encoded_rotation_axis[1].len() > 2 || encoded_rotation_axis[2].len() > 2 {
-                        let mut animation_axis = ModelFileAnimationValue::default();
+                    let mut animation_axis = model::CompressedAnimation::default();
 
-                        let [x_encoded, y_encoded, z_encoded] = encoded_rotation_axis;
+                    let [x_encoded, y_encoded, z_encoded] = encoded_rotation_axis;
 
-                        if x_encoded.len() > 2 {
-                            animation_axis.values[0] = Some(x_encoded);
-                        }
-
-                        if y_encoded.len() > 2 {
-                            animation_axis.values[1] = Some(y_encoded);
-                        }
-
-                        if z_encoded.len() > 2 {
-                            animation_axis.values[2] = Some(z_encoded);
-                        }
-
-                        rotation = Some(ModelFileAnimationData::Array(animation_axis));
+                    if x_encoded.len() > 2 || matches!(&x_encoded[1], &model::CompressedAnimationEntry::Value(x) if x != 0) {
+                        animation_axis.values[0] = Some(x_encoded);
                     }
 
-                    if encoded_position_axis[0].len() > 2 || encoded_position_axis[1].len() > 2 || encoded_position_axis[2].len() > 2 {
-                        let mut animation_axis = ModelFileAnimationValue::default();
+                    if y_encoded.len() > 2 || matches!(&y_encoded[1], &model::CompressedAnimationEntry::Value(y) if y != 0) {
+                        animation_axis.values[1] = Some(y_encoded);
+                    }
 
-                        let [x_encoded, y_encoded, z_encoded] = encoded_position_axis;
+                    if z_encoded.len() > 2 || matches!(&z_encoded[1], &model::CompressedAnimationEntry::Value(z) if z != 0) {
+                        animation_axis.values[2] = Some(z_encoded);
+                    }
 
-                        if x_encoded.len() > 2 {
-                            animation_axis.values[0] = Some(x_encoded);
-                        }
+                    if animation_axis.values[0].is_some() || animation_axis.values[1].is_some() || animation_axis.values[2].is_some() {
+                        rotation = Some(model::AnimationData::Compressed(animation_axis));
+                    }
 
-                        if y_encoded.len() > 2 {
-                            animation_axis.values[1] = Some(y_encoded);
-                        }
+                    let mut animation_axis = model::CompressedAnimation::default();
 
-                        if z_encoded.len() > 2 {
-                            animation_axis.values[2] = Some(z_encoded);
-                        }
+                    let [x_encoded, y_encoded, z_encoded] = encoded_position_axis;
 
-                        position = Some(ModelFileAnimationData::Array(animation_axis));
+                    if x_encoded.len() > 2 || matches!(&x_encoded[1], &model::CompressedAnimationEntry::Value(x) if x != 0) {
+                        animation_axis.values[0] = Some(x_encoded);
+                    }
+
+                    if y_encoded.len() > 2 || matches!(&y_encoded[1], &model::CompressedAnimationEntry::Value(y) if y != 0) {
+                        animation_axis.values[1] = Some(y_encoded);
+                    }
+
+                    if z_encoded.len() > 2 || matches!(&z_encoded[1], &model::CompressedAnimationEntry::Value(z) if z != 0) {
+                        animation_axis.values[2] = Some(z_encoded);
+                    }
+
+                    if animation_axis.values[0].is_some() || animation_axis.values[1].is_some() || animation_axis.values[2].is_some() {
+                        position = Some(model::AnimationData::Compressed(animation_axis));
                     }
                 }
 
@@ -560,7 +594,7 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
                     continue;
                 }
 
-                animation_section.animation_data.push(ModelFileAnimation {
+                animation_section.animation_data.push(model::Animation {
                     bone: animation_bone_data.bone,
                     position,
                     rotation,
@@ -568,23 +602,30 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut ModelFileHe
                 });
             }
 
-            animation_description.animation_sections.push(animation_section);
+            if animation_section.animation_data.is_empty() {
+                animation_section.animation_data.push(model::Animation {
+                    bone: u8::MAX,
+                    ..Default::default()
+                });
+            }
+
+            animation_description.sections.push(animation_section);
         }
 
-        header.local_animation_descriptions.push(animation_description);
+        header.animation_descriptions.push(animation_description);
     }
 }
 
 fn write_body_parts(
     processed_body_parts: Vec<ProcessedBodyPart>,
-    header: &mut ModelFileHeader,
-    mesh_header: &mut MeshFileHeader,
-    vertex_header: &mut VertexFileHeader,
+    header: &mut model::Header,
+    mesh_header: &mut mesh::Header,
+    vertex_header: &mut vertex::Header,
 ) {
     let mut mesh_id = 0;
     let mut previous_base = None;
     for processed_body_part in processed_body_parts {
-        let mut model_body_part = ModelFileBodyPart {
+        let mut model_body_part = model::BodyPart {
             name: processed_body_part.name,
             models: Vec::with_capacity(processed_body_part.models.len()),
             base: match previous_base {
@@ -595,10 +636,10 @@ fn write_body_parts(
         };
         previous_base = Some((model_body_part.base, processed_body_part.models.len()));
 
-        let mut mesh_body_part_header = MeshFileBodyPartHeader::default();
+        let mut mesh_body_part_header = mesh::BodyPartHeader::default();
 
         for processed_model in processed_body_part.models {
-            let mut model_model = ModelFileModel {
+            let mut model_model = model::Model {
                 name: processed_model.name,
                 meshes: Vec::with_capacity(processed_model.meshes.len()),
                 vertex_count: processed_model.meshes.iter().map(|mesh| mesh.vertex_data.len()).sum::<usize>() as i32,
@@ -607,16 +648,16 @@ fn write_body_parts(
                 ..Default::default()
             };
 
-            let mut mesh_model_header = MeshFileModelHeader::default();
-            let mut mesh_model_lod_header = MeshFileModelLODHeader::default();
+            let mut mesh_model_header = mesh::ModelHeader::default();
+            let mut mesh_model_lod_header = mesh::ModelLODHeader::default();
 
             let mut vertex_count = 0;
             for processed_mesh in processed_model.meshes {
-                let model_mesh = ModelFileMesh {
+                let model_mesh = model::Mesh {
                     material: processed_mesh.material,
                     vertex_count: processed_mesh.vertex_data.len() as i32,
                     vertex_offset: vertex_count as i32,
-                    mesh_identifier: mesh_id,
+                    identifier: mesh_id,
                     vertex_lod_count: [processed_mesh.vertex_data.len() as i32; 8],
                     ..Default::default()
                 };
@@ -625,37 +666,39 @@ fn write_body_parts(
                 vertex_count += processed_mesh.vertex_data.len();
 
                 for processed_vertex in processed_mesh.vertex_data {
-                    vertex_header.vertices.push(VertexFileVertex {
+                    vertex_header.vertices.push(vertex::Vertex {
                         weights: processed_vertex.weights,
                         bones: processed_vertex.bones,
                         bone_count: processed_vertex.bone_count,
                         position: processed_vertex.position,
                         normal: processed_vertex.normal,
                         texture_coordinate: processed_vertex.texture_coordinate,
+                        ..Default::default()
                     });
                     vertex_header.tangents.push(processed_vertex.tangent);
                 }
 
-                let mut mesh_mesh_header = MeshFileMeshHeader::default();
+                let mut mesh_mesh_header = mesh::MeshHeader::default();
 
                 for processed_strip_group in processed_mesh.strip_groups {
-                    let mut mesh_strip_group_header = MeshFileStripGroupHeader {
-                        flags: MeshFileStripGroupHeaderFlags::IS_HARDWARE_SKINNED,
+                    let mut mesh_strip_group_header = mesh::StripGroupHeader {
+                        flags: mesh::StripGroupHeaderFlags::IS_HARDWARE_SKINNED,
                         indices: processed_strip_group.indices,
                         ..Default::default()
                     };
 
                     for processed_mesh_vertex in processed_strip_group.vertices {
-                        mesh_strip_group_header.vertices.push(MeshFileVertexHeader {
+                        mesh_strip_group_header.vertices.push(mesh::Vertex {
                             bone_count: processed_mesh_vertex.bone_count,
-                            vertex_index: processed_mesh_vertex.vertex_index,
-                            bone_weight_bones: processed_mesh_vertex.bones,
+                            vertex_id: processed_mesh_vertex.vertex_index,
+                            bone_ids: processed_mesh_vertex.bones,
+                            ..Default::default()
                         });
                     }
 
                     for processed_strip in processed_strip_group.strips {
-                        let mut mesh_strip_header = MeshFileStripHeader {
-                            flags: MeshFileStripFlags::IS_TRIANGLE_LIST,
+                        let mut mesh_strip_header = mesh::StripHeader {
+                            flags: mesh::StripHeaderFlags::IS_TRIANGLE_LIST,
                             indices_count: processed_strip.indices_count,
                             indices_offset: processed_strip.indices_offset,
                             vertices_count: processed_strip.vertex_count,
@@ -665,20 +708,14 @@ fn write_body_parts(
                         };
 
                         for bone_change in processed_strip.hardware_bones {
-                            let mesh_bone_state_change = MeshFileBoneStateChangeHeader {
+                            let mesh_bone_state_change = mesh::BoneStateChangeHeader {
                                 hardware_id: bone_change.hardware_bone,
                                 bone_table_index: bone_change.bone_table_bone,
+                                ..Default::default()
                             };
 
                             mesh_strip_header.bone_state_changes.push(mesh_bone_state_change);
                         }
-
-                        debug_assert!(
-                            mesh_strip_header.bone_state_changes.len() <= MAX_HARDWARE_BONES_PER_STRIP,
-                            "Bone State Changes Exceeds {}! mesh_strip_header.bone_state_changes.len(): {}",
-                            MAX_HARDWARE_BONES_PER_STRIP,
-                            mesh_strip_header.bone_state_changes.len()
-                        );
 
                         mesh_strip_group_header.strips.push(mesh_strip_header);
                     }
@@ -699,6 +736,6 @@ fn write_body_parts(
         mesh_header.body_parts.push(mesh_body_part_header);
     }
 
-    mesh_header.material_replacement_lists.push(MeshFileMaterialReplacementListHeader::default());
+    mesh_header.material_replacement_lists.push(mesh::MaterialReplacementListHeader::default());
     vertex_header.lod_vertex_count = [vertex_header.vertices.len() as i32; MAX_LOD_COUNT];
 }

@@ -86,6 +86,10 @@ impl Angles {
             },
         )
     }
+
+    pub fn is_finite(self) -> bool {
+        self.roll.is_finite() && self.pitch.is_finite() && self.yaw.is_finite()
+    }
 }
 
 impl Index<usize> for Angles {
@@ -204,6 +208,10 @@ impl Quaternion {
         }
 
         Self::new(self.x / mag, self.y / mag, self.z / mag, self.w / mag)
+    }
+
+    pub fn is_finite(self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite() && self.w.is_finite()
     }
 }
 
