@@ -1,12 +1,14 @@
 use std::{
-    io::Error,
+    io::Error as IoError,
     num::NonZeroUsize,
-    path::PathBuf,
-    sync::{Arc, RwLock},
+    path::{Path, PathBuf},
+    sync::{mpsc::channel, Arc},
     thread,
 };
 
 use indexmap::IndexMap;
+use notify::Watcher;
+use parking_lot::RwLock;
 use thiserror::Error as ThisError;
 
 use crate::utilities::{
@@ -121,7 +123,7 @@ pub struct ImportFlexVertex {
 #[derive(Debug, ThisError)]
 pub enum ParseError {
     #[error("Failed To Open File")]
-    FailedFileOpen(#[from] Error),
+    FailedFileOpen(#[from] IoError),
     #[error("File Does Not Exist")]
     FileDoesNotExist,
     #[error("File Does Not Have Extension")]
@@ -135,7 +137,7 @@ pub enum ParseError {
     FailedOBJFileParse(#[from] ParseOBJError),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum FileStatus {
     #[default]
     Loading,
@@ -144,19 +146,87 @@ pub enum FileStatus {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FileManager(Arc<RwLock<IndexMap<PathBuf, (usize, FileStatus)>>>);
+pub struct FileManager {
+    /// A thread safe storage of loaded [FileStatus] with a reference count. If the reference count reaches zero then the file is unloaded.
+    loaded_files: Arc<RwLock<IndexMap<PathBuf, (usize, FileStatus)>>>,
+    file_watcher: Option<Arc<RwLock<notify::ReadDirectoryChangesWatcher>>>,
+}
 
 impl FileManager {
+    pub fn start_file_watch(&mut self) -> Result<(), notify::Error> {
+        let (tx, rx) = channel();
+
+        let watcher = notify::recommended_watcher(tx)?;
+        self.file_watcher = Some(Arc::new(RwLock::new(watcher)));
+
+        let manager = self.clone();
+        std::thread::spawn(move || loop {
+            match rx.recv() {
+                Ok(event) => match event {
+                    Ok(event) => {
+                        let mut paths = event.paths; // Does this need to be looped over?
+                        let file_path = paths.remove(0);
+
+                        match event.kind {
+                            notify::EventKind::Modify(_) => {
+                                if matches!(manager.get_file_status(&file_path), Some(FileStatus::Loading)) {
+                                    continue;
+                                }
+
+                                let mut loaded_files = manager.loaded_files.write();
+
+                                if let Some((_, status)) = loaded_files.get_mut(&file_path) {
+                                    *status = FileStatus::Loading;
+                                }
+
+                                manager.load_file_data(file_path);
+                            }
+                            notify::EventKind::Remove(remove_kind) => {
+                                let mut loaded_files = manager.loaded_files.write();
+
+                                debug_assert!(!matches!(remove_kind, notify::event::RemoveKind::File));
+
+                                if let Some((_, status)) = loaded_files.get_mut(&file_path) {
+                                    *status = FileStatus::Failed;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    Err(error) => {
+                        log(format!("Fail To Watch File: {}!", error), LogLevel::Error);
+                    }
+                },
+                Err(error) => {
+                    log(format!("Fail To Watch Files: {}!", error), LogLevel::Error);
+                    break;
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    /// Loads the file data if not loaded else increase the reference count by one.
     pub fn load_file(&mut self, file_path: PathBuf) {
-        let mut files = self.0.write().unwrap();
+        let mut files = self.loaded_files.write();
         if let Some((existing_count, _)) = files.get_mut(&file_path) {
             *existing_count += 1;
             return;
         }
         files.insert(file_path.clone(), (1, FileStatus::Loading));
-        drop(files);
 
-        let manager = Arc::clone(&self.0);
+        if let Some(watcher) = &self.file_watcher {
+            let mut watch = watcher.write();
+            let _ = watch.watch(&file_path, notify::RecursiveMode::NonRecursive);
+        }
+
+        self.load_file_data(file_path);
+    }
+
+    /// This spawns a new thread and loads the specified file to the manager.
+    fn load_file_data(&self, file_path: PathBuf) {
+        let manager = self.clone();
         thread::spawn(move || {
             let loaded_file = (|| {
                 if !file_path.try_exists()? {
@@ -183,15 +253,15 @@ impl FileManager {
                 Ok(loaded_file)
             })();
 
-            let mut files = manager.write().unwrap();
+            let mut loaded_files = manager.loaded_files.write();
 
             let file_data = match loaded_file {
                 Ok(data) => data,
                 Err(error) => {
                     log(format!("Fail To Load File: {}!", error), LogLevel::Error);
 
-                    if let Some(entry) = files.get_mut(&file_path) {
-                        entry.1 = FileStatus::Failed;
+                    if let Some((_, status)) = loaded_files.get_mut(&file_path) {
+                        *status = FileStatus::Failed;
                     }
 
                     return;
@@ -202,32 +272,21 @@ impl FileManager {
             debug_assert!(!file_data.animations.is_empty(), "File source must have 1 animation!");
             debug_assert!(!file_data.forward.is_parallel(file_data.up), "File Source Directions are parallel!");
 
-            if let Some(entry) = files.get_mut(&file_path) {
-                entry.1 = FileStatus::Loaded(Arc::new(file_data));
+            if let Some((_, status)) = loaded_files.get_mut(&file_path) {
+                *status = FileStatus::Loaded(Arc::new(file_data));
             }
         });
     }
 
-    pub fn get_file_status(&self, file_path: &PathBuf) -> Option<FileStatus> {
-        let files = self.0.read().unwrap();
-        files.get(file_path).map(|(_, status)| status).cloned()
-    }
-
-    pub fn get_file_data(&self, file_path: &PathBuf) -> Option<Arc<ImportFileData>> {
-        let files = self.0.read().unwrap();
-        files
-            .get(file_path)
-            .and_then(|(_, status)| if let FileStatus::Loaded(data) = status { Some(data.clone()) } else { None })
-    }
-
-    pub fn unload_file(&mut self, file_path: &PathBuf) {
-        let mut files = self.0.write().unwrap();
-        if let Some((existing_count, _)) = files.get_mut(file_path) {
+    /// Decreases the reference count of a path by one. If the count is zero then it unloads the file data.
+    pub fn unload_file(&mut self, file_path: &Path) {
+        let mut loaded_files = self.loaded_files.write();
+        if let Some((existing_count, _)) = loaded_files.get_mut(file_path) {
             let current_count = *existing_count - 1;
 
             if current_count == 0 {
                 log(format!("Unloaded {}!", file_path.as_os_str().to_string_lossy()), LogLevel::Debug);
-                files.shift_remove(file_path);
+                loaded_files.shift_remove(file_path);
                 return;
             }
 
@@ -235,15 +294,21 @@ impl FileManager {
         }
     }
 
-    pub fn loaded_file_count(&self) -> usize {
-        let files = self.0.write().unwrap();
-        files.len()
+    /// Returns the status of a loaded file. If the path was unloaded then there will be no status.
+    pub fn get_file_status(&self, file_path: &Path) -> Option<FileStatus> {
+        self.loaded_files.read().get(file_path).map(|(_, status)| status).cloned()
     }
 
-    pub fn is_loading_files(&self) -> bool {
-        let files = self.0.write().unwrap();
-        files
-            .values()
-            .any(|(_, file_status)| matches!(file_status, FileStatus::Loading | FileStatus::Failed))
+    /// Returns the file data of a path if successfully loaded.
+    pub fn get_file_data(&self, file_path: &Path) -> Option<Arc<ImportFileData>> {
+        self.loaded_files
+            .read()
+            .get(file_path)
+            .and_then(|(_, status)| if let FileStatus::Loaded(data) = status { Some(data.clone()) } else { None })
+    }
+
+    /// Returns the amount of loaded files in the manager.
+    pub fn loaded_file_count(&self) -> usize {
+        self.loaded_files.read().len()
     }
 }

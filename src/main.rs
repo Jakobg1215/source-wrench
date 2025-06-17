@@ -45,12 +45,18 @@ impl Default for SourceWrenchApplication {
             .main_surface_mut()
             .split_below(logging_tab, 0.35, vec![SourceWrenchTabType::Animations, SourceWrenchTabType::Sequences]);
 
+        let mut loaded_files = FileManager::default();
+
+        if let Err(watch_error) = loaded_files.start_file_watch() {
+            log(format!("Fail To Start File Watch: {}!", watch_error), LogLevel::Error);
+        }
+
         Self {
             tab_tree: tree,
             compiling: Arc::new(AtomicBool::new(false)),
             input_data_identifier_generator: Default::default(),
             input_data: Default::default(),
-            loaded_files: Default::default(),
+            loaded_files,
         }
     }
 }
@@ -191,7 +197,7 @@ impl SourceWrenchTabManager<'_> {
 
             let is_compiling = self.compiling.load(std::sync::atomic::Ordering::Relaxed);
 
-            let button_response = ui.add_enabled(!self.loaded_files.is_loading_files() && !is_compiling, egui::Button::new("Compile Model"));
+            let button_response = ui.add_enabled(!is_compiling, egui::Button::new("Compile Model"));
             if button_response.clicked() {
                 // The best thing to do is just to clone the data.
                 let input_data = self.input_data.clone();
@@ -353,7 +359,7 @@ impl SourceWrenchTabManager<'_> {
                                     });
 
                                     if let Some(source_file_path) = &model.source_file_path {
-                                        let file_status = self.loaded_files.get_file_status(source_file_path).unwrap();
+                                        let file_status = self.loaded_files.get_file_status(source_file_path).unwrap(); // FIXME: This must be check!
 
                                         ui.horizontal(|ui| {
                                             ui.label("Model File:");
@@ -467,7 +473,7 @@ impl SourceWrenchTabManager<'_> {
                         });
 
                         if let Some(source_file_path) = &animation.source_file_path {
-                            let file_status = self.loaded_files.get_file_status(source_file_path).unwrap();
+                            let file_status = self.loaded_files.get_file_status(source_file_path).unwrap(); // FIXME: This must be check!
 
                             ui.horizontal(|ui| {
                                 ui.label("Animation File:");
