@@ -287,6 +287,12 @@ impl FileManager {
             if current_count == 0 {
                 log(format!("Unloaded {}!", file_path.as_os_str().to_string_lossy()), LogLevel::Debug);
                 loaded_files.shift_remove(file_path);
+
+                if let Some(watcher) = &self.file_watcher {
+                    let mut watch = watcher.write();
+                    let _ = watch.unwatch(file_path);
+                }
+
                 return;
             }
 
