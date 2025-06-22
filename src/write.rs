@@ -6,7 +6,7 @@ use thiserror::Error as ThisError;
 
 use crate::{
     process::{ProcessedAnimationData, ProcessedBodyPart, ProcessedData, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE},
-    utilities::mathematics::{clamp, Angles, Quaternion, Vector2, Vector3, Vector4},
+    utilities::mathematics::{Angles, Quaternion, Vector2, Vector3, Vector4},
 };
 
 mod mesh;
@@ -212,10 +212,10 @@ impl FileWriter {
     }
 
     pub fn write_quaternion64(&mut self, value: Quaternion) {
-        let x = clamp((value.x * 1048576.0) as u64 + 1048576, 0, 2097151);
-        let y = clamp((value.y * 1048576.0) as u64 + 1048576, 0, 2097151);
-        let z = clamp((value.z * 1048576.0) as u64 + 1048576, 0, 2097151);
-        let w = (value.w < 0.0) as u64;
+        let x = ((value.x * 1048576.0) as i64 + 1048576).clamp(0, 2097151) as u64;
+        let y = ((value.y * 1048576.0) as i64 + 1048576).clamp(0, 2097151) as u64;
+        let z = ((value.z * 1048576.0) as i64 + 1048576).clamp(0, 2097151) as u64;
+        let w = if value.w < 0.0 { 1 } else { 0 };
         self.write_unsigned_long((w << 63) | (z << 42) | (y << 21) | x);
     }
 

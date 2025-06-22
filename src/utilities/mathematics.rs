@@ -66,15 +66,3 @@ impl AxisDirection {
         self.as_vector().cross(other.as_vector()).magnitude() < f64::EPSILON
     }
 }
-
-pub fn clamp<T: PartialOrd>(value: T, minimum: T, maximum: T) -> T {
-    if value < minimum {
-        return minimum;
-    }
-
-    if value > maximum {
-        return maximum;
-    }
-
-    value
-}

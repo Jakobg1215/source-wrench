@@ -668,6 +668,7 @@ impl AnimationDescription {
             return Ok(());
         }
 
+        writer.write_to_integer_offset(self.section_index, writer.this() - self.this)?;
         for section in &mut self.sections {
             section.write_data(writer);
         }
@@ -676,8 +677,9 @@ impl AnimationDescription {
     }
 
     fn write_animation_data(&mut self, writer: &mut FileWriter) -> Result<(), FileWriteError> {
+        writer.write_to_integer_offset(self.animation_index, writer.this() - self.this)?; // This is for crowbar as studioMDL does write to this value but is ignored if sections exist.
+
         if self.sections.len() == 1 {
-            writer.write_to_integer_offset(self.animation_index, writer.this() - self.this)?;
             let section = &mut self.sections[0];
             section.write_animation(writer)?;
             return Ok(());
