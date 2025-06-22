@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::input::ImputedCompilationData;
@@ -6,16 +7,25 @@ use super::ProcessedSequence;
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingSequenceError {
+    #[error("Duplicate Sequence Name, Sequence {0}")]
+    DuplicateSequenceName(usize),
     #[error("Model Has Too Many Sequences")]
     TooManySequences,
 }
 
-pub fn process_sequences(input: &ImputedCompilationData, remapped_animations: &[usize]) -> Result<Vec<ProcessedSequence>, ProcessingSequenceError> {
-    let mut processed_sequences = Vec::with_capacity(input.sequences.len());
+pub fn process_sequences(
+    input: &ImputedCompilationData,
+    remapped_animations: &[usize],
+) -> Result<IndexMap<String, ProcessedSequence>, ProcessingSequenceError> {
+    let mut processed_sequences = IndexMap::with_capacity(input.sequences.len());
 
-    for (_, input_sequence) in &input.sequences {
+    for (input_sequence_index, (_, input_sequence)) in input.sequences.iter().enumerate() {
+        let processed_sequence_name = input_sequence.name.clone();
+        if processed_sequences.contains_key(&processed_sequence_name) {
+            return Err(ProcessingSequenceError::DuplicateSequenceName(input_sequence_index + 1));
+        }
+
         let mut processed_sequence = ProcessedSequence {
-            name: input_sequence.name.clone(),
             animations: vec![vec![0; input_sequence.animations[0].len()]; input_sequence.animations.len()],
         };
 
@@ -27,7 +37,7 @@ pub fn process_sequences(input: &ImputedCompilationData, remapped_animations: &[
             }
         }
 
-        processed_sequences.push(processed_sequence);
+        processed_sequences.insert(processed_sequence_name, processed_sequence);
     }
 
     if processed_sequences.len() > i32::MAX as usize {

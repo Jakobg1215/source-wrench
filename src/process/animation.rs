@@ -18,6 +18,8 @@ pub enum ProcessingAnimationError {
     NoFileSource,
     #[error("Animation File Source Not Loaded")]
     FileSourceNotLoaded,
+    #[error("Duplicate Animation Name, Animation {0}")]
+    DuplicateAnimationName(usize),
     #[error("Model Has Too Many Animations")]
     TooManyAnimations,
 }
@@ -33,7 +35,7 @@ pub fn process_animations(
     }
 
     let mut remapped_animations = Vec::with_capacity(input.animations.len());
-    let mut processed_animations = Vec::new();
+    let mut processed_animations = IndexMap::new();
     let mut model_frame_count = 0;
     for (imputed_animation_index, (_, imputed_animation)) in input.animations.iter().enumerate() {
         remapped_animations.push(processed_animations.len());
@@ -47,6 +49,11 @@ pub fn process_animations(
         }) {
             log(format!("Animation \"{}\" Not Used!", imputed_animation.name), LogLevel::Warn);
             continue;
+        }
+
+        let processed_animation_name = imputed_animation.name.clone();
+        if processed_animations.contains_key(&processed_animation_name) {
+            return Err(ProcessingAnimationError::DuplicateAnimationName(imputed_animation_index + 1));
         }
 
         // Gather imported animation data.
@@ -132,7 +139,6 @@ pub fn process_animations(
         };
 
         let mut processed_animation = ProcessedAnimation {
-            name: imputed_animation.name.clone(),
             frame_count,
             sections: Vec::with_capacity(section_count),
         };
@@ -165,7 +171,7 @@ pub fn process_animations(
             processed_animation.sections.push(section_data);
         }
 
-        processed_animations.push(processed_animation);
+        processed_animations.insert(processed_animation_name, processed_animation);
     }
 
     log(format!("Model uses {} frames.", model_frame_count), LogLevel::Debug);
@@ -175,7 +181,7 @@ pub fn process_animations(
     }
 
     let mut animation_scales = vec![(Vector3::default(), Vector3::default()); processed_bone_data.processed_bones.len()];
-    for processed_animation in &processed_animations {
+    for (_, processed_animation) in &processed_animations {
         for sections in &processed_animation.sections {
             for section in sections {
                 for position in &section.delta_position {

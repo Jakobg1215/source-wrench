@@ -327,9 +327,9 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
 
     write_animations(processed_data.animation_data, &mut mdl_header);
 
-    for processed_sequence in processed_data.sequence_data {
+    for (processed_sequence_name, processed_sequence) in processed_data.sequence_data {
         let sequence_description = model::SequenceDescription {
-            name: processed_sequence.name,
+            name: processed_sequence_name,
             activity_weight: -1,
             fade_in_time: 0.2,
             fade_out_time: 0.2,
@@ -389,9 +389,9 @@ pub fn write_files(file_name: String, model_name: String, processed_data: Proces
 }
 
 fn write_animations(animations: ProcessedAnimationData, header: &mut model::Header) {
-    for processed_animation in animations.processed_animations {
+    for (processed_animation_name, processed_animation) in animations.processed_animations {
         let mut animation_description = model::AnimationDescription {
-            name: processed_animation.name,
+            name: processed_animation_name,
             fps: 30.0,
             frame_count: processed_animation.frame_count as i32,
             // TODO: section_frame_count should use the imported frame count.
@@ -617,16 +617,16 @@ fn write_animations(animations: ProcessedAnimationData, header: &mut model::Head
 }
 
 fn write_body_parts(
-    processed_body_parts: Vec<ProcessedBodyPart>,
+    processed_body_parts: IndexMap<String, ProcessedBodyPart>,
     header: &mut model::Header,
     mesh_header: &mut mesh::Header,
     vertex_header: &mut vertex::Header,
 ) {
     let mut mesh_id = 0;
     let mut previous_base = None;
-    for processed_body_part in processed_body_parts {
+    for (processed_body_part_name, processed_body_part) in processed_body_parts {
         let mut model_body_part = model::BodyPart {
-            name: processed_body_part.name,
+            name: processed_body_part_name,
             models: Vec::with_capacity(processed_body_part.models.len()),
             base: match previous_base {
                 Some((previous_base, previous_count)) => previous_base * previous_count as i32,

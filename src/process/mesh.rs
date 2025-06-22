@@ -22,6 +22,8 @@ pub enum ProcessingMeshError {
     NoFileSource,
     #[error("Model File Source Not Loaded")]
     FileSourceNotLoaded,
+    #[error("Duplicate Body Group Name, Body Group {0}")]
+    DuplicateBodyGroupName(usize),
     #[error("Face Was Incomplete")]
     IncompleteFace,
     #[error("Model Has Too Many Materials")]
@@ -60,11 +62,13 @@ pub fn process_meshes(
 ) -> Result<ProcessedModelData, ProcessingMeshError> {
     let mut processed_model_data = ProcessedModelData::default();
 
-    for (_, imputed_body_group) in &input.body_groups {
-        let mut processed_body_part = ProcessedBodyPart {
-            name: imputed_body_group.name.clone(),
-            ..Default::default()
-        };
+    for (imputed_body_group_index, (_, imputed_body_group)) in input.body_groups.iter().enumerate() {
+        let processed_body_part_name = imputed_body_group.name.clone();
+        if processed_model_data.body_parts.contains_key(&processed_body_part_name) {
+            return Err(ProcessingMeshError::DuplicateBodyGroupName(imputed_body_group_index + 1));
+        }
+
+        let mut processed_body_part = ProcessedBodyPart::default();
 
         for (_, imputed_model) in &imputed_body_group.models {
             if imputed_model.blank {
@@ -152,7 +156,7 @@ pub fn process_meshes(
             processed_body_part.models.push(processed_model);
         }
 
-        processed_model_data.body_parts.push(processed_body_part);
+        processed_model_data.body_parts.insert(processed_body_part_name, processed_body_part);
     }
 
     if processed_model_data.body_parts.len() > i32::MAX as usize {

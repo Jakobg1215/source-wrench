@@ -25,7 +25,7 @@ use sequences::{process_sequences, ProcessingSequenceError};
 pub struct ProcessedData {
     pub bone_data: ProcessedBoneData,
     pub animation_data: ProcessedAnimationData,
-    pub sequence_data: Vec<ProcessedSequence>,
+    pub sequence_data: IndexMap<String, ProcessedSequence>,
     pub model_data: ProcessedModelData,
 }
 
@@ -56,14 +56,13 @@ bitflags! {
 
 #[derive(Debug, Default)]
 pub struct ProcessedAnimationData {
-    pub processed_animations: Vec<ProcessedAnimation>,
+    pub processed_animations: IndexMap<String, ProcessedAnimation>,
     pub animation_scales: Vec<(Vector3, Vector3)>,
     pub remapped_animations: Vec<usize>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedAnimation {
-    pub name: String,
     pub frame_count: usize,
     pub sections: Vec<Vec<ProcessedAnimatedBoneData>>,
 }
@@ -79,13 +78,12 @@ pub struct ProcessedAnimatedBoneData {
 
 #[derive(Debug, Default)]
 pub struct ProcessedSequence {
-    pub name: String,
     pub animations: Vec<Vec<i16>>,
 }
 
 #[derive(Debug, Default)]
 pub struct ProcessedModelData {
-    pub body_parts: Vec<ProcessedBodyPart>,
+    pub body_parts: IndexMap<String, ProcessedBodyPart>,
     pub bounding_box: BoundingBox,
     pub hitboxes: IndexMap<u8, BoundingBox>,
     pub materials: IndexSet<String>,
@@ -93,7 +91,6 @@ pub struct ProcessedModelData {
 
 #[derive(Debug, Default)]
 pub struct ProcessedBodyPart {
-    pub name: String,
     pub models: Vec<ProcessedModel>,
 }
 
