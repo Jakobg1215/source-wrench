@@ -10,7 +10,7 @@ mod write;
 use eframe::egui;
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1440.0, 720.0]).with_drag_and_drop(false),
+        viewport: egui::ViewportBuilder::default().with_maximized(true).with_drag_and_drop(false),
         centered: true,
         ..Default::default()
     };
@@ -26,7 +26,6 @@ use std::sync::{
 struct SourceWrenchApplication {
     tab_tree: DockState<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
-    input_data_identifier_generator: usize,
     input_data: ImputedCompilationData,
     loaded_files: FileManager,
 }
@@ -54,7 +53,6 @@ impl Default for SourceWrenchApplication {
         Self {
             tab_tree: tree,
             compiling: Arc::new(AtomicBool::new(false)),
-            input_data_identifier_generator: Default::default(),
             input_data: Default::default(),
             loaded_files,
         }
@@ -64,8 +62,6 @@ impl Default for SourceWrenchApplication {
 impl eframe::App for SourceWrenchApplication {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut new_tabs = Vec::new();
-
-        ctx.set_pixels_per_point(1.25);
 
         egui_dock::DockArea::new(&mut self.tab_tree)
             .style(egui_dock::Style::from_egui(ctx.style().as_ref()))
@@ -77,7 +73,6 @@ impl eframe::App for SourceWrenchApplication {
                 &mut SourceWrenchTabManager {
                     new_tabs: &mut new_tabs,
                     compiling: Arc::clone(&self.compiling),
-                    input_data_identifier_generator: &mut self.input_data_identifier_generator,
                     input_data: &mut self.input_data,
                     loaded_files: &mut self.loaded_files,
                 },
@@ -114,7 +109,6 @@ impl SourceWrenchTabType {
 struct SourceWrenchTabManager<'a> {
     new_tabs: &'a mut Vec<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
-    input_data_identifier_generator: &'a mut usize,
     input_data: &'a mut ImputedCompilationData,
     loaded_files: &'a mut FileManager,
 }
@@ -163,9 +157,11 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
     }
 }
 
-use input::{ImputedAnimation, ImputedBodyPart, ImputedCompilationData, ImputedModel, ImputedSequence};
-use ui::{toggle_ui_compact, ui_failed, ui_success};
+use input::ImputedCompilationData;
+use ui::{icon, toggle_ui_compact};
 use utilities::logging::{self, log, LogLevel};
+
+use crate::ui::ListSelect;
 impl SourceWrenchTabManager<'_> {
     fn render_main(&mut self, ui: &mut egui::Ui) {
         ui.heading("Source Wrench");
@@ -292,295 +288,186 @@ impl SourceWrenchTabManager<'_> {
 
     fn render_body_groups(&mut self, ui: &mut egui::Ui) {
         ui.heading("Body Groups");
-        if ui.button("Add Body Group").clicked() {
-            self.input_data
-                .body_groups
-                .insert(*self.input_data_identifier_generator, ImputedBodyPart::default());
-            *self.input_data_identifier_generator += 1;
-        }
-
+        let selected_body_group = ListSelect::new("Body Group List").show(ui, &mut self.input_data.body_groups, |body_group| &mut body_group.name);
         ui.separator();
+        if let Some(active_body_group) = selected_body_group {
+            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                let name_label = ui.label("Body Group Name: ");
+                ui.text_edit_singleline(&mut active_body_group.name).labelled_by(name_label.id);
 
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-            let mut removed_body_groups = Vec::new();
-            for body_group_index in 0..self.input_data.body_groups.len() {
-                let (body_group_identifier, body_group) = &mut self.input_data.body_groups.get_index_mut(body_group_index).unwrap();
-                egui::CollapsingHeader::new(format!("Body Group: {}", body_group.name))
-                    .id_salt(**body_group_identifier)
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        let name_label = ui.label("Body Group Name: ");
-                        ui.text_edit_singleline(&mut body_group.name).labelled_by(name_label.id);
+                egui::CollapsingHeader::new("Models").default_open(true).show(ui, |ui| {
+                    let selected_model = ListSelect::new("Model List").show(ui, &mut active_body_group.models, |model| &mut model.name);
+                    ui.separator();
 
-                        ui.horizontal(|ui| {
-                            if ui.button("Add Model").clicked() {
-                                body_group.models.insert(*self.input_data_identifier_generator, ImputedModel::default());
-                                *self.input_data_identifier_generator += 1;
-                            }
+                    if let Some(active_model) = selected_model {
+                        ui.checkbox(&mut active_model.blank, "Blank");
 
-                            if ui.button("Remove Body Group").clicked() {
-                                removed_body_groups.push(**body_group_identifier);
-                            }
-                        });
-
-                        let mut removed_models = Vec::new();
-                        for model_index in 0..body_group.models.len() {
-                            let (model_identifier, model) = &mut body_group.models.get_index_mut(model_index).unwrap();
-                            egui::CollapsingHeader::new(format!("Model: {}", model.name))
-                                .default_open(true)
-                                .id_salt(**model_identifier)
-                                .show(ui, |ui| {
-                                    ui.checkbox(&mut model.blank, "Blank");
-
-                                    if model.blank {
-                                        return;
-                                    }
-
-                                    let name_label = ui.label("Model Name: ");
-                                    ui.text_edit_singleline(&mut model.name).labelled_by(name_label.id);
-                                    ui.horizontal(|ui| {
-                                        if ui.button("Select Model File…").clicked() {
-                                            if let Some(path) = rfd::FileDialog::new()
-                                                .set_title("Select Model File")
-                                                .add_filter("Supported Files", &SUPPORTED_FILES)
-                                                .pick_file()
-                                            {
-                                                if let Some(last_path) = &model.source_file_path {
-                                                    self.loaded_files.unload_file(last_path);
-                                                };
-                                                model.source_file_path = Some(path.clone());
-                                                self.loaded_files.load_file(path);
-                                            }
-                                        }
-
-                                        if ui.button("Remove Model").clicked() {
-                                            removed_models.push(**model_identifier);
-                                        }
-                                    });
-
-                                    if let Some(source_file_path) = &model.source_file_path {
-                                        let file_status = self.loaded_files.get_file_status(source_file_path).unwrap(); // FIXME: This must be check!
-
-                                        ui.horizontal(|ui| {
-                                            ui.label("Model File:");
-                                            ui.monospace(source_file_path.display().to_string());
-                                            match file_status {
-                                                FileStatus::Loading => {
-                                                    ui.spinner();
-                                                    if !model.enabled_source_parts.is_empty() {
-                                                        model.enabled_source_parts.clear();
-                                                    }
-                                                }
-                                                FileStatus::Loaded(_) => {
-                                                    ui_success(ui);
-                                                }
-                                                FileStatus::Failed => {
-                                                    ui_failed(ui);
-                                                    if !model.enabled_source_parts.is_empty() {
-                                                        model.enabled_source_parts.clear();
-                                                    }
-                                                }
-                                            }
-                                        });
-
-                                        if let FileStatus::Loaded(file_data) = file_status {
-                                            if file_data.parts.is_empty() {
-                                                ui.colored_label(egui::Color32::RED, "Model File Has No Mesh!");
-                                                return;
-                                            }
-
-                                            if model.enabled_source_parts.is_empty() {
-                                                model.enabled_source_parts = vec![true; file_data.parts.len()];
-                                            }
-
-                                            ui.heading("Enabled Parts");
-                                            ui.separator();
-                                            egui::ScrollArea::horizontal().show(ui, |ui| {
-                                                for (part_index, (part_name, _)) in file_data.parts.iter().enumerate() {
-                                                    let enabled_source_part = &mut model.enabled_source_parts[part_index];
-                                                    ui.checkbox(enabled_source_part, part_name);
-                                                }
-                                            });
-                                        }
-                                    }
-                                });
+                        if active_model.blank {
+                            return;
                         }
 
-                        for removed_model in removed_models {
-                            let removed_model = body_group.models.shift_remove(&removed_model);
-                            if let Some(model) = removed_model {
-                                if let Some(path) = model.source_file_path {
-                                    self.loaded_files.unload_file(&path);
-                                }
+                        let name_label = ui.label("Model Name: ");
+                        ui.text_edit_singleline(&mut active_model.name).labelled_by(name_label.id);
+                        if ui.button("Select Model File…").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .set_title("Select Model File")
+                                .add_filter("Supported Files", &SUPPORTED_FILES)
+                                .pick_file()
+                            {
+                                if let Some(last_path) = &active_model.source_file_path {
+                                    self.loaded_files.unload_file(last_path);
+                                };
+                                active_model.source_file_path = Some(path.clone());
+                                self.loaded_files.load_file(path);
                             }
                         }
-                    });
-            }
 
-            for removed_body_group in removed_body_groups {
-                let removed_body_part = self.input_data.body_groups.shift_remove(&removed_body_group);
-                if let Some(body_part) = removed_body_part {
-                    for (_, model) in body_part.models {
-                        if let Some(path) = model.source_file_path {
-                            self.loaded_files.unload_file(&path);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    fn render_animations(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Animations");
-        if ui.button("Add Animation").clicked() {
-            self.input_data
-                .animations
-                .insert(*self.input_data_identifier_generator, ImputedAnimation::default());
-            *self.input_data_identifier_generator += 1;
-        }
-
-        ui.separator();
-
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-            let mut removed_animations = Vec::new();
-            for animation_index in 0..self.input_data.animations.len() {
-                let (animation_identifier, animation) = &mut self.input_data.animations.get_index_mut(animation_index).unwrap();
-                egui::CollapsingHeader::new(format!("Animation: {}", animation.name))
-                    .id_salt(**animation_identifier)
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        let name_label = ui.label("Animation Name: ");
-                        ui.text_edit_singleline(&mut animation.name).labelled_by(name_label.id);
-
-                        ui.horizontal(|ui| {
-                            if ui.button("Select Model File…").clicked() {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .set_title("Select Model File")
-                                    .add_filter("Supported Files", &SUPPORTED_FILES)
-                                    .pick_file()
-                                {
-                                    if let Some(last_path) = &animation.source_file_path {
-                                        self.loaded_files.unload_file(last_path);
-                                    };
-                                    animation.source_file_path = Some(path.clone());
-                                    self.loaded_files.load_file(path);
-                                }
-                            }
-
-                            if ui.button("Remove Animation").clicked() {
-                                removed_animations.push(**animation_identifier);
-                            }
-                        });
-
-                        if let Some(source_file_path) = &animation.source_file_path {
+                        if let Some(source_file_path) = &active_model.source_file_path {
                             let file_status = self.loaded_files.get_file_status(source_file_path).unwrap(); // FIXME: This must be check!
 
                             ui.horizontal(|ui| {
-                                ui.label("Animation File:");
+                                ui.label("Model File:");
                                 ui.monospace(source_file_path.display().to_string());
                                 match file_status {
                                     FileStatus::Loading => {
                                         ui.spinner();
-                                        animation.source_animation = 0;
+                                        if !active_model.enabled_source_parts.is_empty() {
+                                            active_model.enabled_source_parts.clear();
+                                        }
                                     }
                                     FileStatus::Loaded(_) => {
-                                        ui_success(ui);
+                                        ui.add(icon(ui::IconType::Check));
                                     }
                                     FileStatus::Failed => {
-                                        ui_failed(ui);
-                                        animation.source_animation = 0;
+                                        ui.add(icon(ui::IconType::X));
+                                        if !active_model.enabled_source_parts.is_empty() {
+                                            active_model.enabled_source_parts.clear();
+                                        }
                                     }
                                 }
                             });
 
                             if let FileStatus::Loaded(file_data) = file_status {
-                                if animation.source_animation > file_data.animations.len() {
-                                    animation.source_animation = 0;
+                                if file_data.parts.is_empty() {
+                                    ui.colored_label(egui::Color32::RED, "Model File Has No Mesh!");
+                                    return;
                                 }
 
+                                if active_model.enabled_source_parts.is_empty() {
+                                    active_model.enabled_source_parts = vec![true; file_data.parts.len()];
+                                }
+
+                                ui.heading("Enabled Parts");
                                 ui.separator();
-                                egui::ComboBox::from_label("Source Animation")
-                                    .selected_text(file_data.animations.get_index(animation.source_animation).unwrap().0)
-                                    .show_ui(ui, |ui| {
-                                        for (source_animation_index, (source_animation_name, _)) in file_data.animations.iter().enumerate() {
-                                            ui.selectable_value(&mut animation.source_animation, source_animation_index, source_animation_name);
-                                        }
-                                    });
+                                egui::ScrollArea::horizontal().show(ui, |ui| {
+                                    for (part_index, (part_name, _)) in file_data.parts.iter().enumerate() {
+                                        let enabled_source_part = &mut active_model.enabled_source_parts[part_index];
+                                        ui.checkbox(enabled_source_part, part_name);
+                                    }
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+        }
+    }
+
+    fn render_animations(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Animations");
+        let selected_animation = ListSelect::new("Animation List").show(ui, &mut self.input_data.animations, |animation| &mut animation.name);
+        ui.separator();
+        if let Some(active_animation) = selected_animation {
+            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                let name_label = ui.label("Animation Name: ");
+                ui.text_edit_singleline(&mut active_animation.name).labelled_by(name_label.id);
+
+                if ui.button("Select Model File…").clicked() {
+                    if let Some(path) = rfd::FileDialog::new()
+                        .set_title("Select Model File")
+                        .add_filter("Supported Files", &SUPPORTED_FILES)
+                        .pick_file()
+                    {
+                        if let Some(last_path) = &active_animation.source_file_path {
+                            self.loaded_files.unload_file(last_path);
+                        };
+                        active_animation.source_file_path = Some(path.clone());
+                        self.loaded_files.load_file(path);
+                    }
+                }
+
+                if let Some(source_file_path) = &active_animation.source_file_path {
+                    let file_status = self.loaded_files.get_file_status(source_file_path).unwrap(); // FIXME: This must be check!
+
+                    ui.horizontal(|ui| {
+                        ui.label("Animation File:");
+                        ui.monospace(source_file_path.display().to_string());
+                        match file_status {
+                            FileStatus::Loading => {
+                                ui.spinner();
+                                active_animation.source_animation = 0;
+                            }
+                            FileStatus::Loaded(_) => {
+                                ui.add(icon(ui::IconType::Check));
+                            }
+                            FileStatus::Failed => {
+                                ui.add(icon(ui::IconType::X));
+                                active_animation.source_animation = 0;
                             }
                         }
                     });
-            }
 
-            for removed_animation in removed_animations {
-                let removed_animation = self.input_data.animations.shift_remove(&removed_animation);
-                if let Some(animation) = removed_animation {
-                    if let Some(path) = animation.source_file_path {
-                        self.loaded_files.unload_file(&path);
+                    if let FileStatus::Loaded(file_data) = file_status {
+                        if active_animation.source_animation > file_data.animations.len() {
+                            active_animation.source_animation = 0;
+                        }
+
+                        ui.separator();
+                        egui::ComboBox::from_label("Source Animation")
+                            .selected_text(file_data.animations.get_index(active_animation.source_animation).unwrap().0)
+                            .show_ui(ui, |ui| {
+                                for (source_animation_index, (source_animation_name, _)) in file_data.animations.iter().enumerate() {
+                                    ui.selectable_value(&mut active_animation.source_animation, source_animation_index, source_animation_name);
+                                }
+                            });
                     }
                 }
-            }
-        });
+            });
+        }
     }
 
     fn render_sequences(&mut self, ui: &mut egui::Ui) {
         ui.heading("Sequences");
-        if ui.button("Add Sequence").clicked() {
-            self.input_data
-                .sequences
-                .insert(*self.input_data_identifier_generator, ImputedSequence::default());
-            *self.input_data_identifier_generator += 1;
-        }
-
+        let selected_sequence = ListSelect::new("Sequence List").show(ui, &mut self.input_data.sequences, |sequence| &mut sequence.name);
         ui.separator();
+        if let Some(active_sequence) = selected_sequence {
+            egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
+                let name_label = ui.label("Sequence Name: ");
+                ui.text_edit_singleline(&mut active_sequence.name).labelled_by(name_label.id);
 
-        egui::ScrollArea::vertical().auto_shrink([false; 2]).show(ui, |ui| {
-            let mut removed_sequences = Vec::new();
+                if self.input_data.animations.is_empty() {
+                    ui.colored_label(egui::Color32::RED, "No Animations Created");
 
-            for sequence_index in 0..self.input_data.sequences.len() {
-                let (sequence_identifier, sequence) = &mut self.input_data.sequences.get_index_mut(sequence_index).unwrap();
-                egui::CollapsingHeader::new(format!("Sequence: {}", sequence.name))
-                    .id_salt(**sequence_identifier)
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        let name_label = ui.label("Sequence Name: ");
-                        ui.text_edit_singleline(&mut sequence.name).labelled_by(name_label.id);
+                    if !active_sequence.animations.is_empty() {
+                        active_sequence.animations.clear();
+                    }
 
-                        ui.horizontal(|ui| {
-                            if ui.button("Remove Sequence").clicked() {
-                                removed_sequences.push(**sequence_identifier);
-                            }
-                        });
+                    return;
+                }
 
-                        ui.separator();
+                if active_sequence.animations.is_empty() {
+                    active_sequence.animations = vec![vec![0]];
+                }
 
-                        if self.input_data.animations.is_empty() {
-                            ui.colored_label(egui::Color32::RED, "No Animations Created");
-
-                            if !sequence.animations.is_empty() {
-                                sequence.animations.clear();
-                            }
-
-                            return;
+                let sequence_animation = &mut active_sequence.animations[0][0];
+                egui::ComboBox::from_label("Selected Animation")
+                    .selected_text(&self.input_data.animations[*sequence_animation].name)
+                    .show_ui(ui, |ui| {
+                        for (animation_index, animation) in self.input_data.animations.iter().enumerate() {
+                            ui.selectable_value(sequence_animation, animation_index, &animation.name);
                         }
-
-                        if sequence.animations.is_empty() {
-                            sequence.animations = vec![vec![0]];
-                        }
-
-                        let sequence_animation = &mut sequence.animations[0][0];
-                        egui::ComboBox::from_label("Selected Animation")
-                            .selected_text(&self.input_data.animations.get_index(*sequence_animation).unwrap().1.name)
-                            .show_ui(ui, |ui| {
-                                for (animation_index, (_, animation)) in self.input_data.animations.iter().enumerate() {
-                                    ui.selectable_value(sequence_animation, animation_index, &animation.name);
-                                }
-                            });
                     });
-            }
-
-            for removed_sequence in removed_sequences {
-                self.input_data.sequences.shift_remove(&removed_sequence);
-            }
-        });
+            });
+        }
     }
 }

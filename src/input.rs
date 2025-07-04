@@ -1,16 +1,14 @@
 use std::path::PathBuf;
 
-use indexmap::IndexMap;
-
 #[derive(Clone, Debug, Default)]
 pub struct ImputedCompilationData {
     /// The name of the mdl output as *.mdl
     pub model_name: String,
     /// The path to where the mdl is exported.
     pub export_path: Option<PathBuf>,
-    pub body_groups: IndexMap<usize, ImputedBodyPart>,
-    pub animations: IndexMap<usize, ImputedAnimation>,
-    pub sequences: IndexMap<usize, ImputedSequence>,
+    pub body_groups: Vec<ImputedBodyPart>,
+    pub animations: Vec<ImputedAnimation>,
+    pub sequences: Vec<ImputedSequence>,
 }
 
 /// A struct to define a body part for the model.
@@ -18,7 +16,7 @@ pub struct ImputedCompilationData {
 pub struct ImputedBodyPart {
     pub name: String,
     /// The models used by the body part.
-    pub models: IndexMap<usize, ImputedModel>,
+    pub models: Vec<ImputedModel>,
 }
 
 impl Default for ImputedBodyPart {

@@ -19,7 +19,7 @@ pub fn process_sequences(
 ) -> Result<IndexMap<String, ProcessedSequence>, ProcessingSequenceError> {
     let mut processed_sequences = IndexMap::with_capacity(input.sequences.len());
 
-    for (input_sequence_index, (_, input_sequence)) in input.sequences.iter().enumerate() {
+    for (input_sequence_index, input_sequence) in input.sequences.iter().enumerate() {
         let processed_sequence_name = input_sequence.name.clone();
         if processed_sequences.contains_key(&processed_sequence_name) {
             return Err(ProcessingSequenceError::DuplicateSequenceName(input_sequence_index + 1));

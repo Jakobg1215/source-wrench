@@ -62,7 +62,7 @@ pub fn process_meshes(
 ) -> Result<ProcessedModelData, ProcessingMeshError> {
     let mut processed_model_data = ProcessedModelData::default();
 
-    for (imputed_body_group_index, (_, imputed_body_group)) in input.body_groups.iter().enumerate() {
+    for (imputed_body_group_index, imputed_body_group) in input.body_groups.iter().enumerate() {
         let processed_body_part_name = imputed_body_group.name.clone();
         if processed_model_data.body_parts.contains_key(&processed_body_part_name) {
             return Err(ProcessingMeshError::DuplicateBodyGroupName(imputed_body_group_index + 1));
@@ -70,7 +70,7 @@ pub fn process_meshes(
 
         let mut processed_body_part = ProcessedBodyPart::default();
 
-        for (_, imputed_model) in &imputed_body_group.models {
+        for imputed_model in &imputed_body_group.models {
             if imputed_model.blank {
                 processed_body_part.models.push(ProcessedModel::default());
                 continue;

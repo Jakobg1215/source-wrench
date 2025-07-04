@@ -27,8 +27,8 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
     let mut remapped_files = IndexSet::with_capacity(import.loaded_file_count());
     let mut source_bone_table: IndexMap<String, ProcessedBone> = IndexMap::new();
 
-    for (_, imputed_body_group) in &input.body_groups {
-        for (_, imputed_model) in &imputed_body_group.models {
+    for imputed_body_group in &input.body_groups {
+        for imputed_model in &imputed_body_group.models {
             let source_file_path = imputed_model.source_file_path.as_ref().ok_or(ProcessingBoneError::NoFileSource)?;
 
             if remapped_files.contains(source_file_path) {
@@ -89,7 +89,7 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
         }
     }
 
-    for (_, imputed_animation) in &input.animations {
+    for imputed_animation in &input.animations {
         let source_file_path = imputed_animation.source_file_path.as_ref().ok_or(ProcessingBoneError::NoFileSource)?;
 
         if remapped_files.contains(source_file_path) {

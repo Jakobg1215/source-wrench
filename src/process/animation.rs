@@ -37,11 +37,11 @@ pub fn process_animations(
     let mut remapped_animations = Vec::with_capacity(input.animations.len());
     let mut processed_animations = IndexMap::new();
     let mut model_frame_count = 0;
-    for (imputed_animation_index, (_, imputed_animation)) in input.animations.iter().enumerate() {
+    for (imputed_animation_index, imputed_animation) in input.animations.iter().enumerate() {
         remapped_animations.push(processed_animations.len());
 
         // Check if the animation is used in any sequence.
-        if !input.sequences.iter().any(|(_, sequence)| {
+        if !input.sequences.iter().any(|sequence| {
             sequence
                 .animations
                 .iter()
