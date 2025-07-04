@@ -1,6 +1,6 @@
-use eframe::egui::{vec2, Align, Context, Frame, Id, Layout, Response, ScrollArea, Sense, TextEdit, Ui, UiBuilder, Widget};
+use eframe::egui::{Align, Context, Frame, Id, Layout, Response, ScrollArea, Sense, TextEdit, Ui, UiBuilder, Widget, vec2};
 
-use crate::ui::{icon_button, IconType};
+use crate::ui::{IconType, icon_button};
 
 #[derive(Debug)]
 pub struct ListSelect {

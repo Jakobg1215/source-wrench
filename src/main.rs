@@ -20,8 +20,8 @@ fn main() -> eframe::Result {
 use egui_dock::DockState;
 use import::{FileManager, FileStatus, SUPPORTED_FILES};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 struct SourceWrenchApplication {
     tab_tree: DockState<SourceWrenchTabType>,
@@ -159,7 +159,7 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
 
 use input::ImputedCompilationData;
 use ui::{icon, toggle_ui_compact};
-use utilities::logging::{self, log, LogLevel};
+use utilities::logging::{self, LogLevel, log};
 
 use crate::ui::ListSelect;
 impl SourceWrenchTabManager<'_> {

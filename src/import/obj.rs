@@ -5,11 +5,11 @@ use std::{
     path::Path,
 };
 
-use indexmap::{map::Entry, IndexMap};
+use indexmap::{IndexMap, map::Entry};
 use thiserror::Error as ThisError;
 
 use crate::utilities::{
-    logging::{log, LogLevel},
+    logging::{LogLevel, log},
     mathematics::{AxisDirection, Vector2, Vector3},
 };
 

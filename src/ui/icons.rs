@@ -1,4 +1,4 @@
-use eframe::egui::{pos2, Rect, Response, Sense, Shape, Ui, Vec2, Widget};
+use eframe::egui::{Rect, Response, Sense, Shape, Ui, Vec2, Widget, pos2};
 
 #[derive(Debug, Default)]
 pub enum IconType {

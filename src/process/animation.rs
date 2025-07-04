@@ -5,7 +5,7 @@ use crate::{
     import::FileManager,
     input::ImputedCompilationData,
     utilities::{
-        logging::{log, LogLevel},
+        logging::{LogLevel, log},
         mathematics::{Matrix3, Matrix4, Quaternion, Vector3},
     },
 };

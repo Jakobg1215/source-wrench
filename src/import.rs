@@ -2,7 +2,7 @@ use std::{
     io::Error as IoError,
     num::NonZeroUsize,
     path::{Path, PathBuf},
-    sync::{mpsc::channel, Arc},
+    sync::{Arc, mpsc::channel},
     thread,
 };
 
@@ -12,7 +12,7 @@ use parking_lot::RwLock;
 use thiserror::Error as ThisError;
 
 use crate::utilities::{
-    logging::{log, LogLevel},
+    logging::{LogLevel, log},
     mathematics::{AxisDirection, Quaternion, Vector2, Vector3},
 };
 
@@ -160,46 +160,48 @@ impl FileManager {
         self.file_watcher = Some(Arc::new(RwLock::new(watcher)));
 
         let manager = self.clone();
-        std::thread::spawn(move || loop {
-            match rx.recv() {
-                Ok(event) => match event {
-                    Ok(event) => {
-                        let mut paths = event.paths; // Does this need to be looped over?
-                        let file_path = paths.remove(0);
+        std::thread::spawn(move || {
+            loop {
+                match rx.recv() {
+                    Ok(event) => match event {
+                        Ok(event) => {
+                            let mut paths = event.paths; // Does this need to be looped over?
+                            let file_path = paths.remove(0);
 
-                        match event.kind {
-                            notify::EventKind::Modify(_) => {
-                                if matches!(manager.get_file_status(&file_path), Some(FileStatus::Loading)) {
-                                    continue;
+                            match event.kind {
+                                notify::EventKind::Modify(_) => {
+                                    if matches!(manager.get_file_status(&file_path), Some(FileStatus::Loading)) {
+                                        continue;
+                                    }
+
+                                    let mut loaded_files = manager.loaded_files.write();
+
+                                    if let Some((_, status)) = loaded_files.get_mut(&file_path) {
+                                        *status = FileStatus::Loading;
+                                    }
+
+                                    manager.load_file_data(file_path);
                                 }
+                                notify::EventKind::Remove(remove_kind) => {
+                                    let mut loaded_files = manager.loaded_files.write();
 
-                                let mut loaded_files = manager.loaded_files.write();
+                                    debug_assert!(!matches!(remove_kind, notify::event::RemoveKind::File));
 
-                                if let Some((_, status)) = loaded_files.get_mut(&file_path) {
-                                    *status = FileStatus::Loading;
+                                    if let Some((_, status)) = loaded_files.get_mut(&file_path) {
+                                        *status = FileStatus::Failed;
+                                    }
                                 }
-
-                                manager.load_file_data(file_path);
+                                _ => {}
                             }
-                            notify::EventKind::Remove(remove_kind) => {
-                                let mut loaded_files = manager.loaded_files.write();
-
-                                debug_assert!(!matches!(remove_kind, notify::event::RemoveKind::File));
-
-                                if let Some((_, status)) = loaded_files.get_mut(&file_path) {
-                                    *status = FileStatus::Failed;
-                                }
-                            }
-                            _ => {}
                         }
-                    }
+                        Err(error) => {
+                            log(format!("Fail To Watch File: {error}!"), LogLevel::Error);
+                        }
+                    },
                     Err(error) => {
-                        log(format!("Fail To Watch File: {error}!"), LogLevel::Error);
+                        log(format!("Fail To Watch Files: {error}!"), LogLevel::Error);
+                        break;
                     }
-                },
-                Err(error) => {
-                    log(format!("Fail To Watch Files: {error}!"), LogLevel::Error);
-                    break;
                 }
             }
         });

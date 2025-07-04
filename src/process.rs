@@ -6,7 +6,7 @@ use crate::{
     import::FileManager,
     input::ImputedCompilationData,
     utilities::{
-        logging::{log, LogLevel},
+        logging::{LogLevel, log},
         mathematics::{Angles, BoundingBox, Matrix4, Quaternion, Vector2, Vector3, Vector4},
     },
 };
@@ -16,10 +16,10 @@ mod bones;
 mod mesh;
 mod sequences;
 
-use animation::{process_animations, ProcessingAnimationError};
-use bones::{process_bones, ProcessingBoneError};
-use mesh::{process_meshes, ProcessingMeshError};
-use sequences::{process_sequences, ProcessingSequenceError};
+use animation::{ProcessingAnimationError, process_animations};
+use bones::{ProcessingBoneError, process_bones};
+use mesh::{ProcessingMeshError, process_meshes};
+use sequences::{ProcessingSequenceError, process_sequences};
 
 #[derive(Debug, Default)]
 pub struct ProcessedData {

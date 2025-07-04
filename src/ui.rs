@@ -1,9 +1,9 @@
 mod icons;
 mod list_select;
 
+pub use icons::IconType;
 pub use icons::icon;
 pub use icons::icon_button;
-pub use icons::IconType;
 
 pub use list_select::ListSelect;
 

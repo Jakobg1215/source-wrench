@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::{
-    process::{ProcessedAnimationData, ProcessedBodyPart, ProcessedData, FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, VERTEX_CACHE_SIZE},
+    process::{FLOAT_TOLERANCE, MAX_HARDWARE_BONES_PER_STRIP, ProcessedAnimationData, ProcessedBodyPart, ProcessedData, VERTEX_CACHE_SIZE},
     utilities::mathematics::{Angles, Quaternion, Vector2, Vector3, Vector4},
 };
 
