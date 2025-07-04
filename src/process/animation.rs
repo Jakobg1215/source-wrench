@@ -41,12 +41,11 @@ pub fn process_animations(
         remapped_animations.push(processed_animations.len());
 
         // Check if the animation is used in any sequence.
-        if !input.sequences.iter().any(|sequence| {
-            sequence
-                .animations
-                .iter()
-                .any(|row| row.iter().any(|&used_animation| used_animation == imputed_animation_index))
-        }) {
+        if !input
+            .sequences
+            .iter()
+            .any(|sequence| sequence.animations.iter().any(|row| row.contains(&imputed_animation_index)))
+        {
             log(format!("Animation \"{}\" Not Used!", imputed_animation.name), LogLevel::Warn);
             continue;
         }
@@ -174,7 +173,7 @@ pub fn process_animations(
         processed_animations.insert(processed_animation_name, processed_animation);
     }
 
-    log(format!("Model uses {} frames.", model_frame_count), LogLevel::Debug);
+    log(format!("Model uses {model_frame_count} frames."), LogLevel::Debug);
 
     if processed_animations.len() > (i16::MAX as usize + 1) {
         return Err(ProcessingAnimationError::TooManyAnimations);

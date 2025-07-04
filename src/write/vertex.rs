@@ -72,11 +72,10 @@ impl Header {
         writer.write_to_integer_offset(self.tangent_index, writer.this() - self.this)?;
 
         for tangent in &self.tangents {
-            debug_assert!(tangent.is_finite(), "Tangent Is Not Finite! tangent: {:?}", tangent);
+            debug_assert!(tangent.is_finite(), "Tangent Is Not Finite! tangent: {tangent:?}");
             debug_assert!(
                 Vector3::new(tangent.x, tangent.y, tangent.z).is_normalized(),
-                "Tangent Is Not Normalized! tangent: {:?}",
-                tangent
+                "Tangent Is Not Normalized! tangent: {tangent:?}"
             );
             debug_assert!(
                 tangent.w == 1.0 || tangent.w == -1.0,

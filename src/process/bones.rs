@@ -163,9 +163,9 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
 
         collapsed_remap.push((true, bone_data.parent));
         collapsed_count += 1;
-        log(format!("Collapsed \"{}\"!", bone_name), LogLevel::Verbose);
+        log(format!("Collapsed \"{bone_name}\"!"), LogLevel::Verbose);
     }
-    log(format!("Collapsed {} bones.", collapsed_count), LogLevel::Debug);
+    log(format!("Collapsed {collapsed_count} bones."), LogLevel::Debug);
 
     if collapsed_bone_table.len() > (i8::MAX as usize) + 1 {
         return Err(ProcessingBoneError::TooManyBones);

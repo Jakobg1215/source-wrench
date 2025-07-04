@@ -194,11 +194,11 @@ impl FileManager {
                         }
                     }
                     Err(error) => {
-                        log(format!("Fail To Watch File: {}!", error), LogLevel::Error);
+                        log(format!("Fail To Watch File: {error}!"), LogLevel::Error);
                     }
                 },
                 Err(error) => {
-                    log(format!("Fail To Watch Files: {}!", error), LogLevel::Error);
+                    log(format!("Fail To Watch Files: {error}!"), LogLevel::Error);
                     break;
                 }
             }
@@ -258,7 +258,7 @@ impl FileManager {
             let file_data = match loaded_file {
                 Ok(data) => data,
                 Err(error) => {
-                    log(format!("Fail To Load File: {}!", error), LogLevel::Error);
+                    log(format!("Fail To Load File: {error}!"), LogLevel::Error);
 
                     if let Some((_, status)) = loaded_files.get_mut(&file_path) {
                         *status = FileStatus::Failed;

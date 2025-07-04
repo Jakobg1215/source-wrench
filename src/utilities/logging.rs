@@ -23,7 +23,7 @@ pub fn log<T: Into<String>>(message: T, level: LogLevel) {
         LogLevel::Error => "ERROR",
     };
 
-    logger.logs.push((format!("[{}] {}", level_string, log_message), level));
+    logger.logs.push((format!("[{level_string}] {log_message}"), level));
 }
 
 pub struct LoggingData {

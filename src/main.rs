@@ -47,7 +47,7 @@ impl Default for SourceWrenchApplication {
         let mut loaded_files = FileManager::default();
 
         if let Err(watch_error) = loaded_files.start_file_watch() {
-            log(format!("Fail To Start File Watch: {}!", watch_error), LogLevel::Error);
+            log(format!("Fail To Start File Watch: {watch_error}!"), LogLevel::Error);
         }
 
         Self {
@@ -219,7 +219,7 @@ impl SourceWrenchTabManager<'_> {
                     let processed_data = match process::process(&input_data, &loaded_files) {
                         Ok(data) => data,
                         Err(error) => {
-                            log(format!("Fail To Compile Model: {}!", error), LogLevel::Error);
+                            log(format!("Fail To Compile Model: {error}!"), LogLevel::Error);
                             compiling.store(false, Ordering::Relaxed);
                             return;
                         }
@@ -230,7 +230,7 @@ impl SourceWrenchTabManager<'_> {
                     match write::write_files(input_data.model_name.clone(), model_name, processed_data, export_path) {
                         Ok(_) => {}
                         Err(error) => {
-                            log(format!("Fail To Write Files: {}!", error), LogLevel::Error);
+                            log(format!("Fail To Write Files: {error}!"), LogLevel::Error);
                             compiling.store(false, Ordering::Relaxed);
                             return;
                         }
