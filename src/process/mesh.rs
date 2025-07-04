@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
 use indexmap::{IndexMap, IndexSet};
-use kdtree::{distance::squared_euclidean, KdTree};
+use kdtree::{KdTree, distance::squared_euclidean};
 use thiserror::Error as ThisError;
 
 use crate::{
     import::{FileManager, ImportFileData, ImportVertex},
     input::ImputedCompilationData,
-    process::{ProcessedHardwareBone, ProcessedMeshVertex, ProcessedStrip, ProcessedStripGroup, ProcessedVertex, MAX_HARDWARE_BONES_PER_STRIP},
+    process::{MAX_HARDWARE_BONES_PER_STRIP, ProcessedHardwareBone, ProcessedMeshVertex, ProcessedStrip, ProcessedStripGroup, ProcessedVertex},
     utilities::{
-        logging::{log, LogLevel},
+        logging::{LogLevel, log},
         mathematics::{BoundingBox, Matrix3, Matrix4, Vector2, Vector3, Vector4},
     },
 };
 
-use super::{ProcessedBodyPart, ProcessedBoneData, ProcessedMesh, ProcessedModel, ProcessedModelData, FLOAT_TOLERANCE};
+use super::{FLOAT_TOLERANCE, ProcessedBodyPart, ProcessedBoneData, ProcessedMesh, ProcessedModel, ProcessedModelData};
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingMeshError {
@@ -235,7 +235,7 @@ fn create_triangle_lists(
                             .within(&triangle_vertex.position.as_slice(), FLOAT_TOLERANCE, &squared_euclidean)
                             .unwrap();
 
-                        if let Some(&(_, index)) = neighbors.iter().find(|(_, &i)| vertex_equals(&triangle_vertex, &triangle_list.vertices[i])) {
+                        if let Some(&(_, index)) = neighbors.iter().find(|(_, i)| vertex_equals(&triangle_vertex, &triangle_list.vertices[**i])) {
                             *vertex_index = *index;
                             continue;
                         }
