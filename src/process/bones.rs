@@ -1,4 +1,6 @@
-use indexmap::{IndexMap, IndexSet};
+use std::path::PathBuf;
+
+use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::{
@@ -14,37 +16,43 @@ use super::{ProcessedBone, ProcessedBoneData, ProcessedBoneFlags};
 
 #[derive(Debug, ThisError)]
 pub enum ProcessingBoneError {
-    #[error("No Animation File Selected")]
-    NoFileSource,
-    #[error("Animation File Source Not Loaded")]
-    FileSourceNotLoaded,
+    #[error("Model \"{0}\" In Body Group \"{1}\" Has No File Source")]
+    NoModelFileSource(String, String),
+    #[error("Animation \"{0}\" Has No File Source")]
+    NoAnimationFileSource(String),
+    #[error("File Source Not Loaded \"{0}\"")]
+    FileSourceNotLoaded(PathBuf),
     #[error("Model Has Too Many Bone")]
     TooManyBones,
 }
 
 pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Result<ProcessedBoneData, ProcessingBoneError> {
-    // Load all source files to a bone table.
-    let mut remapped_files = IndexSet::with_capacity(import.loaded_file_count());
-    let mut source_bone_table: IndexMap<String, ProcessedBone> = IndexMap::new();
+    let mut processed_bones: IndexMap<String, ProcessedBone> = IndexMap::new();
 
-    for imputed_body_group in &input.body_groups {
-        for imputed_model in &imputed_body_group.models {
-            let source_file_path = imputed_model.source_file_path.as_ref().ok_or(ProcessingBoneError::NoFileSource)?;
+    // TODO: Declare define bones.
 
-            if remapped_files.contains(source_file_path) {
+    for input_body_part in &input.body_groups {
+        for input_model in &input_body_part.models {
+            if input_model.blank {
                 continue;
             }
 
-            let imported_file = import.get_file_data(source_file_path).ok_or(ProcessingBoneError::FileSourceNotLoaded)?;
+            let source_file_path = input_model
+                .source_file_path
+                .as_ref()
+                .ok_or(ProcessingBoneError::NoModelFileSource(input_model.name.clone(), input_body_part.name.clone()))?;
+
+            let imported_file = import
+                .get_file_data(source_file_path)
+                .ok_or(ProcessingBoneError::FileSourceNotLoaded(source_file_path.clone()))?;
 
             for (import_bone_index, (import_bone_name, import_bone)) in imported_file.skeleton.iter().enumerate() {
                 let mut bone_flags = ProcessedBoneFlags::default();
-                for (enabled_part_index, enabled_part) in imputed_model.enabled_source_parts.iter().enumerate() {
-                    if !enabled_part {
+
+                for (import_part_index, (_, import_part)) in imported_file.parts.iter().enumerate() {
+                    if !input_model.enabled_source_parts[import_part_index] {
                         continue;
                     }
-
-                    let (_, import_part) = imported_file.parts.get_index(enabled_part_index).unwrap();
 
                     for vertex in &import_part.vertices {
                         if vertex.links.contains_key(&import_bone_index) {
@@ -53,178 +61,171 @@ pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Re
                     }
                 }
 
-                if let Some(global_bone) = source_bone_table.get_mut(import_bone_name) {
+                if let Some(global_bone) = processed_bones.get_mut(import_bone_name) {
                     global_bone.flags.insert(bone_flags);
                     continue;
                 }
 
-                // TODO: Validate the data and not unwrap
-                let import_bone_parent = import_bone.parent.map(|parent_index| {
-                    source_bone_table
-                        .get_index_of(imported_file.skeleton.get_index(parent_index).map(|(parent_name, _)| parent_name).unwrap())
-                        .unwrap()
+                let parent_index = import_bone.parent.map(|index| {
+                    let (parent_name, _) = imported_file.skeleton.get_index(index).expect("Source Bone Parent Index Should Be Valid");
+                    processed_bones.get_index_of(parent_name).expect("Parent Bone Should Already Be Loaded")
                 });
 
                 let source_transform = Matrix4::new(Matrix3::from_up_forward(imported_file.up, imported_file.forward), Vector3::default());
                 let bone_matrix = Matrix4::new(import_bone.orientation.to_matrix(), import_bone.position);
-                let bone_transform = if import_bone_parent.is_none() {
+                let bone_transform = if parent_index.is_none() {
                     source_transform.inverse() * bone_matrix
                 } else {
                     bone_matrix
                 };
 
-                source_bone_table.insert(
+                processed_bones.insert(
                     import_bone_name.clone(),
                     ProcessedBone {
-                        parent: import_bone_parent,
+                        parent: parent_index,
                         position: bone_transform.translation(),
-                        rotation: bone_transform.rotation().to_angles(),
+                        orientation: bone_transform.rotation().to_angles(),
                         flags: bone_flags,
                         ..Default::default()
                     },
                 );
             }
-
-            remapped_files.insert(source_file_path);
         }
     }
 
-    for imputed_animation in &input.animations {
-        let source_file_path = imputed_animation.source_file_path.as_ref().ok_or(ProcessingBoneError::NoFileSource)?;
+    for input_animation in &input.animations {
+        let source_file_path = input_animation
+            .source_file_path
+            .as_ref()
+            .ok_or(ProcessingBoneError::NoAnimationFileSource(input_animation.name.clone()))?;
 
-        if remapped_files.contains(source_file_path) {
-            continue;
-        }
-
-        let imported_file = import.get_file_data(source_file_path).ok_or(ProcessingBoneError::FileSourceNotLoaded)?;
+        let imported_file = import
+            .get_file_data(source_file_path)
+            .ok_or(ProcessingBoneError::FileSourceNotLoaded(source_file_path.clone()))?;
 
         for (import_bone_name, import_bone) in &imported_file.skeleton {
-            if source_bone_table.contains_key(import_bone_name) {
+            let bone_flags = ProcessedBoneFlags::default();
+
+            // TODO: Add flags for animated bones.
+
+            if let Some(global_bone) = processed_bones.get_mut(import_bone_name) {
+                global_bone.flags.insert(bone_flags);
                 continue;
             }
 
-            // TODO: Validate the data and not unwrap
-            let import_bone_parent = import_bone.parent.map(|parent_index: usize| {
-                source_bone_table
-                    .get_index_of(imported_file.skeleton.get_index(parent_index).map(|(parent_name, _)| parent_name).unwrap())
-                    .unwrap()
+            let parent_index = import_bone.parent.map(|index| {
+                let (parent_name, _) = imported_file.skeleton.get_index(index).expect("Source Bone Parent Index Should Be Valid");
+                processed_bones.get_index_of(parent_name).expect("Parent Bone Should Already Be Loaded")
             });
 
             let source_transform = Matrix4::new(Matrix3::from_up_forward(imported_file.up, imported_file.forward), Vector3::default());
             let bone_matrix = Matrix4::new(import_bone.orientation.to_matrix(), import_bone.position);
-            let bone_transform = if import_bone_parent.is_none() {
+            let bone_transform = if parent_index.is_none() {
                 source_transform.inverse() * bone_matrix
             } else {
                 bone_matrix
             };
 
-            source_bone_table.insert(
+            processed_bones.insert(
                 import_bone_name.clone(),
                 ProcessedBone {
-                    parent: import_bone_parent,
+                    parent: parent_index,
                     position: bone_transform.translation(),
-                    rotation: bone_transform.rotation().to_angles(),
+                    orientation: bone_transform.rotation().to_angles(),
+                    flags: bone_flags,
                     ..Default::default()
                 },
             );
         }
-
-        remapped_files.insert(source_file_path);
     }
 
-    log(format!("Model uses {} source bones.", source_bone_table.len()), LogLevel::Debug);
+    log(format!("Model uses {} source bones.", processed_bones.len()), LogLevel::Debug);
 
-    // Generate all pose matrixes for source bones.
-    for bone_index in 0..source_bone_table.len() {
-        if let Some(parent_pose) = source_bone_table[bone_index].parent.map(|index| source_bone_table[index].pose) {
-            let bone = &mut source_bone_table[bone_index];
-            let pose_matrix = parent_pose * Matrix4::new(bone.rotation, bone.position);
-            bone.pose = pose_matrix;
+    // TODO: Enforce define bone's transforms.
+
+    // TODO: Tag bones from input data.
+
+    // Create all world transform matrixes for source bones.
+    for source_bone_index in 0..processed_bones.len() {
+        if let Some(parent_matrix) = processed_bones[source_bone_index]
+            .parent
+            .map(|parent_index| processed_bones[parent_index].world_transform)
+        {
+            let bone = &mut processed_bones[source_bone_index];
+            let transform_matrix = parent_matrix * Matrix4::new(bone.orientation, bone.position);
+            bone.world_transform = transform_matrix;
             continue;
         }
 
-        let bone = &mut source_bone_table[bone_index];
-        bone.pose = Matrix4::new(bone.rotation, bone.position);
+        let bone = &mut processed_bones[source_bone_index];
+        bone.world_transform = Matrix4::new(bone.orientation, bone.position);
     }
 
-    // TODO: Tag bones from input data
+    // TODO: Enforce skeleton hierarchy.
 
-    // TODO: Enforce skeleton hierarchy
-
-    let mut collapsed_bone_table = IndexMap::with_capacity(source_bone_table.len());
-    let mut collapsed_remap = Vec::with_capacity(source_bone_table.len());
-    let mut collapsed_count = 0;
-    for (bone_name, bone_data) in source_bone_table {
-        if !bone_data.flags.is_empty() {
-            collapsed_bone_table.insert(bone_name, bone_data);
-            collapsed_remap.push((false, Some(collapsed_bone_table.len() - 1)));
+    // Collapse unused Bones.
+    let mut current_bone_index = 0;
+    let mut collapse_count = 0;
+    while current_bone_index < processed_bones.len() {
+        let (current_bone_name, current_bone) = processed_bones.get_index(current_bone_index).expect("Current Bone Index Should Be Valid");
+        if !current_bone.flags.is_empty() {
+            current_bone_index += 1;
             continue;
         }
 
-        collapsed_remap.push((true, bone_data.parent));
-        collapsed_count += 1;
-        log(format!("Collapsed \"{bone_name}\"!"), LogLevel::Verbose);
-    }
-    log(format!("Collapsed {collapsed_count} bones."), LogLevel::Debug);
+        collapse_count += 1;
+        log(format!("Collapsing \"{current_bone_name}\"!"), LogLevel::Verbose);
 
-    if collapsed_bone_table.len() > (i8::MAX as usize) + 1 {
+        let current_bone_parent = current_bone.parent;
+        processed_bones.shift_remove_index(current_bone_index);
+
+        for new_bone_index in current_bone_index..processed_bones.len() {
+            let bone = &mut processed_bones[new_bone_index];
+            if let Some(bone_parent) = bone.parent {
+                if bone_parent == new_bone_index {
+                    bone.parent = current_bone_parent;
+                    continue;
+                }
+
+                if bone_parent > current_bone_index {
+                    bone.parent = Some(bone_parent - 1);
+                }
+            }
+        }
+    }
+    log(format!("Collapsed {collapse_count} bones."), LogLevel::Debug);
+
+    if processed_bones.len() > (i8::MAX as usize) + 1 {
         return Err(ProcessingBoneError::TooManyBones);
     }
 
-    // Remap bones parents.
-    for (_, bone_data) in &mut collapsed_bone_table {
-        let old_parent = match bone_data.parent {
-            Some(parent) => parent,
-            None => continue,
-        };
-
-        let mut new_parent = Some(old_parent);
-
-        loop {
-            match collapsed_remap[new_parent.unwrap()] {
-                (true, None) => {
-                    new_parent = None;
-                    break;
-                }
-                (false, None) => {
-                    new_parent = None;
-                    break;
-                }
-                (false, Some(parent)) => {
-                    new_parent = Some(parent);
-                    break;
-                }
-                (true, Some(parent)) => new_parent = Some(parent),
-            };
-        }
-
-        bone_data.parent = new_parent;
-    }
-
-    // Update bones local rotation and location
-    for bone_index in 0..collapsed_bone_table.len() {
-        if let Some(parent_pose) = collapsed_bone_table[bone_index].parent.map(|index| collapsed_bone_table[index].pose) {
-            let bone = &mut collapsed_bone_table[bone_index];
-            let local_pose = parent_pose.inverse() * bone.pose;
-            bone.rotation = local_pose.rotation().to_angles();
+    // Update bones local location and orientation.
+    for source_bone_index in 0..processed_bones.len() {
+        if let Some(parent_matrix) = processed_bones[source_bone_index]
+            .parent
+            .map(|parent_index| processed_bones[parent_index].world_transform)
+        {
+            let bone = &mut processed_bones[source_bone_index];
+            let local_pose = parent_matrix.inverse() * bone.world_transform;
+            bone.orientation = local_pose.rotation().to_angles();
             bone.position = local_pose.translation();
             continue;
         }
 
-        let bone = &mut collapsed_bone_table[bone_index];
-        bone.rotation = bone.pose.rotation().to_angles();
-        bone.position = bone.pose.translation();
+        let bone = &mut processed_bones[source_bone_index];
+        bone.orientation = bone.world_transform.rotation().to_angles();
+        bone.position = bone.world_transform.translation();
     }
 
-    let mut sorted_bones_by_name: Vec<u8> = (0..collapsed_bone_table.len() as u8).collect();
+    let mut sorted_bones_by_name = (0..processed_bones.len() as u8).collect::<Vec<_>>();
     sorted_bones_by_name.sort_by(|from, to| {
-        let bone_from = collapsed_bone_table.get_index(*from as usize).unwrap().0;
-        let bone_to = collapsed_bone_table.get_index(*to as usize).unwrap().0;
+        let bone_from = processed_bones.get_index(*from as usize).unwrap().0;
+        let bone_to = processed_bones.get_index(*to as usize).unwrap().0;
         bone_from.cmp(bone_to)
     });
 
     Ok(ProcessedBoneData {
-        processed_bones: collapsed_bone_table,
+        processed_bones,
         sorted_bones_by_name,
     })
 }

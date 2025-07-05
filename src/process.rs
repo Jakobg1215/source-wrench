@@ -37,14 +37,16 @@ pub struct ProcessedBoneData {
 
 #[derive(Debug, Default)]
 pub struct ProcessedBone {
+    /// The index of the parent bone. None if the bone is a root bone.
     pub parent: Option<usize>,
     /// The position of the bone relative to the parent bone.
     pub position: Vector3,
     /// The rotation of the bone relative to the parent bone.
-    pub rotation: Angles,
+    pub orientation: Angles,
+    /// The flags the bone has.
     pub flags: ProcessedBoneFlags,
     /// The transforms in world space.
-    pub pose: Matrix4,
+    pub world_transform: Matrix4,
 }
 
 bitflags! {

@@ -556,7 +556,7 @@ fn convert_to_meshes(
 
             for (index, link) in processed_vertex.bones.iter().take(processed_vertex.bone_count.into()).enumerate() {
                 let bone = &processed_bone_data.processed_bones[*link as usize];
-                let local_point = (bone.pose.inverse() * Matrix4::new(Matrix3::default(), processed_vertex.position)).translation();
+                let local_point = (bone.world_transform.inverse() * Matrix4::new(Matrix3::default(), processed_vertex.position)).translation();
                 hitboxes
                     .entry(*link)
                     .or_default()

@@ -314,9 +314,4 @@ impl FileManager {
             .get(file_path)
             .and_then(|(_, status)| if let FileStatus::Loaded(data) = status { Some(data.clone()) } else { None })
     }
-
-    /// Returns the amount of loaded files in the manager.
-    pub fn loaded_file_count(&self) -> usize {
-        self.loaded_files.read().len()
-    }
 }
