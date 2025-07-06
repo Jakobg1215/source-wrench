@@ -1,25 +1,25 @@
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Default)]
-pub struct ImputedCompilationData {
+pub struct InputCompilationData {
     /// The name of the mdl output as *.mdl
     pub model_name: String,
     /// The path to where the mdl is exported.
     pub export_path: Option<PathBuf>,
-    pub body_groups: Vec<ImputedBodyPart>,
-    pub animations: Vec<ImputedAnimation>,
-    pub sequences: Vec<ImputedSequence>,
+    pub body_groups: Vec<InputBodyPart>,
+    pub animations: Vec<InputAnimation>,
+    pub sequences: Vec<InputSequence>,
 }
 
 /// A struct to define a body part for the model.
 #[derive(Clone, Debug)]
-pub struct ImputedBodyPart {
+pub struct InputBodyPart {
     pub name: String,
     /// The models used by the body part.
-    pub models: Vec<ImputedModel>,
+    pub models: Vec<InputModel>,
 }
 
-impl Default for ImputedBodyPart {
+impl Default for InputBodyPart {
     fn default() -> Self {
         Self {
             name: String::from("New Body Group"),
@@ -30,7 +30,7 @@ impl Default for ImputedBodyPart {
 
 /// A struct to define a model for a body part.
 #[derive(Clone, Debug)]
-pub struct ImputedModel {
+pub struct InputModel {
     pub name: String,
     /// This specify if the model will have no mesh.
     pub blank: bool,
@@ -40,7 +40,7 @@ pub struct ImputedModel {
     pub enabled_source_parts: Vec<bool>,
 }
 
-impl Default for ImputedModel {
+impl Default for InputModel {
     fn default() -> Self {
         Self {
             name: String::from("New Model"),
@@ -53,7 +53,7 @@ impl Default for ImputedModel {
 
 /// A struct to define an animation for the model.
 #[derive(Clone, Debug)]
-pub struct ImputedAnimation {
+pub struct InputAnimation {
     pub name: String,
     /// The source file to get the animation data from.
     pub source_file_path: Option<PathBuf>,
@@ -61,7 +61,7 @@ pub struct ImputedAnimation {
     pub source_animation: usize,
 }
 
-impl Default for ImputedAnimation {
+impl Default for InputAnimation {
     fn default() -> Self {
         Self {
             name: String::from("New Animation"),
@@ -73,13 +73,13 @@ impl Default for ImputedAnimation {
 
 /// A struct the define a sequence for a model.
 #[derive(Clone, Debug)]
-pub struct ImputedSequence {
+pub struct InputSequence {
     pub name: String,
     /// A N by N grid of animations used by the sequence.
     pub animations: Vec<Vec<usize>>,
 }
 
-impl Default for ImputedSequence {
+impl Default for InputSequence {
     fn default() -> Self {
         Self {
             name: String::from("New Sequence"),

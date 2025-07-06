@@ -4,7 +4,7 @@ use thiserror::Error as ThisError;
 
 use crate::{
     import::FileManager,
-    input::ImputedCompilationData,
+    input::InputCompilationData,
     utilities::{
         logging::{LogLevel, log},
         mathematics::{Angles, BoundingBox, Matrix4, Quaternion, Vector2, Vector3, Vector4},
@@ -174,7 +174,7 @@ pub const VERTEX_CACHE_SIZE: usize = 16;
 /// The tolerance for floating point numbers until they are considered equal.
 pub const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
 
-pub fn process(input: &ImputedCompilationData, file_manager: &FileManager) -> Result<ProcessedData, ProcessingDataError> {
+pub fn process(input: &InputCompilationData, file_manager: &FileManager) -> Result<ProcessedData, ProcessingDataError> {
     log("Processing Bones.", LogLevel::Debug);
     let processed_bone_data = process_bones(input, file_manager)?;
     log(format!("Model uses {} bones.", processed_bone_data.processed_bones.len()), LogLevel::Verbose);

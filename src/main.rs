@@ -26,7 +26,7 @@ use std::sync::{
 struct SourceWrenchApplication {
     tab_tree: DockState<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
-    input_data: ImputedCompilationData,
+    input_data: InputCompilationData,
     loaded_files: FileManager,
 }
 
@@ -109,7 +109,7 @@ impl SourceWrenchTabType {
 struct SourceWrenchTabManager<'a> {
     new_tabs: &'a mut Vec<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
-    input_data: &'a mut ImputedCompilationData,
+    input_data: &'a mut InputCompilationData,
     loaded_files: &'a mut FileManager,
 }
 
@@ -157,7 +157,7 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
     }
 }
 
-use input::ImputedCompilationData;
+use input::InputCompilationData;
 use ui::{icon, toggle_ui_compact};
 use utilities::logging::{self, LogLevel, log};
 

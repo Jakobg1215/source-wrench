@@ -6,7 +6,7 @@ use thiserror::Error as ThisError;
 
 use crate::{
     import::{FileManager, ImportFileData, ImportVertex},
-    input::ImputedCompilationData,
+    input::InputCompilationData,
     process::{MAX_HARDWARE_BONES_PER_STRIP, ProcessedHardwareBone, ProcessedMeshVertex, ProcessedStrip, ProcessedStripGroup, ProcessedVertex},
     utilities::{
         logging::{LogLevel, log},
@@ -56,7 +56,7 @@ struct TriangleList {
 }
 
 pub fn process_meshes(
-    input: &ImputedCompilationData,
+    input: &InputCompilationData,
     import: &FileManager,
     processed_bone_data: &ProcessedBoneData,
 ) -> Result<ProcessedModelData, ProcessingMeshError> {

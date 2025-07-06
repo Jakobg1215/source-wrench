@@ -3,7 +3,7 @@ use thiserror::Error as ThisError;
 
 use crate::{
     import::FileManager,
-    input::ImputedCompilationData,
+    input::InputCompilationData,
     utilities::{
         logging::{LogLevel, log},
         mathematics::{Matrix3, Matrix4, Quaternion, Vector3},
@@ -25,7 +25,7 @@ pub enum ProcessingAnimationError {
 }
 
 pub fn process_animations(
-    input: &ImputedCompilationData,
+    input: &InputCompilationData,
     import: &FileManager,
     processed_bone_data: &ProcessedBoneData,
 ) -> Result<ProcessedAnimationData, ProcessingAnimationError> {

@@ -5,7 +5,7 @@ use thiserror::Error as ThisError;
 
 use crate::{
     import::FileManager,
-    input::ImputedCompilationData,
+    input::InputCompilationData,
     utilities::{
         logging::{LogLevel, log},
         mathematics::{Matrix3, Matrix4, Vector3},
@@ -26,7 +26,7 @@ pub enum ProcessingBoneError {
     TooManyBones,
 }
 
-pub fn process_bones(input: &ImputedCompilationData, import: &FileManager) -> Result<ProcessedBoneData, ProcessingBoneError> {
+pub fn process_bones(input: &InputCompilationData, import: &FileManager) -> Result<ProcessedBoneData, ProcessingBoneError> {
     let mut processed_bones: IndexMap<String, ProcessedBone> = IndexMap::new();
 
     // TODO: Declare define bones.
