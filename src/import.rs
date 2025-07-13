@@ -1,3 +1,6 @@
+use indexmap::IndexMap;
+use notify::Watcher;
+use parking_lot::RwLock;
 use std::{
     io::Error as IoError,
     num::NonZeroUsize,
@@ -5,10 +8,6 @@ use std::{
     sync::{Arc, mpsc::channel},
     thread,
 };
-
-use indexmap::IndexMap;
-use notify::Watcher;
-use parking_lot::RwLock;
 use thiserror::Error as ThisError;
 
 use crate::{

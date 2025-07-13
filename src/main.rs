@@ -1,5 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use eframe::egui;
+use egui_dock::DockState;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
 mod import;
 mod input;
 mod process;
@@ -7,7 +14,11 @@ mod ui;
 mod utilities;
 mod write;
 
-use eframe::egui;
+use import::{FileManager, FileStatus, SUPPORTED_FILES};
+use input::InputCompilationData;
+use ui::{ListSelect, icon, toggle_ui_compact};
+use utilities::logging;
+
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_maximized(true).with_drag_and_drop(false),
@@ -17,12 +28,6 @@ fn main() -> eframe::Result {
     eframe::run_native("Source Wrench", options, Box::new(|_| Ok(Box::<SourceWrenchApplication>::default())))
 }
 
-use egui_dock::DockState;
-use import::{FileManager, FileStatus, SUPPORTED_FILES};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
-};
 struct SourceWrenchApplication {
     tab_tree: DockState<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
@@ -118,11 +123,6 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
     }
 }
 
-use input::InputCompilationData;
-use ui::{icon, toggle_ui_compact};
-use utilities::logging;
-
-use crate::ui::ListSelect;
 impl SourceWrenchTabManager<'_> {
     fn render_main(&mut self, ui: &mut egui::Ui) {
         ui.heading("Source Wrench");

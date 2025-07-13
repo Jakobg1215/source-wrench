@@ -1,3 +1,5 @@
+use eframe::egui;
+
 mod icons;
 mod list_select;
 
@@ -6,8 +8,6 @@ pub use icons::icon;
 pub use icons::icon_button;
 
 pub use list_select::ListSelect;
-
-use eframe::egui;
 
 pub fn toggle_ui_compact(ui: &mut egui::Ui, on: &mut bool) -> egui::Response {
     let desired_size = ui.spacing().interact_size.y * egui::vec2(2.0, 1.0);

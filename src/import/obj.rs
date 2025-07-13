@@ -1,11 +1,10 @@
+use indexmap::{IndexMap, map::Entry};
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error},
     num::NonZero,
     path::Path,
 };
-
-use indexmap::{IndexMap, map::Entry};
 use thiserror::Error as ThisError;
 
 use crate::{

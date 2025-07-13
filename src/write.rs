@@ -1,7 +1,6 @@
-use std::fs::write;
-
 use half::f16;
 use indexmap::IndexMap;
+use std::fs::write;
 use thiserror::Error as ThisError;
 
 use crate::{

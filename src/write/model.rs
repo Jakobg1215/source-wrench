@@ -1,9 +1,9 @@
+use bitflags::bitflags;
+
 use crate::{
     utilities::mathematics::{Angles, BoundingBox, Matrix4, Quaternion, Vector3},
     write::MAX_LOD_COUNT,
 };
-
-use bitflags::bitflags;
 
 use super::{FileWriteError, FileWriter};
 

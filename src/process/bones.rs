@@ -1,6 +1,5 @@
-use std::path::PathBuf;
-
 use indexmap::IndexMap;
+use std::path::PathBuf;
 use thiserror::Error as ThisError;
 
 use crate::{

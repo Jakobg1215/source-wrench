@@ -1,11 +1,10 @@
+use indexmap::IndexMap;
 use std::{
     fs::File,
     io::{BufRead, BufReader, Error},
     num::{NonZero, ParseFloatError, ParseIntError},
     path::Path,
 };
-
-use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::utilities::mathematics::{Angles, AxisDirection, Vector2, Vector3};

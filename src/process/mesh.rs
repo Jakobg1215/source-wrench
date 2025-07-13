@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use indexmap::{IndexMap, IndexSet};
 use kdtree::{KdTree, distance::squared_euclidean};
+use std::sync::Arc;
 use thiserror::Error as ThisError;
 
 use crate::{

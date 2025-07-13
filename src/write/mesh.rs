@@ -1,7 +1,8 @@
+use bitflags::bitflags;
+
 use crate::process::MAX_HARDWARE_BONES_PER_STRIP;
 
 use super::{FileWriteError, FileWriter};
-use bitflags::bitflags;
 
 #[derive(Debug, Default)]
 pub struct Header {
