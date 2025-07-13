@@ -1,4 +1,6 @@
-use std::sync::{LazyLock, Mutex};
+use parking_lot::Mutex;
+
+use std::sync::LazyLock;
 
 #[macro_export]
 macro_rules! info {
@@ -45,7 +47,7 @@ pub enum LogLevel {
 
 pub fn log<T: Into<String>>(message: T, level: LogLevel) {
     let log_message = message.into();
-    let mut logger = LOGGER.lock().unwrap();
+    let mut logger = LOGGER.lock();
 
     let level_string = match &level {
         LogLevel::Info => "INFO",

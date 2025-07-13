@@ -244,7 +244,7 @@ impl SourceWrenchTabManager<'_> {
     }
 
     fn render_logging(&mut self, ui: &mut egui::Ui) {
-        let mut logger = logging::LOGGER.lock().unwrap();
+        let mut logger = logging::LOGGER.lock();
         ui.horizontal(|ui| {
             ui.horizontal(|ui| {
                 ui.label("Verbose:");
