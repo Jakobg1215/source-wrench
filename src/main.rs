@@ -61,37 +61,21 @@ impl Default for SourceWrenchApplication {
 
 impl eframe::App for SourceWrenchApplication {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut new_tabs = Vec::new();
-
         egui_dock::DockArea::new(&mut self.tab_tree)
             .style(egui_dock::Style::from_egui(ctx.style().as_ref()))
+            .show_close_buttons(false)
             .show_leaf_close_all_buttons(false)
-            .show_add_buttons(true)
-            .show_add_popup(true)
             .show(
                 ctx,
                 &mut SourceWrenchTabManager {
-                    new_tabs: &mut new_tabs,
                     compiling: Arc::clone(&self.compiling),
                     input_data: &mut self.input_data,
                     loaded_files: &mut self.loaded_files,
                 },
             );
-
-        new_tabs.drain(..).for_each(|tab| {
-            let existing_tab = self.tab_tree.find_tab(&tab);
-
-            if let Some(existing_tab) = existing_tab {
-                self.tab_tree.set_active_tab(existing_tab);
-                return;
-            }
-
-            self.tab_tree.push_to_focused_leaf(tab);
-        });
     }
 }
 
-#[derive(PartialEq)]
 enum SourceWrenchTabType {
     Main,
     Logging,
@@ -100,14 +84,7 @@ enum SourceWrenchTabType {
     Sequences,
 }
 
-impl SourceWrenchTabType {
-    fn all_closeable_variants() -> Vec<Self> {
-        vec![Self::BodyGroups, Self::Animations, Self::Sequences]
-    }
-}
-
 struct SourceWrenchTabManager<'a> {
-    new_tabs: &'a mut Vec<SourceWrenchTabType>,
     compiling: Arc<AtomicBool>,
     input_data: &'a mut InputCompilationData,
     loaded_files: &'a mut FileManager,
@@ -138,22 +115,6 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
 
     fn scroll_bars(&self, _tab: &Self::Tab) -> [bool; 2] {
         [false, false]
-    }
-
-    fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
-        !matches!(tab, SourceWrenchTabType::Main | SourceWrenchTabType::Logging)
-    }
-
-    fn add_popup(&mut self, ui: &mut egui::Ui, _surface: egui_dock::SurfaceIndex, _node: egui_dock::NodeIndex) {
-        ui.set_min_width(100.0);
-        ui.style_mut().visuals.button_frame = false;
-
-        // TODO: Only show the ones that are missing.
-        for mut tab in SourceWrenchTabType::all_closeable_variants() {
-            if ui.button(self.title(&mut tab)).clicked() {
-                self.new_tabs.push(tab);
-            }
-        }
     }
 }
 
