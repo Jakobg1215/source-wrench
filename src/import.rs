@@ -11,9 +11,9 @@ use notify::Watcher;
 use parking_lot::RwLock;
 use thiserror::Error as ThisError;
 
-use crate::utilities::{
-    logging::{LogLevel, log},
-    mathematics::{AxisDirection, Quaternion, Vector2, Vector3},
+use crate::{
+    debug, error,
+    utilities::mathematics::{AxisDirection, Quaternion, Vector2, Vector3},
 };
 
 mod obj;
@@ -195,11 +195,11 @@ impl FileManager {
                             }
                         }
                         Err(error) => {
-                            log(format!("Fail To Watch File: {error}!"), LogLevel::Error);
+                            error!("Fail To Watch File: {error}!");
                         }
                     },
                     Err(error) => {
-                        log(format!("Fail To Watch Files: {error}!"), LogLevel::Error);
+                        error!("Fail To Watch Files: {error}!");
                         break;
                     }
                 }
@@ -243,13 +243,10 @@ impl FileManager {
                     _ => return Err(ParseError::UnsupportedFileFormat),
                 };
 
-                log(
-                    format!(
-                        "Loaded \"{}\" file: \"{}\".",
-                        file_extension.to_string_lossy().to_uppercase(),
-                        file_path.as_os_str().to_string_lossy()
-                    ),
-                    LogLevel::Verbose,
+                debug!(
+                    "Loaded \"{}\" file: \"{}\".",
+                    file_extension.to_string_lossy().to_uppercase(),
+                    file_path.as_os_str().to_string_lossy()
                 );
 
                 Ok(loaded_file)
@@ -260,7 +257,7 @@ impl FileManager {
             let file_data = match loaded_file {
                 Ok(data) => data,
                 Err(error) => {
-                    log(format!("Fail To Load File: {error}!"), LogLevel::Error);
+                    error!("Fail To Load File: {error}!");
 
                     if let Some((_, status)) = loaded_files.get_mut(&file_path) {
                         *status = FileStatus::Failed;
@@ -287,7 +284,7 @@ impl FileManager {
             let current_count = *existing_count - 1;
 
             if current_count == 0 {
-                log(format!("Unloaded {}!", file_path.as_os_str().to_string_lossy()), LogLevel::Debug);
+                debug!("Unloaded {}!", file_path.as_os_str().to_string_lossy());
                 loaded_files.shift_remove(file_path);
 
                 if let Some(watcher) = &self.file_watcher {

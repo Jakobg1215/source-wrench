@@ -2,12 +2,11 @@ use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::{
+    debug,
     import::FileManager,
     input::InputCompilationData,
-    utilities::{
-        logging::{LogLevel, log},
-        mathematics::{Matrix3, Matrix4, Quaternion, Vector3},
-    },
+    utilities::mathematics::{Matrix3, Matrix4, Quaternion, Vector3},
+    warn,
 };
 
 use super::{ProcessedAnimatedBoneData, ProcessedAnimation, ProcessedAnimationData, ProcessedBoneData};
@@ -46,7 +45,7 @@ pub fn process_animations(
             .iter()
             .any(|sequence| sequence.animations.iter().any(|row| row.contains(&imputed_animation_index)))
         {
-            log(format!("Animation \"{}\" Not Used!", imputed_animation.name), LogLevel::Warn);
+            warn!("Animation \"{}\" Not Used!", imputed_animation.name);
             continue;
         }
 
@@ -173,7 +172,7 @@ pub fn process_animations(
         processed_animations.insert(processed_animation_name, processed_animation);
     }
 
-    log(format!("Model uses {model_frame_count} frames."), LogLevel::Debug);
+    debug!("Model uses {model_frame_count} frames.");
 
     if processed_animations.len() > (i16::MAX as usize + 1) {
         return Err(ProcessingAnimationError::TooManyAnimations);

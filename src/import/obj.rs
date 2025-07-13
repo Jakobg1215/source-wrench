@@ -8,9 +8,9 @@ use std::{
 use indexmap::{IndexMap, map::Entry};
 use thiserror::Error as ThisError;
 
-use crate::utilities::{
-    logging::{LogLevel, log},
-    mathematics::{AxisDirection, Vector2, Vector3},
+use crate::{
+    utilities::mathematics::{AxisDirection, Vector2, Vector3},
+    warn,
 };
 
 use super::{ImportAnimation, ImportBone, ImportFileData, ImportPart, ImportVertex};
@@ -198,13 +198,10 @@ pub fn load_obj(file_path: &Path) -> Result<ImportFileData, ParseOBJError> {
                 }
 
                 if current_material == "debug/debugempty" && !warned_no_material {
-                    log(
-                        format!(
-                            "Object {} faces has no materials! Defaulting to {}!",
-                            if object_name.is_empty() { "Object" } else { &object_name },
-                            &current_material
-                        ),
-                        LogLevel::Warn,
+                    warn!(
+                        "Object {} faces has no materials! Defaulting to {}!",
+                        if object_name.is_empty() { "Object" } else { &object_name },
+                        &current_material
                     );
                     warned_no_material = true;
                 }

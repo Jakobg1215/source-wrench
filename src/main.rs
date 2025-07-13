@@ -47,7 +47,7 @@ impl Default for SourceWrenchApplication {
         let mut loaded_files = FileManager::default();
 
         if let Err(watch_error) = loaded_files.start_file_watch() {
-            log(format!("Fail To Start File Watch: {watch_error}!"), LogLevel::Error);
+            error!("Fail To Start File Watch: {watch_error}!");
         }
 
         Self {
@@ -159,7 +159,7 @@ impl egui_dock::TabViewer for SourceWrenchTabManager<'_> {
 
 use input::InputCompilationData;
 use ui::{icon, toggle_ui_compact};
-use utilities::logging::{self, LogLevel, log};
+use utilities::logging;
 
 use crate::ui::ListSelect;
 impl SourceWrenchTabManager<'_> {
@@ -204,7 +204,7 @@ impl SourceWrenchTabManager<'_> {
 
                 std::thread::spawn(move || {
                     if input_data.model_name.is_empty() {
-                        log("Model name is empty!", LogLevel::Error);
+                        error!("Model name is empty!");
                         compiling.store(false, Ordering::Relaxed);
                         return;
                     }
@@ -214,29 +214,29 @@ impl SourceWrenchTabManager<'_> {
                         model_name.push_str(".mdl");
                     }
 
-                    log(format!("Processing {}!", &model_name), LogLevel::Info);
+                    info!("Processing {}!", &model_name);
 
                     let processed_data = match process::process(&input_data, &loaded_files) {
                         Ok(data) => data,
                         Err(error) => {
-                            log(format!("Fail To Compile Model: {error}!"), LogLevel::Error);
+                            error!("Fail To Compile Model: {error}!");
                             compiling.store(false, Ordering::Relaxed);
                             return;
                         }
                     };
 
-                    log("Writing Files!", LogLevel::Info);
+                    info!("Writing Files!");
 
                     match write::write_files(input_data.model_name.clone(), model_name, processed_data, export_path) {
                         Ok(_) => {}
                         Err(error) => {
-                            log(format!("Fail To Write Files: {error}!"), LogLevel::Error);
+                            error!("Fail To Write Files: {error}!");
                             compiling.store(false, Ordering::Relaxed);
                             return;
                         }
                     }
 
-                    log("Model compiled successfully!", LogLevel::Info);
+                    info!("Model compiled successfully!");
                     compiling.store(false, Ordering::Relaxed);
                 });
             }
@@ -264,7 +264,6 @@ impl SourceWrenchTabManager<'_> {
         egui::ScrollArea::vertical().auto_shrink([false; 2]).stick_to_bottom(true).show(ui, |ui| {
             for (log, level) in &logger.logs {
                 let log_color = match level {
-                    logging::LogLevel::Log => egui::Color32::GRAY,
                     logging::LogLevel::Info => egui::Color32::DARK_GREEN,
                     logging::LogLevel::Verbose => egui::Color32::MAGENTA,
                     logging::LogLevel::Debug => egui::Color32::CYAN,
@@ -272,11 +271,11 @@ impl SourceWrenchTabManager<'_> {
                     logging::LogLevel::Error => egui::Color32::RED,
                 };
 
-                if matches!(level, LogLevel::Verbose) && !logger.allow_verbose {
+                if matches!(level, logging::LogLevel::Verbose) && !logger.allow_verbose {
                     continue;
                 }
 
-                if matches!(level, LogLevel::Debug) && !logger.allow_debug {
+                if matches!(level, logging::LogLevel::Debug) && !logger.allow_debug {
                     continue;
                 }
 

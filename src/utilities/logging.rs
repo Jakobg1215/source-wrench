@@ -1,8 +1,41 @@
 use std::sync::{LazyLock, Mutex};
 
+#[macro_export]
+macro_rules! info {
+    ($($message:tt)*) => {
+        $crate::logging::log(std::fmt::format(format_args!($($message)*)), $crate::logging::LogLevel::Info)
+    };
+}
+
+#[macro_export]
+macro_rules! verbose {
+    ($($message:tt)*) => {
+        $crate::logging::log(std::fmt::format(format_args!($($message)*)), $crate::logging::LogLevel::Verbose)
+    };
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($($message:tt)*) => {
+        $crate::logging::log(std::fmt::format(format_args!($($message)*)), $crate::logging::LogLevel::Debug)
+    };
+}
+
+#[macro_export]
+macro_rules! warn {
+    ($($message:tt)*) => {
+        $crate::logging::log(std::fmt::format(format_args!($($message)*)), $crate::logging::LogLevel::Warn)
+    };
+}
+
+#[macro_export]
+macro_rules! error {
+    ($($message:tt)*) => {
+        $crate::logging::log(std::fmt::format(format_args!($($message)*)), $crate::logging::LogLevel::Error)
+    };
+}
+
 pub enum LogLevel {
-    #[allow(dead_code)]
-    Log,
     Info,
     Verbose,
     Debug,
@@ -15,7 +48,6 @@ pub fn log<T: Into<String>>(message: T, level: LogLevel) {
     let mut logger = LOGGER.lock().unwrap();
 
     let level_string = match &level {
-        LogLevel::Log => "LOG",
         LogLevel::Info => "INFO",
         LogLevel::Verbose => "VERBOSE",
         LogLevel::Debug => "DEBUG",

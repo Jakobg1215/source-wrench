@@ -5,13 +5,12 @@ use kdtree::{KdTree, distance::squared_euclidean};
 use thiserror::Error as ThisError;
 
 use crate::{
+    debug,
     import::{FileManager, ImportFileData, ImportVertex},
     input::InputCompilationData,
     process::{MAX_HARDWARE_BONES_PER_STRIP, ProcessedHardwareBone, ProcessedMeshVertex, ProcessedStrip, ProcessedStripGroup, ProcessedVertex},
-    utilities::{
-        logging::{LogLevel, log},
-        mathematics::{BoundingBox, Matrix3, Matrix4, Vector2, Vector3, Vector4},
-    },
+    utilities::mathematics::{BoundingBox, Matrix3, Matrix4, Vector2, Vector3, Vector4},
+    verbose, warn,
 };
 
 use super::{FLOAT_TOLERANCE, ProcessedBodyPart, ProcessedBoneData, ProcessedMesh, ProcessedModel, ProcessedModelData};
@@ -82,7 +81,7 @@ pub fn process_meshes(
             };
 
             if processed_model.name.len() > 64 {
-                log("Model Part Name Longer That 64! Trimming!", LogLevel::Warn);
+                warn!("Model Part Name Longer That 64! Trimming!");
                 processed_model.name.truncate(64);
             }
 
@@ -98,7 +97,7 @@ pub fn process_meshes(
             )?;
 
             if triangle_lists.is_empty() {
-                log("Model Had No Parts! Defaulting To Blank!", LogLevel::Warn);
+                warn!("Model Had No Parts! Defaulting To Blank!");
                 processed_body_part.models.push(ProcessedModel::default());
                 continue;
             }
@@ -130,28 +129,20 @@ pub fn process_meshes(
             }
 
             if bad_vertex_count > 0 {
-                log(format!("{} Had {} Bad Vertices!", imputed_model.name, bad_vertex_count), LogLevel::Warn);
+                warn!("{} Had {bad_vertex_count} Bad Vertices!", imputed_model.name);
             }
 
             if culled_vertex_count > 0 {
-                log(
-                    format!("{} Had {} Weight Culled Vertices!", imputed_model.name, culled_vertex_count),
-                    LogLevel::Warn,
-                );
+                warn!("{} Had {culled_vertex_count} Weight Culled Vertices!", imputed_model.name);
             }
 
-            log(
-                format!(
-                    "{} has {} faces, {} vertices and {} indices.",
-                    imputed_model.name,
-                    face_count,
-                    vertex_count,
-                    face_count * 3
-                ),
-                LogLevel::Verbose,
+            verbose!(
+                "{} has {face_count} faces, {vertex_count} vertices and {} indices.",
+                imputed_model.name,
+                face_count * 3
             );
 
-            log(format!("{} has {} strips.", imputed_model.name, strip_count), LogLevel::Debug);
+            debug!("{} has {strip_count} strips.", imputed_model.name);
 
             processed_body_part.models.push(processed_model);
         }

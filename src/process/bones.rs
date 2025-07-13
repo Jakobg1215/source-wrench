@@ -4,12 +4,11 @@ use indexmap::IndexMap;
 use thiserror::Error as ThisError;
 
 use crate::{
+    debug,
     import::FileManager,
     input::InputCompilationData,
-    utilities::{
-        logging::{LogLevel, log},
-        mathematics::{Matrix3, Matrix4, Vector3},
-    },
+    utilities::mathematics::{Matrix3, Matrix4, Vector3},
+    verbose,
 };
 
 use super::{ProcessedBone, ProcessedBoneData, ProcessedBoneFlags};
@@ -139,7 +138,7 @@ pub fn process_bones(input: &InputCompilationData, import: &FileManager) -> Resu
         }
     }
 
-    log(format!("Model uses {} source bones.", processed_bones.len()), LogLevel::Debug);
+    debug!("Model uses {} source bones.", processed_bones.len());
 
     // TODO: Enforce define bone's transforms.
 
@@ -174,7 +173,7 @@ pub fn process_bones(input: &InputCompilationData, import: &FileManager) -> Resu
         }
 
         collapse_count += 1;
-        log(format!("Collapsing \"{current_bone_name}\"!"), LogLevel::Verbose);
+        debug!("Collapsing \"{current_bone_name}\"!");
 
         let current_bone_parent = current_bone.parent;
         processed_bones.shift_remove_index(current_bone_index);
@@ -193,7 +192,7 @@ pub fn process_bones(input: &InputCompilationData, import: &FileManager) -> Resu
             }
         }
     }
-    log(format!("Collapsed {collapse_count} bones."), LogLevel::Debug);
+    verbose!("Collapsed {collapse_count} bones.");
 
     if processed_bones.len() > (i8::MAX as usize) + 1 {
         return Err(ProcessingBoneError::TooManyBones);

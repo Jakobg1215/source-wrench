@@ -3,12 +3,12 @@ use indexmap::{IndexMap, IndexSet};
 use thiserror::Error as ThisError;
 
 use crate::{
+    debug,
     import::FileManager,
+    info,
     input::InputCompilationData,
-    utilities::{
-        logging::{LogLevel, log},
-        mathematics::{Angles, BoundingBox, Matrix4, Quaternion, Vector2, Vector3, Vector4},
-    },
+    utilities::mathematics::{Angles, BoundingBox, Matrix4, Quaternion, Vector2, Vector3, Vector4},
+    verbose,
 };
 
 mod animation;
@@ -175,37 +175,34 @@ pub const VERTEX_CACHE_SIZE: usize = 16;
 pub const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
 
 pub fn process(input: &InputCompilationData, file_manager: &FileManager) -> Result<ProcessedData, ProcessingDataError> {
-    log("Processing Bones.", LogLevel::Debug);
+    debug!("Processing Bones.");
     let processed_bone_data = process_bones(input, file_manager)?;
-    log(format!("Model uses {} bones.", processed_bone_data.processed_bones.len()), LogLevel::Verbose);
+    info!("Model uses {} bones.", processed_bone_data.processed_bones.len());
 
     if processed_bone_data.processed_bones.is_empty() {
         return Err(ProcessingDataError::NoBones);
     }
 
-    log("Processing Animations.", LogLevel::Debug);
+    debug!("Processing Animations.");
     let processed_animation_data = process_animations(input, file_manager, &processed_bone_data)?;
-    log(
-        format!("Model has {} animations.", processed_animation_data.processed_animations.len()),
-        LogLevel::Verbose,
-    );
+    verbose!("Model has {} animations.", processed_animation_data.processed_animations.len());
 
     if processed_animation_data.processed_animations.is_empty() {
         return Err(ProcessingDataError::NoAnimations);
     }
 
-    log("Processing Sequences.", LogLevel::Debug);
+    debug!("Processing Sequences.");
     let processed_sequences = process_sequences(input, &processed_animation_data.remapped_animations)?;
-    log(format!("Model has {} sequences.", processed_sequences.len()), LogLevel::Verbose);
+    info!("Model has {} sequences.", processed_sequences.len());
 
     if processed_sequences.is_empty() {
         return Err(ProcessingDataError::NoSequences);
     }
 
-    log("Processing Mesh Data.", LogLevel::Debug);
+    debug!("Processing Mesh Data.");
     let processed_mesh = process_meshes(input, file_manager, &processed_bone_data)?;
-    log(format!("Model has {} materials.", processed_mesh.materials.len()), LogLevel::Verbose);
-    log(format!("Model has {} body parts.", processed_mesh.body_parts.len()), LogLevel::Verbose);
+    verbose!("Model has {} materials.", processed_mesh.materials.len());
+    info!("Model has {} body parts.", processed_mesh.body_parts.len());
 
     Ok(ProcessedData {
         bone_data: processed_bone_data,
