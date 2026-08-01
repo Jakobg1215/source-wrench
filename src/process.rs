@@ -13,12 +13,12 @@ use crate::{
 mod animation;
 mod bones;
 mod mesh;
-mod sequences;
+mod sequence;
 
 use animation::{ProcessingAnimationError, process_animations};
 use bones::{ProcessingBoneError, process_bones};
 use mesh::{ProcessingMeshError, process_meshes};
-use sequences::{ProcessingSequenceError, process_sequences};
+use sequence::{ProcessingSequenceError, process_sequences};
 
 #[derive(Debug, Default)]
 pub struct CompiledData {

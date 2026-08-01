@@ -8,7 +8,7 @@ use crate::{
     utilities::mathematics::{EULER_ROTATION, Quaternion, Vector2, Vector3, Vector4},
 };
 
-mod mesh;
+mod index;
 mod model;
 mod vertex;
 
@@ -353,7 +353,7 @@ pub fn write_files(file_name: String, model_name: String, compiled_data: Compile
         lod_count: 1,
         ..Default::default()
     };
-    let mut vtx_header = mesh::Header {
+    let mut vtx_header = index::Header {
         version: 7,
         vertex_cache_size: VERTEX_CACHE_SIZE as i32,
         max_bones_per_strip: MAX_HARDWARE_BONES_PER_STRIP as u16,
@@ -682,7 +682,7 @@ fn write_model_flex_data(flex_data: process::FlexData, header: &mut model::Heade
 fn write_model_groups(
     processed_model_groups: IndexMap<String, process::ModelGroup>,
     header: &mut model::Header,
-    mesh_header: &mut mesh::Header,
+    mesh_header: &mut index::Header,
     vertex_header: &mut vertex::Header,
 ) {
     let flex_scale = compute_flex_scale(&processed_model_groups);
@@ -702,7 +702,7 @@ fn write_model_groups(
         };
         previous_base = Some((model_body_part.base, processed_model_group.models.len()));
 
-        let mut mesh_body_part_header = mesh::BodyPartHeader::default();
+        let mut mesh_body_part_header = index::BodyPartHeader::default();
 
         for (processed_model_name, processed_model) in processed_model_group.models {
             let mut model_model = model::Model {
@@ -714,8 +714,8 @@ fn write_model_groups(
                 ..Default::default()
             };
 
-            let mut mesh_model_header = mesh::ModelHeader::default();
-            let mut mesh_model_lod_header = mesh::ModelLODHeader::default();
+            let mut mesh_model_header = index::ModelHeader::default();
+            let mut mesh_model_lod_header = index::ModelLODHeader::default();
 
             let mut vertex_count = 0;
             for processed_mesh in processed_model.meshes {
@@ -781,19 +781,19 @@ fn write_model_groups(
                     vertex_header.tangents.push(processed_vertex.tangent);
                 }
 
-                let mut mesh_mesh_header = mesh::MeshHeader::default();
+                let mut mesh_mesh_header = index::MeshHeader::default();
 
                 for processed_strip_group in processed_mesh.strip_groups {
-                    let mut mesh_strip_group_header = mesh::StripGroupHeader {
-                        flags: mesh::StripGroupHeaderFlags::IS_HARDWARE_SKINNED
-                            | mesh::StripGroupHeaderFlags::IS_FLEXED
-                            | mesh::StripGroupHeaderFlags::IS_DELTA_FLEXED,
+                    let mut mesh_strip_group_header = index::StripGroupHeader {
+                        flags: index::StripGroupHeaderFlags::IS_HARDWARE_SKINNED
+                            | index::StripGroupHeaderFlags::IS_FLEXED
+                            | index::StripGroupHeaderFlags::IS_DELTA_FLEXED,
                         indices: processed_strip_group.indices,
                         ..Default::default()
                     };
 
                     for processed_mesh_vertex in processed_strip_group.vertices {
-                        mesh_strip_group_header.vertices.push(mesh::Vertex {
+                        mesh_strip_group_header.vertices.push(index::Vertex {
                             bone_count: processed_mesh_vertex.bone_count,
                             vertex_id: processed_mesh_vertex.vertex_index,
                             bone_ids: processed_mesh_vertex.bones,
@@ -802,8 +802,8 @@ fn write_model_groups(
                     }
 
                     for processed_strip in processed_strip_group.strips {
-                        let mut mesh_strip_header = mesh::StripHeader {
-                            flags: mesh::StripHeaderFlags::IS_TRIANGLE_LIST,
+                        let mut mesh_strip_header = index::StripHeader {
+                            flags: index::StripHeaderFlags::IS_TRIANGLE_LIST,
                             indices_count: processed_strip.indices_count,
                             indices_offset: processed_strip.indices_offset,
                             vertices_count: processed_strip.vertex_count,
@@ -813,7 +813,7 @@ fn write_model_groups(
                         };
 
                         for bone_change in processed_strip.hardware_bones {
-                            let mesh_bone_state_change = mesh::BoneStateChangeHeader {
+                            let mesh_bone_state_change = index::BoneStateChangeHeader {
                                 hardware_id: bone_change.hardware_bone,
                                 bone_table_index: bone_change.bone_table_bone,
                                 ..Default::default()
@@ -841,7 +841,7 @@ fn write_model_groups(
         mesh_header.body_parts.push(mesh_body_part_header);
     }
 
-    mesh_header.material_replacement_lists.push(mesh::MaterialReplacementListHeader::default());
+    mesh_header.material_replacement_lists.push(index::MaterialReplacementListHeader::default());
     vertex_header.lod_vertex_count = [vertex_header.vertices.len() as i32; MAX_LOD_COUNT];
 }
 
