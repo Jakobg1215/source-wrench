@@ -344,15 +344,15 @@ fn optimize_merge_vertices(triangle_list: &mut TriangleList) {
     let mut unique_vertices = Vec::new();
     let mut indices_remap = Vec::with_capacity(triangle_list.vertices.len());
     let mut vertex_tree = KdTree::new(3);
-    'vertices: for vertex in triangle_list.vertices.drain(..) {
-        if let Ok(neighbors) = vertex_tree.within(&vertex.location.to_array(), super::FLOAT_TOLERANCE, &squared_euclidean) {
-            for (_, &neighbor) in neighbors {
-                if vertex_equals(&vertex, &unique_vertices[neighbor]) {
-                    indices_remap.push(neighbor);
-                    continue 'vertices;
-                }
-            }
+
+    for vertex in triangle_list.vertices.drain(..) {
+        if let Ok(neighbors) = vertex_tree.within(&vertex.location.to_array(), super::FLOAT_TOLERANCE, &squared_euclidean)
+            && let Some((_, &neighbor)) = neighbors.into_iter().find(|(_, neighbor)| vertex_equals(&vertex, &unique_vertices[**neighbor]))
+        {
+            indices_remap.push(neighbor);
+            continue;
         }
+
         indices_remap.push(unique_vertices.len());
         let _ = vertex_tree.add(vertex.location.to_array(), unique_vertices.len());
         unique_vertices.push(vertex);
