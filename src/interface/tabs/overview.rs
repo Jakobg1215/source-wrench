@@ -32,6 +32,20 @@ impl<'a> TabViewer<'a> {
                         match serde_json::from_reader(save_file_buffer) {
                             Ok(save_data) => {
                                 *self.input_data = save_data;
+
+                                for model_group in &self.input_data.model_groups {
+                                    for model in &model_group.models {
+                                        if let Some(source_file_path) = &model.source_file_path {
+                                            self.loaded_files.load_file(source_file_path.clone());
+                                        };
+                                    }
+                                }
+
+                                for animation in &self.input_data.animations {
+                                    if let Some(source_file_path) = &animation.source_file_path {
+                                        self.loaded_files.load_file(source_file_path.clone());
+                                    };
+                                }
                             }
                             Err(reason) => {
                                 error!("Failed To Load: {reason}!");
