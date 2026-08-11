@@ -7,6 +7,44 @@ use eframe::egui;
 
 impl<'a> TabViewer<'a> {
     pub fn render_overview(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if ui.button("Save").clicked()
+                && let Some(save_file_path) = rfd::FileDialog::new().set_title("Save Data").add_filter("Save File", &["swsf"]).save_file()
+            {
+                match serde_json::to_string(self.input_data) {
+                    Ok(serialized_data) => {
+                        if let Err(reason) = std::fs::write(save_file_path, serialized_data) {
+                            error!("Failed To Save: {reason}!");
+                        }
+                    }
+                    Err(reason) => {
+                        error!("Failed To Save: {reason}!");
+                    }
+                };
+            }
+
+            if ui.button("Load").clicked()
+                && let Some(save_file_path) = rfd::FileDialog::new().set_title("Load Save").add_filter("Save File", &["swsf"]).pick_file()
+            {
+                match std::fs::File::open(save_file_path) {
+                    Ok(save_file) => {
+                        let save_file_buffer = std::io::BufReader::new(save_file);
+                        match serde_json::from_reader(save_file_buffer) {
+                            Ok(save_data) => {
+                                *self.input_data = save_data;
+                            }
+                            Err(reason) => {
+                                error!("Failed To Load: {reason}!");
+                            }
+                        }
+                    }
+                    Err(reason) => {
+                        error!("Failed To Load: {reason}!");
+                    }
+                }
+            }
+        });
+
         self.render_header(ui);
         self.render_output_input(ui);
 

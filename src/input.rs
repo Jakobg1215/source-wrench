@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
 use indexmap::{IndexMap, IndexSet};
+use serde::{Deserialize, Serialize};
 
 use crate::utilities::mathematics::Vector3;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SourceInput {
     /// The name of the output mdl file.
     pub model_name: String,
@@ -41,7 +42,7 @@ macro_rules! implement_named_data {
 }
 
 /// A struct to define a model part for the model.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ModelGroup {
     /// The unique name of model group.
     pub name: String,
@@ -61,7 +62,7 @@ impl Default for ModelGroup {
 implement_named_data! {ModelGroup}
 
 /// A struct to define a model for a model group.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Model {
     /// The unique name of model.
     pub name: String,
@@ -89,12 +90,12 @@ impl Default for Model {
 
 implement_named_data! {Model}
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Flex {
     pub assigned_flex_key: Option<usize>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FlexKey {
     /// The unique name of the key.
     pub name: String,
@@ -116,7 +117,7 @@ impl Default for FlexKey {
 
 implement_named_data! {FlexKey}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FlexController {
     /// The unique name of the controller.
     pub name: String,
@@ -135,7 +136,7 @@ impl Default for FlexController {
 
 implement_named_data! {FlexController}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BoneProperty {
     /// The unique name of the bone to define.
     pub name: String,
@@ -183,7 +184,7 @@ impl Default for BoneProperty {
 implement_named_data! {BoneProperty}
 
 /// A struct to define an animation for the model.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Animation {
     /// The unique name of the animation.
     pub name: String,
@@ -209,7 +210,7 @@ impl Default for Animation {
 implement_named_data! {Animation}
 
 /// A struct the define a sequence for a model.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Sequence {
     /// The unique name of the sequence.
     pub name: String,

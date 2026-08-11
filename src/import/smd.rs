@@ -170,7 +170,7 @@ pub fn load_smd(file_buffer: BufReader<File>, file_name: String) -> Result<super
                             if token_string == "time" {
                                 let frame_token = reader.next_token(false)?.ok_or(ParseSMDError::UnexpectedEndOfFile)?;
                                 let frame_string = frame_token.get_string().ok_or(ParseSMDError::MissingArgument("Frame Number", reader.line))?;
-                                let frame_number = frame_string.parse()?;
+                                let frame_number = frame_string.parse::<usize>()?;
 
                                 if frames.len() != frame_number {
                                     return Err(ParseSMDError::NonSequentialFrames(reader.line));
