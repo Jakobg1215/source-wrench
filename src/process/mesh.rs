@@ -148,7 +148,7 @@ struct TriangleVertexFlex {
 
 struct TriangleVertexLink {
     bone: usize,
-    weight: f64,
+    weight: f32,
 }
 
 /// Create triangle lists structures for a model.
@@ -236,7 +236,7 @@ fn triangulate_face(face: &[usize], vertices: &[import::Vertex]) -> Vec<[usize; 
     let mut triangles = Vec::new();
 
     let index_count = face.len();
-    let mut minimum_distance = f64::MAX;
+    let mut minimum_distance = f32::MAX;
     let mut minimum_index = 0;
 
     for loop_index in 0..index_count {
@@ -330,7 +330,7 @@ fn vertices_remap_links(
         }
         vertex.links.truncate(3);
         // Normalize links
-        let weight_sum = vertex.links.iter().map(|link| link.weight).sum::<f64>();
+        let weight_sum = vertex.links.iter().map(|link| link.weight).sum::<f32>();
         debug_assert!(weight_sum > super::FLOAT_TOLERANCE);
         for link in &mut vertex.links {
             link.weight /= weight_sum;
@@ -446,10 +446,10 @@ fn optimize_vertex_cache(triangle_list: &mut TriangleList) {
 
     const CACHE_SIZE: usize = 16;
     const VALENCE_SIZE: usize = 8;
-    const CACHE_SCORES: [f64; CACHE_SIZE + 1] = [
+    const CACHE_SCORES: [f32; CACHE_SIZE + 1] = [
         0.0, 0.779, 0.791, 0.789, 0.981, 0.843, 0.726, 0.847, 0.882, 0.867, 0.799, 0.642, 0.613, 0.600, 0.568, 0.372, 0.234,
     ];
-    const VALENCE_SCORES: [f64; VALENCE_SIZE + 1] = [0.0, 0.995, 0.713, 0.450, 0.404, 0.059, 0.005, 0.147, 0.006];
+    const VALENCE_SCORES: [f32; VALENCE_SIZE + 1] = [0.0, 0.995, 0.713, 0.450, 0.404, 0.059, 0.005, 0.147, 0.006];
 
     let mut vertex_scores = vec![0.0; vertex_count];
     for vertex_index in 0..vertex_count {
@@ -589,7 +589,7 @@ fn calculate_vertex_tangents(triangle_list: &TriangleList) -> Vec<Vector4> {
 
         let denominator = delta_uv1.x * delta_uv2.y - delta_uv2.x * delta_uv1.y;
 
-        if denominator.abs() < f64::EPSILON {
+        if denominator.abs() < f32::EPSILON {
             for vertex_index in 0..3 {
                 tangents[face[vertex_index]] += Vector3::new(1.0, 0.0, 0.0);
                 bi_tangents[face[vertex_index]] += Vector3::new(0.0, 1.0, 0.0);
@@ -747,7 +747,7 @@ fn finalize_triangle_list(
             let mut vertex_weights = [0.0; 3];
             let mut weight_bones = [0; 3];
             for (link_index, link) in vertex_data.links.iter().enumerate() {
-                vertex_weights[link_index] = link.weight as f32;
+                vertex_weights[link_index] = link.weight;
                 debug_assert!(link.bone <= u8::MAX as usize);
                 weight_bones[link_index] = link.bone as u8;
             }

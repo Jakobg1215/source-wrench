@@ -116,7 +116,7 @@ pub struct Vertex {
     /// The UV position of the vertex.
     pub texture_coordinate: Vector2,
     /// List of weights the vertex has mapped to a bone in the file skeleton.
-    pub links: IndexMap<usize, f64>,
+    pub links: IndexMap<usize, f32>,
 }
 
 /// Data of a flexed vertex for a file.

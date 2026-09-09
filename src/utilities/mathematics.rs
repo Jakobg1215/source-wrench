@@ -1,9 +1,9 @@
-pub type Matrix4 = glam::DAffine3;
+pub type Matrix4 = glam::Affine3;
 pub const EULER_ROTATION: glam::EulerRot = glam::EulerRot::XYZEx;
-pub type Quaternion = glam::DQuat;
-pub type Vector2 = glam::DVec2;
-pub type Vector3 = glam::DVec3;
-pub type Vector4 = glam::DVec4;
+pub type Quaternion = glam::Quat;
+pub type Vector2 = glam::Vec2;
+pub type Vector3 = glam::Vec3;
+pub type Vector4 = glam::Vec4;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct BoundingBox {
@@ -62,7 +62,7 @@ impl AxisDirection {
     }
 
     pub fn is_parallel(self, other: Self) -> bool {
-        self.as_vector().cross(other.as_vector()).length() < f64::EPSILON
+        self.as_vector().cross(other.as_vector()).length() < f32::EPSILON
     }
 }
 

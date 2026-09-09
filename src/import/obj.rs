@@ -59,7 +59,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
         match command {
             Some("v") => {
                 let x_position = match line_arguments.next() {
-                    Some(x_position) => match x_position.parse::<f64>() {
+                    Some(x_position) => match x_position.parse::<f32>() {
                         Ok(x_position) => x_position,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },
@@ -67,7 +67,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
                 };
 
                 let y_position = match line_arguments.next() {
-                    Some(y_position) => match y_position.parse::<f64>() {
+                    Some(y_position) => match y_position.parse::<f32>() {
                         Ok(y_position) => y_position,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },
@@ -75,7 +75,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
                 };
 
                 let z_position = match line_arguments.next() {
-                    Some(z_position) => match z_position.parse::<f64>() {
+                    Some(z_position) => match z_position.parse::<f32>() {
                         Ok(z_position) => z_position,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },
@@ -86,7 +86,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
             }
             Some("vt") => {
                 let u_texture_coordinate = match line_arguments.next() {
-                    Some(u_texture_coordinate) => match u_texture_coordinate.parse::<f64>() {
+                    Some(u_texture_coordinate) => match u_texture_coordinate.parse::<f32>() {
                         Ok(u_texture_coordinate) => u_texture_coordinate,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },
@@ -94,7 +94,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
                 };
 
                 let v_texture_coordinate = match line_arguments.next() {
-                    Some(v_texture_coordinate) => match v_texture_coordinate.parse::<f64>() {
+                    Some(v_texture_coordinate) => match v_texture_coordinate.parse::<f32>() {
                         Ok(v_texture_coordinate) => v_texture_coordinate,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },
@@ -105,7 +105,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
             }
             Some("vn") => {
                 let x_normal = match line_arguments.next() {
-                    Some(x_normal) => match x_normal.parse::<f64>() {
+                    Some(x_normal) => match x_normal.parse::<f32>() {
                         Ok(x_normal) => x_normal,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },
@@ -113,7 +113,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
                 };
 
                 let y_normal = match line_arguments.next() {
-                    Some(y_normal) => match y_normal.parse::<f64>() {
+                    Some(y_normal) => match y_normal.parse::<f32>() {
                         Ok(y_normal) => y_normal,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },
@@ -121,7 +121,7 @@ pub fn load_obj(file_buffer: BufReader<File>, file_name: String) -> Result<super
                 };
 
                 let z_normal = match line_arguments.next() {
-                    Some(z_normal) => match z_normal.parse::<f64>() {
+                    Some(z_normal) => match z_normal.parse::<f32>() {
                         Ok(z_normal) => z_normal,
                         Err(_) => return Err(ParseOBJError::FailedFloatParse(current_line_count)),
                     },

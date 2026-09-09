@@ -220,7 +220,7 @@ pub const MAX_HARDWARE_BONES_PER_STRIP: usize = 53;
 pub const VERTEX_CACHE_SIZE: usize = 16;
 
 /// The tolerance for floating point numbers until they are considered equal.
-pub const FLOAT_TOLERANCE: f64 = f32::EPSILON as f64;
+pub const FLOAT_TOLERANCE: f32 = f32::EPSILON;
 
 pub fn compile_data(input_data: &input::SourceInput, source_files: &FileManager) -> Result<CompiledData, ProcessingDataError> {
     debug!("Processing Bones.");

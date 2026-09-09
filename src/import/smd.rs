@@ -76,7 +76,7 @@ pub fn load_smd(file_buffer: BufReader<File>, file_name: String) -> Result<super
         position: Vector3,
         normal: Vector3,
         texture_coordinate: Vector2,
-        links: IndexMap<usize, f64>,
+        links: IndexMap<usize, f32>,
         #[allow(dead_code)]
         extra_texture_coordinates: Vec<Vector2>,
     }
@@ -343,7 +343,7 @@ pub fn load_smd(file_buffer: BufReader<File>, file_name: String) -> Result<super
                                             links.insert(link_id, link_weight);
                                         }
 
-                                        let weight_count = links.values().sum::<f64>();
+                                        let weight_count = links.values().sum::<f32>();
 
                                         if version.unwrap() < 3 {
                                             if weight_count == 0.0 {

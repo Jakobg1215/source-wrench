@@ -96,35 +96,35 @@ impl FileWriter {
     }
 
     pub fn write_vector2(&mut self, value: Vector2) {
-        self.write_float(value.x as f32);
-        self.write_float(value.y as f32);
+        self.write_float(value.x);
+        self.write_float(value.y);
     }
 
     pub fn write_vector3(&mut self, value: Vector3) {
-        self.write_float(value.x as f32);
-        self.write_float(value.y as f32);
-        self.write_float(value.z as f32);
+        self.write_float(value.x);
+        self.write_float(value.y);
+        self.write_float(value.z);
     }
 
     pub fn write_vector4(&mut self, value: Vector4) {
-        self.write_float(value.x as f32);
-        self.write_float(value.y as f32);
-        self.write_float(value.z as f32);
-        self.write_float(value.w as f32);
+        self.write_float(value.x);
+        self.write_float(value.y);
+        self.write_float(value.z);
+        self.write_float(value.w);
     }
 
     pub fn write_quaternion(&mut self, value: Quaternion) {
-        self.write_float(value.x as f32);
-        self.write_float(value.y as f32);
-        self.write_float(value.z as f32);
-        self.write_float(value.w as f32);
+        self.write_float(value.x);
+        self.write_float(value.y);
+        self.write_float(value.z);
+        self.write_float(value.w);
     }
 
     pub fn write_euler(&mut self, value: Quaternion) {
         let (roll, pitch, yaw) = value.to_euler(EULER_ROTATION);
-        self.write_float(roll as f32);
-        self.write_float(pitch as f32);
-        self.write_float(yaw as f32);
+        self.write_float(roll);
+        self.write_float(pitch);
+        self.write_float(yaw);
     }
 
     pub fn write_string_to_table(&mut self, base: usize, value: &str) {
@@ -220,9 +220,9 @@ impl FileWriter {
     }
 
     pub fn write_vector48(&mut self, value: Vector3) {
-        self.buffer.extend(f16::from_f64(value.x).to_le_bytes());
-        self.buffer.extend(f16::from_f64(value.y).to_le_bytes());
-        self.buffer.extend(f16::from_f64(value.z).to_le_bytes());
+        self.buffer.extend(f16::from_f32(value.x).to_le_bytes());
+        self.buffer.extend(f16::from_f32(value.y).to_le_bytes());
+        self.buffer.extend(f16::from_f32(value.z).to_le_bytes());
     }
 
     pub fn write_array_size_integer<T>(&mut self, array: &[T]) -> Result<(), FileWriteError> {
@@ -686,7 +686,7 @@ fn write_model_groups(
     vertex_header: &mut vertex::Header,
 ) {
     let flex_scale = compute_flex_scale(&processed_model_groups);
-    header.flex_scale = flex_scale as f32;
+    header.flex_scale = flex_scale;
 
     let mut mesh_id = 0;
     let mut previous_base = None;
@@ -845,7 +845,7 @@ fn write_model_groups(
     vertex_header.lod_vertex_count = [vertex_header.vertices.len() as i32; MAX_LOD_COUNT];
 }
 
-fn compute_flex_scale(processed_model_groups: &IndexMap<String, process::ModelGroup>) -> f64 {
+fn compute_flex_scale(processed_model_groups: &IndexMap<String, process::ModelGroup>) -> f32 {
     let mut max_value = 0.0;
     for processed_model_group in processed_model_groups.values() {
         for processed_model in processed_model_group.models.values() {
@@ -869,5 +869,5 @@ fn compute_flex_scale(processed_model_groups: &IndexMap<String, process::ModelGr
         }
     }
 
-    max_value / i16::MAX as f64
+    max_value / i16::MAX as f32
 }

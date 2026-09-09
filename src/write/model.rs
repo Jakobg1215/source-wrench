@@ -534,18 +534,18 @@ impl SecondHeader {
         for bone in bones {
             let entries = bone.pose.to_cols_array_2d();
             writer.write_float_array(&[
-                entries[0][0] as f32,
-                entries[1][0] as f32,
-                entries[2][0] as f32,
-                entries[3][0] as f32,
-                entries[0][1] as f32,
-                entries[1][1] as f32,
-                entries[2][1] as f32,
-                entries[3][1] as f32,
-                entries[0][2] as f32,
-                entries[1][2] as f32,
-                entries[2][2] as f32,
-                entries[3][2] as f32,
+                entries[0][0],
+                entries[1][0],
+                entries[2][0],
+                entries[3][0],
+                entries[0][1],
+                entries[1][1],
+                entries[2][1],
+                entries[3][1],
+                entries[0][2],
+                entries[1][2],
+                entries[2][2],
+                entries[3][2],
             ]);
         }
 
@@ -609,18 +609,18 @@ impl Bone {
         debug_assert!(self.pose.is_finite());
         let entries = self.pose.to_cols_array_2d();
         writer.write_float_array(&[
-            entries[0][0] as f32,
-            entries[1][0] as f32,
-            entries[2][0] as f32,
-            entries[3][0] as f32,
-            entries[0][1] as f32,
-            entries[1][1] as f32,
-            entries[2][1] as f32,
-            entries[3][1] as f32,
-            entries[0][2] as f32,
-            entries[1][2] as f32,
-            entries[2][2] as f32,
-            entries[3][2] as f32,
+            entries[0][0],
+            entries[1][0],
+            entries[2][0],
+            entries[3][0],
+            entries[0][1],
+            entries[1][1],
+            entries[2][1],
+            entries[3][1],
+            entries[0][2],
+            entries[1][2],
+            entries[2][2],
+            entries[3][2],
         ]);
         debug_assert!(self.alignment.is_finite());
         writer.write_quaternion(self.alignment);

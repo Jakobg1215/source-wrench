@@ -128,13 +128,8 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
             parent_dag.name.get().clone(),
             super::Bone {
                 parent: parent_index,
-                location: Math::Vector3::new(joint_position.x as f64, joint_position.y as f64, joint_position.z as f64),
-                rotation: Math::Quaternion::from_xyzw(
-                    joint_rotation.x as f64,
-                    joint_rotation.y as f64,
-                    joint_rotation.z as f64,
-                    joint_rotation.w as f64,
-                ),
+                location: Math::Vector3::new(joint_position.x, joint_position.y, joint_position.z),
+                rotation: Math::Quaternion::from_xyzw(joint_rotation.x, joint_rotation.y, joint_rotation.z, joint_rotation.w),
             },
         );
 
@@ -166,8 +161,8 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
             let mesh_rotation = *mesh_transform.orientation.get();
             let current_transform = parent_transform
                 * Math::Matrix4::from_rotation_translation(
-                    Math::Quaternion::from_xyzw(mesh_rotation.x as f64, mesh_rotation.y as f64, mesh_rotation.z as f64, mesh_rotation.w as f64),
-                    Math::Vector3::new(mesh_position.x as f64, mesh_position.y as f64, mesh_position.z as f64),
+                    Math::Quaternion::from_xyzw(mesh_rotation.x, mesh_rotation.y, mesh_rotation.z, mesh_rotation.w),
+                    Math::Vector3::new(mesh_position.x, mesh_position.y, mesh_position.z),
                 );
 
             if let Some(shape) = parent_dag.shape.get_as::<Mesh>()
@@ -257,14 +252,14 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
                     let texture_coordinate = texture_coordinates[texture_coordinate_indices[vertex_index] as usize];
 
                     let mut vertex = super::Vertex {
-                        location: Math::Vector3::new(position.x as f64, position.y as f64, position.z as f64),
-                        normal: Math::Vector3::new(normal.x as f64, normal.y as f64, normal.z as f64),
+                        location: Math::Vector3::new(position.x, position.y, position.z),
+                        normal: Math::Vector3::new(normal.x, normal.y, normal.z),
                         texture_coordinate: Math::Vector2::new(
-                            texture_coordinate.x as f64,
+                            texture_coordinate.x,
                             if *bind_state.flip_coordinates.get() {
-                                texture_coordinate.y as f64
+                                texture_coordinate.y
                             } else {
-                                1.0 + texture_coordinate.y as f64
+                                1.0 + texture_coordinate.y
                             },
                         ),
                         ..Default::default()
@@ -301,7 +296,7 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
                         let joint_element = &joints[validate_index(joint_index, joints.len(), "jointIndices", &bind_state.name.owner())? as usize];
                         let joint_dag = Dag::from_element(Element::clone(joint_element));
                         let joint_link = file_data.skeleton.get_index_of(joint_dag.name.get().as_str()).unwrap_or_default();
-                        vertex.links.insert(joint_link, joint_weight as f64);
+                        vertex.links.insert(joint_link, joint_weight);
                     }
                     part.vertices.push(vertex);
                 }
@@ -351,7 +346,7 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
                         for &unique_vertex_index in position_index_map.get(&delta_positions_index).unwrap() {
                             let unique_vertex = &part.vertices[unique_vertex_index];
                             let unique_vertex_location = unique_vertex.location;
-                            let delta_location = Math::Vector3::new(delta_position.x as f64, delta_position.y as f64, delta_position.z as f64);
+                            let delta_location = Math::Vector3::new(delta_position.x, delta_position.y, delta_position.z);
                             let transformed_location = current_transform.transform_point3(unique_vertex_location + delta_location);
 
                             flex.insert(
@@ -378,7 +373,7 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
                         for &unique_vertex_index in normal_index_map.get(&delta_normals_index).unwrap() {
                             let unique_vertex = &part.vertices[unique_vertex_index];
                             let unique_vertex_normal = unique_vertex.normal;
-                            let delta_normal = Math::Vector3::new(delta_normal.x as f64, delta_normal.y as f64, delta_normal.z as f64);
+                            let delta_normal = Math::Vector3::new(delta_normal.x, delta_normal.y, delta_normal.z);
                             let transformed_normal = current_transform.transform_vector3(unique_vertex_normal + delta_normal);
 
                             if let Some(flexed_vertex) = flex.get_mut(&unique_vertex_index) {
@@ -518,7 +513,7 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
 
                             animation_channel
                                 .location
-                                .insert(time_frame, Math::Vector3::new(position.x as f64, position.y as f64, position.z as f64));
+                                .insert(time_frame, Math::Vector3::new(position.x, position.y, position.z));
                         }
                         continue;
                     }
@@ -549,10 +544,9 @@ pub fn load_dmx(mut file_buffer: BufReader<File>, file_name: String) -> Result<s
 
                             let rotation = values[frame];
 
-                            animation_channel.rotation.insert(
-                                time_frame,
-                                Math::Quaternion::from_xyzw(rotation.x as f64, rotation.y as f64, rotation.z as f64, rotation.w as f64),
-                            );
+                            animation_channel
+                                .rotation
+                                .insert(time_frame, Math::Quaternion::from_xyzw(rotation.x, rotation.y, rotation.z, rotation.w));
                         }
                     }
                 }
